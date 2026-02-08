@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>啡你莫屬 - 探索好店</title>
+    <style>
+        :root {
+            /* 延續主色調 */
+            --bg-main: #ddccb9;       
+            --bg-sidebar: #d6c2a5;    
+            --bg-card: #FFFFFF;      
+            --accent-color: #432a00;  
+            --text-main: #4E342E;     
+            --text-light: #795548;    
+            --btn-active: #bcaaa4;
+            
+            --border-radius: 24px;
+            --sidebar-width: 280px;
+            --sidebar-width-collapsed: 88px; 
+            --transition-speed: 0.3s;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Microsoft JhengHei", sans-serif; }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* --- 側欄 --- */
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--bg-sidebar);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            flex-shrink: 0;
+            transition: width var(--transition-speed) ease;
+            position: relative;
+        }
+        .sidebar.collapsed { width: var(--sidebar-width-collapsed); padding: 20px 10px; }
+
+        .toggle-sidebar-btn {
+            position: absolute; top: 20px; right: 20px;
+            background: transparent; border: none; color: var(--text-main);
+            cursor: pointer; width: 30px; height: 30px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; z-index: 10;
+        }
+        .sidebar.collapsed .toggle-sidebar-btn { transform: rotate(180deg); right: 50%; margin-right: -15px; }
+
+        .user-profile-btn {
+            display: flex; align-items: center; padding: 15px;
+            background: #FFFFFF; border: none; border-radius: var(--border-radius);
+            cursor: pointer; margin-bottom: 30px; margin-top: 40px;
+            height: 70px; overflow: hidden;
+        }
+        .user-avatar {
+            width: 40px; height: 40px; background-color: var(--accent-color);
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            color: white; font-weight: bold; margin-right: 12px; flex-shrink: 0;
+        }
+        .user-name { font-weight: bold; color: var(--text-main); white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar.collapsed .user-name { opacity: 0; display: none; }
+        .sidebar.collapsed .user-profile-btn { justify-content: center; padding: 15px 0; }
+        .sidebar.collapsed .user-avatar { margin-right: 0; }
+
+        .new-chat-btn {
+            width: 100%; padding: 12px; background-color: transparent;
+            border: 2px dashed var(--text-light); border-radius: 16px;
+            color: var(--text-main); font-weight: bold; cursor: pointer;
+            transition: 0.2s; margin-bottom: 20px; display: flex;
+            align-items: center; justify-content: center; gap: 8px;
+            height: 50px; overflow: hidden; flex-shrink: 0;
+        }
+        .new-chat-btn:hover { background-color: rgba(255, 255, 255, 0.5); border-color: var(--text-main); }
+        .sidebar.collapsed .new-chat-btn { justify-content: center; padding: 0; }
+        
+        .text-label { opacity: 1; white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar.collapsed .text-label { opacity: 0; display: none; }
+
+        .history-label { font-size: 0.9rem; color: var(--text-light); margin-bottom: 10px; padding-left: 10px; white-space: nowrap; }
+        .sidebar.collapsed .history-label { display: none; }
+
+        /* 側欄列表 */
+        .chat-list {
+            flex: 1; overflow-y: auto; overflow-x: hidden;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .chat-list::-webkit-scrollbar { width: 5px; }
+        .chat-list::-webkit-scrollbar-thumb { background-color: #E0C0A0; border-radius: 10px; }
+
+        .chat-item {
+            padding: 12px 15px; border-radius: 16px; cursor: pointer;
+            font-size: 0.95rem; color: var(--text-main); transition: 0.2s;
+            display: flex; align-items: center; justify-content: flex-start;
+            position: relative; height: 50px; flex-shrink: 0;
+        }
+        .chat-item:hover { background-color: rgba(255, 255, 255, 0.6); }
+        .sidebar.collapsed .chat-item { justify-content: center; padding: 0; }
+
+        .chat-icon { margin-right: 10px; flex-shrink: 0; display: flex; align-items: center; }
+        .sidebar.collapsed .chat-icon { margin-right: 0; }
+        
+        .chat-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; flex-grow: 1; }
+        
+        .empty-sidebar-msg { text-align: center; color: var(--text-light); opacity: 0.6; font-size: 0.9rem; margin-top: 20px; }
+        .sidebar.collapsed .empty-sidebar-msg { display: none; }
+
+        /* --- 主內容區 --- */
+        .main-container {
+            flex: 1; display: flex; flex-direction: column;
+            position: relative; background-color: var(--bg-main); overflow: hidden;
+        }
+
+        /* 導覽列 */
+        .navbar {
+            display: flex; justify-content: flex-end; padding: 20px 30px; gap: 15px;
+            position: relative; z-index: 1; flex-shrink: 0;
+        }
+
+        .nav-marker {
+            position: absolute; background-color: var(--text-main);
+            height: 44px; border-radius: 20px; z-index: 0;
+            width: 0; left: 0; top: 20px; opacity: 0;
+        }
+        .nav-marker.animate { transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1); }
+
+        .nav-btn {
+            padding: 10px 24px; border: none; background: transparent;
+            font-size: 1rem; font-weight: 600; color: var(--text-light);
+            cursor: pointer; border-radius: 20px; transition: color 0.2s;
+            position: relative; z-index: 1;
+        }
+        .nav-btn:hover { color: var(--text-main); }
+        .nav-btn.active { color: #fff; }
+
+        /* --- 探索區塊 --- */
+        .explore-content {
+            flex: 1; padding: 0 40px 40px 40px; overflow-y: auto;
+        }
+
+        .filter-bar { display: flex; gap: 15px; margin-bottom: 25px; }
+        .filter-chip {
+            padding: 8px 20px; background-color: rgba(255,255,255,0.4);
+            border: 2px solid transparent; border-radius: 20px; cursor: pointer;
+            color: var(--text-main); font-weight: bold; transition: 0.2s;
+        }
+        .filter-chip:hover { background-color: rgba(255,255,255,0.7); }
+        .filter-chip.active { background-color: var(--accent-color); color: #fff; }
+
+        .shop-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 25px; padding-bottom: 40px;
+        }
+
+        .shop-card {
+            background: var(--bg-card); border-radius: 20px; overflow: hidden;
+            cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+            position: relative; display: flex; flex-direction: column;
+        }
+        .shop-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(78, 52, 46, 0.1); }
+
+        .card-img { width: 100%; height: 160px; background-color: #ddd; object-fit: cover; }
+        .card-info { padding: 15px; flex: 1; display: flex; flex-direction: column; }
+        .shop-name { font-size: 1.1rem; font-weight: bold; margin-bottom: 5px; }
+        .shop-tags { font-size: 0.8rem; color: var(--text-light); margin-bottom: 10px; }
+        
+        .card-status-icons { position: absolute; top: 10px; right: 10px; display: flex; gap: 5px; }
+        .status-dot {
+            width: 24px; height: 24px; background: rgba(255,255,255,0.9);
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 0.8rem; opacity: 0; transition: 0.2s; color: var(--accent-color);
+        }
+        .shop-card.is-fav .status-dot.fav { opacity: 1; }
+        .shop-card.is-visited .status-dot.visited { opacity: 1; }
+
+        /* --- 彈窗 (Modal) --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(78, 52, 46, 0.4); backdrop-filter: blur(4px);
+            z-index: 100; display: none; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .modal-overlay.open { display: flex; opacity: 1; }
+
+        .modal-card {
+            background: var(--bg-card); 
+            width: 90%; 
+            max-width: 550px;
+            border-radius: 30px; overflow: hidden;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+            transform: scale(0.9); transition: transform 0.3s; position: relative;
+            max-height: 90vh; 
+            overflow-y: auto; 
+        }
+        .modal-overlay.open .modal-card { transform: scale(1); }
+
+        /* 圖片容器：為了定位按鈕 */
+        .modal-img-wrapper {
+            position: relative;
+            width: 100%;
+            height: 350px;
+        }
+
+        .modal-img { 
+            width: 100%; 
+            height: 100%; 
+            background: #eee; 
+            object-fit: cover; 
+            display: block; 
+        }
+
+        /* 彈窗關閉按鈕：定位在圖片右上 */
+        .modal-close-btn {
+            position: absolute; top: 15px; right: 15px;
+            background: rgba(0,0,0,0.3); color: white;
+            border: none; width: 32px; height: 32px; border-radius: 50%;
+            cursor: pointer; z-index: 10; font-size: 1.2rem;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* 操作按鈕群組：定位在圖片右下 */
+        .overlay-actions {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            display: flex;
+            gap: 10px;
+            z-index: 5;
+        }
+
+        .overlay-btn {
+            padding: 8px 16px; 
+            border-radius: 20px;
+            border: none;
+            background: rgba(255, 255, 255, 0.9); /* 半透明白底 */
+            color: var(--text-main); 
+            font-weight: bold; 
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .overlay-btn:hover { background: #fff; transform: translateY(-2px); }
+
+        /* 激活狀態 */
+        .overlay-btn.active {
+            color: white;
+        }
+        .overlay-btn.btn-fav.active { background-color: rgb(160, 104, 112); }
+        .overlay-btn.btn-visited.active { background-color: #9EA66C; }
+
+        
+        .modal-content { padding: 25px; }
+        
+        .modal-header-row { 
+            display: flex; 
+            justify-content: space-between; /* 左右推開 */
+            align-items: flex-start;        /* 靠上對齊 */
+            gap: 15px;                      /* 中間間距 */
+            margin-bottom: 20px; 
+        }
+
+        /* 新增：左側標題區塊的寬度設定，防止被壓縮太小 */
+        .header-left {
+            flex-shrink: 0;       /* 不讓標題區塊縮水 */
+            max-width: 40%;       /* 限制最大寬度 */
+        }
+        .modal-title { font-size: 1.8rem; font-weight: bold; color: var(--text-main); margin-bottom: 5px; }
+        
+        .info-row {
+            display: flex; align-items: flex-start; gap: 10px; 
+            margin-bottom: 10px; color: var(--text-main); font-size: 0.95rem;
+        }
+        .info-icon { width: 18px; height: 18px; color: var(--text-light); flex-shrink: 0; margin-top: 2px; }
+
+        .map-placeholder {
+            width: 100%;
+            height: 180px;
+            background-color: #E0E0E0;
+            border-radius: 16px;
+            margin: 15px 0 25px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #757575;
+            font-weight: bold;
+            font-size: 0.9rem;
+            border: 2px dashed #BCAAA4;
+        }
+
+        .modal-desc { 
+            color: var(--text-main); 
+            line-height: 1.5; 
+            font-size: 0.85rem; 
+            background: #f9f5f0; 
+            padding: 10px; 
+            border-radius: 12px;
+            flex-grow: 1;         /* 讓簡介填滿右邊剩餘空間 */
+            margin-bottom: 0;     /* 移除原本的底部距離，因為已經在上面了 */
+        }
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar" id="sidebar">
+        <button class="toggle-sidebar-btn" id="toggleSidebarBtn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
+        </button>
+
+        <button class="user-profile-btn" onclick="window.location.href='user_profile.html'">
+            <div class="user-avatar">U</div>
+            <span class="user-name text-label">使用者名稱</span>
+        </button>
+
+        <button class="new-chat-btn" onclick="handleSidebarNewChat()" title="新增對話">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span class="text-label">新增對話</span>
+        </button>
+
+        <div class="history-label text-label">對話紀錄</div>
+        
+        <div class="chat-list" id="sidebarChatList">
+            <div class="empty-sidebar-msg" id="sidebarEmptyMsg">尚無對話紀錄</div>
+        </div>
+    </aside>
+
+    <main class="main-container">
+        <nav class="navbar">
+            <div class="nav-marker"></div>
+            <button class="nav-btn" onclick="window.location.href='chat.html'">對話</button>
+            <button class="nav-btn active" onclick="window.location.href='explore.html'">探索</button>
+            <button class="nav-btn" onclick="window.location.href='quiz.html'">測驗</button>
+        </nav>
+
+        <div class="explore-content">
+            <div class="filter-bar">
+                <div class="filter-chip active" onclick="filterShops('all', this)">全部</div>
+                <div class="filter-chip" onclick="filterShops('fav', this)">已收藏</div>
+                <div class="filter-chip" onclick="filterShops('visited', this)">已去過</div>
+            </div>
+
+            <div class="shop-grid" id="shopGrid">
+            </div>
+        </div>
+    </main>
+
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+        <div class="modal-card" onclick="event.stopPropagation()"> 
+            
+            <div class="modal-img-wrapper">
+                <button class="modal-close-btn" onclick="closeModalDirect()">×</button>
+                <img src="" alt="Shop Image" class="modal-img" id="modalImg">
+                
+                <div class="overlay-actions">
+                    <button class="overlay-btn btn-fav" id="btnFav" onclick="toggleAction('fav')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                        收藏
+                    </button>
+                    <button class="overlay-btn btn-visited" id="btnVisited" onclick="toggleAction('visited')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                        已去過
+                    </button>
+                </div>
+            </div>
+            
+            <div class="modal-content">
+                <div class="header-left">
+                    <div class="modal-title" id="modalTitle">咖啡廳名稱</div>
+                    <div style="font-size: 0.9rem; color: #795548; margin-top: 5px;">
+                        <span id="modalRating">4.5</span> ★ | <span id="modalHours">10:00 - 18:00</span>
+                    </div>
+                </div>
+
+                <div class="modal-desc" id="modalDesc">
+                    這是一間位於巷弄中的寧靜咖啡廳。
+                </div>
+
+                <div class="info-row">
+                    <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                    <span id="modalPhone">02-xxxx-xxxx</span>
+                </div>
+
+                <div class="info-row">
+                    <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                    <span id="modalAddress">台北市某某區...</span>
+                </div>
+
+                <div class="map-placeholder">
+                    Google Maps 地圖區塊保留
+                </div>
+                
+                </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // 1. 側欄資料連動邏輯
+        // ============================================
+        
+        let chats = JSON.parse(localStorage.getItem('allChats')) || [];
+        const chatListEl = document.getElementById('sidebarChatList');
+        const emptyMsgEl = document.getElementById('sidebarEmptyMsg');
+        const sidebar = document.getElementById('sidebar');
+        const toggleBtn = document.getElementById('toggleSidebarBtn');
+
+        if(toggleBtn) {
+            toggleBtn.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+        }
+
+        function renderSidebar() {
+            chatListEl.innerHTML = '';
+            
+            if (chats.length === 0) {
+                chatListEl.appendChild(emptyMsgEl);
+                emptyMsgEl.style.display = 'block';
+                return;
+            } else {
+                emptyMsgEl.style.display = 'none';
+            }
+
+            chats.forEach(chat => {
+                const item = document.createElement('div');
+                item.className = 'chat-item';
+                item.title = chat.title; 
+                
+                item.onclick = () => {
+                    localStorage.setItem('targetChatId', chat.id);
+                    window.location.href = 'chat.html';
+                };
+
+                const iconDiv = document.createElement('div');
+                iconDiv.className = 'chat-icon';
+                iconDiv.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
+
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'chat-title text-label';
+                titleSpan.innerText = chat.title;
+
+                item.appendChild(iconDiv);
+                item.appendChild(titleSpan);
+                chatListEl.appendChild(item);
+            });
+        }
+
+        function handleSidebarNewChat() {
+            localStorage.setItem('targetChatId', 'new');
+            window.location.href = 'chat.html';
+        }
+
+        renderSidebar();
+
+
+        // ============================================
+        // 2. 探索頁面功能
+        // ============================================
+
+        let shops = []; 
+        let currentFilter = 'all';
+        let currentModalShopId = null;
+        const shopGrid = document.getElementById('shopGrid');
+
+        function fetchCafes() {
+            shopGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center;">☕ 載入中...</div>';
+            
+            fetch('http://127.0.0.1:5000/api/cafes', { credentials: 'include' })
+            .then(res => res.json())
+            .then(data => {
+                shops = data; 
+                renderShops();
+            })
+            .catch(err => console.error(err));
+        }
+
+        fetchCafes();
+
+        function renderShops() {
+            shopGrid.innerHTML = '';
+            
+            const filteredShops = shops.filter(shop => {
+                if (currentFilter === 'fav') return shop.is_fav;
+                if (currentFilter === 'visited') return shop.is_visited;
+                return true;
+            });
+
+            if (filteredShops.length === 0) {
+                shopGrid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; margin-top:50px;">沒有符合條件的咖啡廳</div>';
+                return;
+            }
+
+            filteredShops.forEach(shop => {
+                const isFav = shop.is_fav ? 'is-fav' : '';
+                const isVisited = shop.is_visited ? 'is-visited' : '';
+                const imgStyle = `background-color: ${shop.color};`;
+
+                const card = document.createElement('div');
+                card.className = `shop-card ${isFav} ${isVisited}`;
+                card.onclick = () => openModal(shop.id);
+
+                card.innerHTML = `
+                    <div class="card-img" style="${imgStyle}"></div>
+                    <div class="card-status-icons">
+                        <div class="status-dot fav">❤</div>
+                        <div class="status-dot visited">✔</div>
+                    </div>
+                    <div class="card-info">
+                        <div class="shop-name">${shop.name}</div>
+                        <div class="shop-tags">${shop.tags}</div>
+                    </div>
+                `;
+                shopGrid.appendChild(card);
+            });
+        }
+
+        // --- Modal 邏輯 ---
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalImg = document.getElementById('modalImg');
+        // ... (其他 DOM 元素變數維持不變) ...
+        const btnFav = document.getElementById('btnFav');
+        const btnVisited = document.getElementById('btnVisited');
+
+        function openModal(id) {
+            const shop = shops.find(s => s.id === id);
+            if(!shop) return;
+            currentModalShopId = id;
+            
+            // 填入資料 (維持不變)
+            document.getElementById('modalTitle').innerText = shop.name;
+            document.getElementById('modalDesc').innerText = shop.desc;
+            document.getElementById('modalHours').innerText = shop.hours;
+            document.getElementById('modalRating').innerText = shop.rating;
+            document.getElementById('modalPhone').innerText = shop.phone;
+            document.getElementById('modalAddress').innerText = shop.address;
+            modalImg.style.backgroundColor = shop.color;
+            
+            // 地圖邏輯 (維持不變)
+            const mapPlaceholder = document.querySelector('.map-placeholder');
+            if (shop.address && shop.address !== "地址未知") {
+                 const encodedAddress = encodeURIComponent(shop.address);
+                 mapPlaceholder.innerHTML = `<iframe width="100%" height="100%" frameborder="0" style="border:0; border-radius: 16px;" src="https://maps.google.com/maps?q=$${encodedAddress}&t=&z=15&ie=UTF8&iwloc=&output=embed" allowfullscreen></iframe>`;
+                 mapPlaceholder.style.backgroundColor = "transparent";
+            } else if (shop.map_url) {
+                // ... (維持不變)
+                mapPlaceholder.innerHTML = `<button onclick="window.open('${shop.map_url}', '_blank')">開啟地圖</button>`;
+            } else {
+                mapPlaceholder.innerHTML = '尚無地圖資料';
+            }
+
+            updateModalButtons(shop);
+            modalOverlay.classList.add('open');
+        }
+
+        function closeModal(e) {
+            if (e.target === modalOverlay) modalOverlay.classList.remove('open');
+        }
+        function closeModalDirect() { modalOverlay.classList.remove('open'); }
+
+        function updateModalButtons(shop) {
+            if (shop.is_fav) btnFav.classList.add('active');
+            else btnFav.classList.remove('active');
+
+            if (shop.is_visited) btnVisited.classList.add('active');
+            else btnVisited.classList.remove('active');
+        }
+
+        // --- 關鍵修改：呼叫後端 API 更新狀態 ---
+        function toggleAction(type) {
+            if (!currentModalShopId) return;
+            
+            fetch('http://127.0.0.1:5000/api/user/shop_state', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    cafe_id: currentModalShopId,
+                    type: type // 'fav' 或 'visited'
+                })
+            })
+            .then(res => res.json())
+            .then(result => {
+                if(result.success) {
+                    // 更新本地 shops 資料，這樣不用重新 fetch 整個列表
+                    const shop = shops.find(s => s.id === currentModalShopId);
+                    if(shop) {
+                        if(type === 'fav') shop.is_fav = result.fav;
+                        if(type === 'visited') shop.is_visited = result.visited;
+                        
+                        updateModalButtons(shop);
+                        renderShops(); // 重新渲染列表以更新愛心圖示
+                    }
+                } else {
+                    alert("請先登入才能使用此功能！");
+                }
+            });
+        }
+
+        function filterShops(type, btnElement) {
+            currentFilter = type;
+            document.querySelectorAll('.filter-chip').forEach(el => el.classList.remove('active'));
+            btnElement.classList.add('active');
+            renderShops();
+        }
+
+
+        // ============================================
+        // 3. 導覽列滑塊動畫
+        // ============================================
+        function initNavMarker() {
+            const marker = document.querySelector('.nav-marker');
+            const navButtons = document.querySelectorAll('.nav-btn');
+            const activeBtn = document.querySelector('.nav-btn.active');
+            const navContainer = document.querySelector('.navbar');
+
+            function moveMarker(target) {
+                if (!target) return;
+                marker.style.width = `${target.offsetWidth}px`;
+                marker.style.left = `${target.offsetLeft}px`;
+                marker.style.top = `${target.offsetTop}px`;
+                marker.style.opacity = '1';
+            }
+            function updateTextColors(targetBtn) {
+                navButtons.forEach(btn => {
+                    if (btn === targetBtn) btn.style.color = '#fff';
+                    else btn.style.color = '';
+                });
+            }
+
+            const savedLeft = sessionStorage.getItem('navMarkerLeft');
+            const savedWidth = sessionStorage.getItem('navMarkerWidth');
+
+            if (savedLeft && savedWidth) {
+                marker.style.left = savedLeft;
+                marker.style.width = savedWidth;
+                marker.style.top = '20px';
+                marker.style.opacity = '1';
+                void marker.offsetWidth; 
+            }
+            marker.classList.add('animate');
+
+            if (activeBtn) {
+                moveMarker(activeBtn);
+                updateTextColors(activeBtn);
+            }
+
+            navButtons.forEach(btn => {
+                btn.addEventListener('mouseenter', (e) => {
+                    moveMarker(e.target);
+                    updateTextColors(e.target);
+                });
+                btn.addEventListener('click', (e) => {
+                    sessionStorage.setItem('navMarkerLeft', `${e.currentTarget.offsetLeft}px`);
+                    sessionStorage.setItem('navMarkerWidth', `${e.currentTarget.offsetWidth}px`);
+                });
+            });
+
+            navContainer.addEventListener('mouseleave', () => {
+                const currentActive = document.querySelector('.nav-btn.active');
+                if (currentActive) {
+                    moveMarker(currentActive);
+                    updateTextColors(currentActive);
+                }
+            });
+        }
+
+        fetch('http://127.0.0.1:5000/api/me', {
+            method: 'GET',
+            credentials: 'include' 
+        })
+        .then(response => {
+            if (response.status === 401) {
+                // 如果是 401，代表後端沒收到 Cookie 或 Session 過期
+                // 暫時不強制踢人，先觀察 Console
+                console.log("未登入或 Session 失效");
+                return null;
+            }
+            return response.json();
+        })
+        .then(data => {
+            if(data && data.is_logged_in) {
+                console.log("登入成功，資料為:", data); // 這裡應該要印出名字跟圖片網址
+
+                // 更新畫面上的頭像
+                const avatarElements = document.querySelectorAll('.user-avatar');
+                avatarElements.forEach(el => {
+                    if(data.picture) {
+                        el.innerText = '';
+                        el.innerHTML = `<img src="${data.picture}" style="width:100%; height:100%; border-radius:50%; object-fit: cover;">`;
+                        el.style.backgroundColor = 'transparent';
+                    }
+                });
+
+                // 更新畫面上的名字
+                const nameElements = document.querySelectorAll('.user-name');
+                nameElements.forEach(el => {
+                    if(data.name) el.innerText = data.name;
+                });
+            }
+        })
+        .catch(err => {
+            console.error("連線錯誤:", err);
+        });
+        setTimeout(initNavMarker, 50); 
+        window.addEventListener('resize', initNavMarker);
+
+    </script>
+</body>
+</html>
