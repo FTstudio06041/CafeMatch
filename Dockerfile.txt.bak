@@ -1,0 +1,15 @@
+# 使用輕量級 Python 映像
+FROM python:3.10-slim
+
+# 設定工作目錄
+WORKDIR /app
+
+# 複製依賴清單並安裝
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 複製專案原始碼
+COPY . .
+
+# 啟動指令 (根據你的框架調整)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

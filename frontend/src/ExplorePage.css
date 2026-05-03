@@ -1,0 +1,640 @@
+:root {
+    /* 延續主色調 */
+    --bg-main: #ddccb9;
+    --bg-sidebar: #d6c2a5;
+    --bg-card: #FFFFFF;
+    --accent-color: #432a00;
+    --text-main: #4E342E;
+    --text-light: #795548;
+    --btn-active: #bcaaa4;
+
+    --border-radius: 24px;
+    --sidebar-width: 280px;
+    --sidebar-width-collapsed: 88px;
+    --transition-speed: 0.3s;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Microsoft JhengHei", sans-serif;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+}
+
+/* 全域卷軸樣式 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: #d6c2a5;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: #b5a191;
+}
+
+/* --- 側欄 --- */
+.sidebar {
+    width: var(--sidebar-width);
+    background-color: var(--bg-sidebar);
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    flex-shrink: 0;
+    transition: width var(--transition-speed) ease;
+    position: relative;
+}
+
+.sidebar.collapsed {
+    width: var(--sidebar-width-collapsed);
+    padding: 20px 10px;
+}
+
+.toggle-sidebar-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+.sidebar.collapsed .toggle-sidebar-btn {
+    transform: rotate(180deg);
+    right: 50%;
+    margin-right: -15px;
+}
+
+.user-profile-btn {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    background: #FFFFFF;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    margin-bottom: 30px;
+    margin-top: 40px;
+    height: 70px;
+    overflow: hidden;
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    background-color: var(--accent-color);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.user-name {
+    font-weight: bold;
+    color: var(--text-main);
+    white-space: nowrap;
+    transition: opacity 0.2s;
+}
+
+.sidebar.collapsed .user-name {
+    opacity: 0;
+    width: 0;
+    margin: 0;
+    overflow: hidden;
+}
+
+.sidebar.collapsed .user-profile-btn {
+    justify-content: center;
+    padding: 15px 0;
+}
+
+.sidebar.collapsed .user-avatar {
+    margin-right: 0;
+}
+
+.new-chat-btn {
+    width: 100%;
+    padding: 12px;
+    background-color: transparent;
+    border: 2px dashed var(--text-light);
+    border-radius: 16px;
+    color: var(--text-main);
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 50px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.new-chat-btn:hover {
+    background-color: rgba(255, 255, 255, 0.5);
+    border-color: var(--text-main);
+}
+
+.sidebar.collapsed .new-chat-btn {
+    justify-content: center;
+    padding: 0;
+}
+
+.text-label {
+    opacity: 1;
+    white-space: nowrap;
+    transition: opacity 0.2s;
+}
+
+.sidebar.collapsed .text-label {
+    opacity: 0;
+    width: 0;
+    margin: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.history-label {
+    font-size: 0.9rem;
+    color: var(--text-light);
+    margin-bottom: 10px;
+    padding-left: 10px;
+    white-space: nowrap;
+}
+
+.sidebar.collapsed .history-label {
+    opacity: 0;
+    width: 0;
+    margin: 0;
+    overflow: hidden;
+}
+
+/* 側欄列表 */
+.chat-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.chat-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.chat-list::-webkit-scrollbar-thumb {
+    background-color: #E0C0A0;
+    border-radius: 10px;
+}
+
+.chat-item {
+    padding: 12px 15px;
+    border-radius: 16px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: var(--text-main);
+    transition: 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    position: relative;
+    height: 50px;
+    flex-shrink: 0;
+}
+
+.chat-item:hover {
+    background-color: rgba(255, 255, 255, 0.6);
+}
+
+.sidebar.collapsed .chat-item {
+    justify-content: center;
+    padding: 0;
+}
+
+.chat-icon {
+    margin-right: 10px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+.sidebar.collapsed .chat-icon {
+    margin-right: 0;
+}
+
+.chat-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+    flex-grow: 1;
+}
+
+.empty-sidebar-msg {
+    text-align: center;
+    color: var(--text-light);
+    opacity: 0.6;
+    font-size: 0.9rem;
+    margin-top: 20px;
+}
+
+.sidebar.collapsed .empty-sidebar-msg {
+    display: none;
+}
+
+/* --- 主內容區 --- */
+.main-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background-color: var(--bg-main);
+    overflow: hidden;
+}
+
+/* 導覽列 */
+.navbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 20px 30px;
+    gap: 15px;
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+}
+
+.nav-marker {
+    position: absolute;
+    background-color: var(--text-main);
+    height: 44px;
+    border-radius: 20px;
+    z-index: 0;
+    width: 0;
+    left: 0;
+    top: 20px;
+    opacity: 0;
+}
+
+.nav-marker.animate {
+    transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.nav-btn {
+    padding: 10px 24px;
+    border: none;
+    background: transparent;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-light);
+    cursor: pointer;
+    border-radius: 20px;
+    transition: color 0.2s;
+    position: relative;
+    z-index: 1;
+}
+
+.nav-btn:hover {
+    color: var(--text-main);
+}
+
+.nav-btn.active {
+    color: #fff;
+}
+
+/* --- 探索區塊 --- */
+.explore-content {
+    flex: 1;
+    padding: 0 40px 40px 40px;
+    overflow-y: auto;
+}
+
+.filter-bar {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.filter-chip {
+    padding: 8px 20px;
+    background-color: rgba(255, 255, 255, 0.4);
+    border: 2px solid transparent;
+    border-radius: 20px;
+    cursor: pointer;
+    color: var(--text-main);
+    font-weight: bold;
+    transition: 0.2s;
+}
+
+.filter-chip:hover {
+    background-color: rgba(255, 255, 255, 0.7);
+}
+
+.filter-chip.active {
+    background-color: var(--accent-color);
+    color: #fff;
+}
+
+.shop-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 25px;
+    padding-bottom: 40px;
+}
+
+.shop-card {
+    background: var(--bg-card);
+    border-radius: 20px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.shop-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(78, 52, 46, 0.1);
+}
+
+.card-img {
+    width: 100%;
+    height: 160px;
+    background-color: #ddd;
+    object-fit: cover;
+}
+
+.card-info {
+    padding: 15px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.shop-name {
+    font-size: 1.1rem;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.shop-tags {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-bottom: 10px;
+}
+
+.card-status-icons {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 5px;
+}
+
+.status-dot {
+    width: 24px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    opacity: 0;
+    transition: 0.2s;
+    color: var(--accent-color);
+}
+
+.shop-card.is-fav .status-dot.fav {
+    opacity: 1;
+}
+
+.shop-card.is-visited .status-dot.visited {
+    opacity: 1;
+}
+
+/* --- 彈窗 (Modal) --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(78, 52, 46, 0.4);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.modal-overlay.open {
+    display: flex;
+    opacity: 1;
+}
+
+.modal-card {
+    background: var(--bg-card);
+    width: 90%;
+    max-width: 550px;
+    border-radius: 30px;
+    overflow: hidden;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+    transform: scale(0.9);
+    transition: transform 0.3s;
+    position: relative;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.modal-overlay.open .modal-card {
+    transform: scale(1);
+}
+
+/* 圖片容器：為了定位按鈕 */
+.modal-img-wrapper {
+    position: relative;
+    width: 100%;
+    height: 350px;
+}
+
+.modal-img {
+    width: 100%;
+    height: 100%;
+    background: #eee;
+    object-fit: cover;
+    display: block;
+}
+
+/* 彈窗關閉按鈕：定位在圖片右上 */
+.modal-close-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: rgba(0, 0, 0, 0.3);
+    color: white;
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 10;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 操作按鈕群組：定位在圖片右下 */
+.overlay-actions {
+    position: absolute;
+    bottom: 15px;
+    right: 15px;
+    display: flex;
+    gap: 10px;
+    z-index: 5;
+}
+
+.overlay-btn {
+    padding: 8px 16px;
+    border-radius: 20px;
+    border: none;
+    background: rgba(255, 255, 255, 0.9);
+    /* 半透明白底 */
+    color: var(--text-main);
+    font-weight: bold;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.overlay-btn:hover {
+    background: #fff;
+    transform: translateY(-2px);
+}
+
+/* 激活狀態 */
+.overlay-btn.active {
+    color: white;
+}
+
+.overlay-btn.btn-fav.active {
+    background-color: rgb(160, 104, 112);
+}
+
+.overlay-btn.btn-visited.active {
+    background-color: #9EA66C;
+}
+
+
+.modal-content {
+    padding: 25px;
+}
+
+.modal-header-row {
+    display: flex;
+    justify-content: space-between;
+    /* 左右推開 */
+    align-items: flex-start;
+    /* 靠上對齊 */
+    gap: 15px;
+    /* 中間間距 */
+    margin-bottom: 20px;
+}
+
+/* 新增：左側標題區塊的寬度設定，防止被壓縮太小 */
+.header-left {
+    flex-shrink: 0;
+    /* 不讓標題區塊縮水 */
+    max-width: 40%;
+    /* 限制最大寬度 */
+}
+
+.modal-title {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: var(--text-main);
+    margin-bottom: 5px;
+}
+
+.info-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+    color: var(--text-main);
+    font-size: 0.95rem;
+}
+
+.info-icon {
+    width: 18px;
+    height: 18px;
+    color: var(--text-light);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.map-placeholder {
+    width: 100%;
+    height: 180px;
+    background-color: #E0E0E0;
+    border-radius: 16px;
+    margin: 15px 0 25px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #757575;
+    font-weight: bold;
+    font-size: 0.9rem;
+    border: 2px dashed #BCAAA4;
+}
+
+.modal-desc {
+    color: var(--text-main);
+    line-height: 1.5;
+    font-size: 0.85rem;
+    background: #f9f5f0;
+    padding: 10px;
+    border-radius: 12px;
+    flex-grow: 1;
+    /* 讓簡介填滿右邊剩餘空間 */
+    margin-bottom: 0;
+    /* 移除原本的底部距離，因為已經在上面了 */
+}

@@ -1,0 +1,272 @@
+:root {
+    /* 延續主色調 */
+    --bg-main: #ddccb9;
+    --bg-white: #FFFFFF;
+    --accent-color: #432a00;
+    --text-main: #4E342E;
+    --text-light: #795548;
+    --border-radius: 24px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Microsoft JhengHei", sans-serif;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    min-height: 100vh;
+    /* Allow scrolling if content is long */
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    /* Enable vertical scroll */
+    overflow-x: hidden;
+}
+
+/* --- Header --- */
+.landing-header {
+    padding: 15px 40px;
+    /* Reduced padding */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    height: 70px;
+    /* Fixed height for calculation */
+}
+
+.brand-logo {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--accent-color);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    /* 讓 Logo 看起來可點擊 */
+}
+
+/* --- 新增：Header 右側按鈕群組 --- */
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    /* 按鈕之間的間距 */
+}
+
+/* 1. 註冊與登入按鈕樣式 (文字型) */
+.btn-text {
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    font-weight: bold;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 8px;
+    transition: 0.2s;
+}
+
+.btn-text:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 2. 開始使用按鈕樣式 (強調型) */
+.btn-primary-sm {
+    background-color: var(--text-main);
+    color: #fff;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 10px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    text-align: center;
+}
+
+.btn-primary-sm:hover {
+    background-color: var(--accent-color);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.15);
+}
+
+/* --- 主內容區 --- */
+/* --- 主內容區 --- */
+.landing-container {
+    /* Top section - minimized */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 5%;
+    /* Reduced padding */
+    gap: 20px;
+    /* Reduced gap */
+    max-width: 1300px;
+    margin: 0 auto;
+    width: 100%;
+    flex: 1;
+    /* Allow it to shrink/grow */
+    min-height: auto;
+    /* Remove large min-height */
+}
+
+.section-brown {
+    background-color: var(--accent-color);
+    width: 100%;
+    flex: 1.5;
+    /* Give more space to video section */
+    padding: 0 5%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    color: var(--bg-white);
+    overflow: hidden;
+    /* Prevent spill */
+}
+
+/* 左側：介紹與登入 (現在在上方) */
+.intro-section {
+    width: 100%;
+    max-width: 800px;
+    /* Increase max-width for better centering */
+    animation: slideInLeft 0.8s ease;
+    margin-left: 0;
+    /* Remove left margin */
+    text-align: center;
+    /* Center text */
+    margin-top: 80px;
+    /* Increased from 40px */
+    /* Add spacing to move it down */
+}
+
+.main-title {
+    font-size: 2.5rem;
+    /* Reduced font size */
+    font-weight: 900;
+    line-height: 1.2;
+    margin-bottom: 10px;
+    /* Reduced margin */
+    color: var(--accent-color);
+}
+
+.sub-title {
+    font-size: 1rem;
+    /* Reduced font size */
+    color: var(--text-main);
+    margin-bottom: 20px;
+    /* Reduced margin */
+    line-height: 1.5;
+    opacity: 0.9;
+}
+
+.btn-google-login {
+    background-color: var(--bg-white);
+    color: var(--text-main);
+    border: none;
+    padding: 15px 30px;
+    border-radius: 50px;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    cursor: pointer;
+    display: inline-flex;
+    /* Changed to inline-flex for centering */
+    align-items: center;
+    gap: 15px;
+    margin: 0 auto;
+    /* Center the button */
+    box-shadow: 0 4px 15px rgba(67, 42, 0, 0.15);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-google-login:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(67, 42, 0, 0.2);
+}
+
+/* 右側：影片展示區 (現在在下方深色區塊內) */
+.demo-section {
+    width: 100%;
+    max-width: 1300px;
+    /* 限制最大寬度 */
+    display: flex;
+    flex-direction: column;
+    /* Revert to column */
+    justify-content: center;
+    align-items: center;
+    gap: 0;
+    /* Remove gap */
+    animation: slideInRight 0.8s ease;
+    margin-bottom: 0;
+    /* 移除底部間距 */
+}
+
+.video-wrapper {
+    margin: 0 auto;
+    /* Center horizontally */
+    /* Remove auto margin */
+    /* Reduced from 900px to fit better */
+    width: 65%;
+    /* Slightly increased width since it's alone */
+    max-width: 800px;
+    /* Responsive width */
+
+    /* Use modern aspect-ratio property */
+    aspect-ratio: 16 / 9;
+
+    position: relative;
+    /* 讓內部的 video 可以絕對定位 */
+
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+    flex-shrink: 0;
+}
+
+video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+
+    object-fit: cover;
+    /* Ensure full 16:9 video is visible without black bars */
+
+    z-index: 1;
+}
+
+
+
+/* 移除點點樣式 */
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-50px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(50px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}

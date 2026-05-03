@@ -4,6 +4,7 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 import os
 from dotenv import load_dotenv
+import requests
 
 load_dotenv()
 
@@ -16,7 +17,11 @@ app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev_key')
 app.config['GOOGLE_CLIENT_ID'] = os.getenv('GOOGLE_CLIENT_ID')
 app.config['GOOGLE_CLIENT_SECRET'] = os.getenv('GOOGLE_CLIENT_SECRET')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DB_URI')
+local_db_uri = 'mysql+pymysql://root:@localhost/cafematch'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DB_URI', local_db_uri)
+
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
 
 # ==========================================
 # MySQL 連線設定 (XAMPP 預設)
@@ -25,11 +30,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DB_URI')
 # 主機: localhost
 # 資料庫: cafematch
 # ==========================================
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:@localhost/cafematch'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# 初始化資料庫
-db = SQLAlchemy(app)
 
 # 啟用 CORS
 CORS(app, supports_credentials=True)
@@ -155,6 +156,13 @@ def get_cafes():
             if cafe.url:
                 map_link = f"http://maps.app.goo.gl/{cafe.url}"
             
+            # Earth/Coffee Tones Palette
+            palette = [
+                "#8D6E63", "#A1887F", "#BCAAA4", "#D7CCC8", # Browns
+                "#795548", "#6D4C41", "#5D4037", "#4E342E", # Dark Browns
+                "#78909C", "#607D8B", "#546E7A"             # Blue Greys
+            ]
+            
             results.append({
                 "id": cafe.id,
                 "name": cafe.name,
@@ -164,8 +172,8 @@ def get_cafes():
                 "phone": cafe.phone or "無電話",
                 "address": cafe.address or "地址未知",
                 "desc": cafe.website or "尚無介紹",
-                "color": "#8D6E63", 
-                "map_url": map_link,
+                "color": random.choice(palette), 
+                "map_url": map_link, 
                 "is_fav": my_state['fav'],          # 傳給前端亮燈
                 "is_visited": my_state['visited']   # 傳給前端亮燈
             })
@@ -228,14 +236,16 @@ def authorize():
     
     # 這裡多帶一個參數回到前端
     if is_new_user:
-        return redirect('http://127.0.0.1:5500/chat.html?welcome=true') 
+        # 移除 .html，直接導向 /chat
+        return redirect('http://localhost:5173/chat?welcome=true') 
     else:
-        return redirect('http://127.0.0.1:5500/chat.html')
+        # 移除 .html，直接導向 /chat
+        return redirect('http://localhost:5173/chat')
     
 @app.route('/logout')
 def logout():
     session.pop('user_email', None)
-    return redirect('http://127.0.0.1:5500/index.html')
+    return redirect('http://localhost:5173')
 
 @app.route('/api/me')
 def get_current_user():
@@ -329,6 +339,72 @@ def update_shop_state():
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route('/api/user/delete', methods=['POST'])
+def delete_user_account():
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({"success": False, "message": "未登入"}), 401
+
+    try:
+        user = User.query.filter_by(email=user_email).first()
+        if not user:
+            return jsonify({"success": False, "message": "使用者不存在"}), 404
+
+        # 1. 刪除相關資料 (UserShopState)
+        UserShopState.query.filter_by(user_id=user.id).delete()
+        
+        # 2. 刪除使用者
+        db.session.delete(user)
+        db.session.commit()
+        
+        # 3. 清除 Session
+        session.pop('user_email', None)
+        
+        return jsonify({"success": True, "message": "帳號已刪除"})
+
+    except Exception as e:
+        db.session.rollback()
+        print("Delete Account Error:", e)
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route('/api/chat', methods=['POST'])
+def chat_with_ai():
+    # 1. 確保使用者有登入 (若不想強制登入可拿掉這段)
+    # user_email = session.get('user_email')
+    # if not user_email:
+    #     return jsonify({"error": "請先登入"}), 401
+
+    try:
+        # 2. 接收前端傳來的訊息
+        data = request.json
+        user_message = data.get('message', '')
+
+        if not user_message:
+            return jsonify({"error": "未提供訊息"}), 400
+
+        # 3. 準備發送給 Ollama 的資料
+        ollama_url = "http://localhost:11434/api/generate"
+        payload = {
+            "model": "qwen3.5:397b-cloud",
+            "prompt": f"你是一個專業的台灣咖啡廳推薦助手。請用繁體中文自然地回答使用者的問題，像朋友一樣聊天即可。不要每次都自我介紹。\n\n使用者：{user_message}\n助手：",
+            "stream": False # 讓 AI 一次把整段話講完再傳回前端
+        }
+
+        # 4. 發送請求給本機的 Ollama
+        response = requests.post(ollama_url, json=payload)
+        response.raise_for_status() # 檢查 HTTP 狀態碼
+        
+        # 5. 取出 AI 的回答並回傳給前端
+        ai_reply = response.json().get("response", "抱歉，我現在腦筋有點打結，請再說一次。")
+        return jsonify({"reply": ai_reply})
+
+    except requests.exceptions.ConnectionError:
+        print("Ollama 連線失敗，請檢查 Ollama 主程式是否開啟")
+        return jsonify({"error": "AI 伺服器未啟動，請聯絡管理員。"}), 500
+    except Exception as e:
+        print("Chat API Error:", e)
+        return jsonify({"error": "系統發生未知的錯誤"}), 500
 
 
 
