@@ -8,11 +8,11 @@ export const AuthProvider = ({ children }) => {
 
   // 1. 抓資料用的路徑：雲端用 AWS IP，地端用空字串 (配合 Vite Proxy)
   const API_BASE_URL = isProduction
-    ? 'http://32.236.46.23:5000'
+    ? 'http://ec2-32-236-46-23.ap-southeast-2.compute.amazonaws.com:5000'
     : '';
 
   // 2. 登入跳轉用的絕對路徑：不管地端還雲端，都必須直接飛去 AWS
-  const AWS_REAL_URL = 'http://32.236.46.23:5000';
+  const AWS_REAL_URL = 'http://ec2-32-236-46-23.ap-southeast-2.compute.amazonaws.com:5000';
 
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
