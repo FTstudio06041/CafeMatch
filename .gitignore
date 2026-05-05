@@ -16,3 +16,4 @@ env/
 # 忽略作業系統縮圖
 .DS_Store
 Thumbs.db
+aws-ec2-token.txt
