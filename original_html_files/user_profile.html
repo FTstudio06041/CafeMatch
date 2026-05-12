@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>啡你莫屬 - 個人主頁</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
+    <style>
+        :root {
+            --bg-main: #ddccb9;
+            --bg-sidebar: #d6c2a5;
+            --bg-card: #FFFFFF;
+            --accent-color: #432a00;
+            --text-main: #4E342E;
+            --text-light: #795548;
+
+            --border-radius: 24px;
+            --sidebar-width: 280px;
+            --sidebar-width-collapsed: 88px;
+            --transition-speed: 0.3s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
+        }
+
+        /* 全域卷軸樣式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background-color: #d6c2a5;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: #b5a191;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* --- 側欄樣式 --- */
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--bg-sidebar);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            flex-shrink: 0;
+            transition: width var(--transition-speed) ease;
+            position: relative;
+        }
+
+        .sidebar.collapsed {
+            width: var(--sidebar-width-collapsed);
+            padding: 20px 10px;
+        }
+
+        .toggle-sidebar-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .sidebar.collapsed .toggle-sidebar-btn {
+            transform: rotate(180deg);
+            right: 50%;
+            margin-right: -15px;
+        }
+
+        .user-profile-btn {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            background: #FFFFFF;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            margin-bottom: 20px;
+            margin-top: 40px;
+            height: 70px;
+            overflow: hidden;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background-color: var(--accent-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            margin-right: 12px;
+            flex-shrink: 0;
+            object-fit: cover;
+        }
+
+        .user-name {
+            font-weight: bold;
+            color: var(--text-main);
+            white-space: nowrap;
+            transition: opacity 0.2s;
+        }
+
+        .sidebar.collapsed .user-name {
+            opacity: 0;
+            display: none;
+        }
+
+        .sidebar.collapsed .user-profile-btn {
+            justify-content: center;
+            padding: 15px 0;
+        }
+
+        .sidebar.collapsed .user-avatar {
+            margin-right: 0;
+        }
+
+        .new-chat-btn {
+            width: 100%;
+            padding: 12px;
+            background-color: transparent;
+            border: 2px dashed var(--text-light);
+            border-radius: 16px;
+            color: var(--text-main);
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            height: 50px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .new-chat-btn:hover {
+            background-color: rgba(255, 255, 255, 0.5);
+            border-color: var(--text-main);
+        }
+
+        .sidebar.collapsed .new-chat-btn {
+            justify-content: center;
+            padding: 0;
+        }
+
+        .text-label {
+            opacity: 1;
+            white-space: nowrap;
+            transition: opacity 0.2s;
+        }
+
+        .sidebar.collapsed .text-label {
+            opacity: 0;
+            display: none;
+        }
+
+        .history-label {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin-bottom: 10px;
+            padding-left: 10px;
+            white-space: nowrap;
+        }
+
+        .sidebar.collapsed .history-label {
+            display: none;
+        }
+
+        .chat-list {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .chat-list::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .chat-list::-webkit-scrollbar-thumb {
+            background-color: #E0C0A0;
+            border-radius: 10px;
+        }
+
+        .chat-item {
+            padding: 12px 15px;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            color: var(--text-main);
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            position: relative;
+            height: 50px;
+            flex-shrink: 0;
+        }
+
+        .chat-item:hover {
+            background-color: rgba(255, 255, 255, 0.6);
+        }
+
+        .sidebar.collapsed .chat-item {
+            justify-content: center;
+            padding: 0;
+        }
+
+        .chat-icon {
+            margin-right: 10px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .sidebar.collapsed .chat-icon {
+            margin-right: 0;
+        }
+
+        .chat-title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 160px;
+            flex-grow: 1;
+        }
+
+        .empty-sidebar-msg {
+            text-align: center;
+            color: var(--text-light);
+            opacity: 0.6;
+            font-size: 0.9rem;
+            margin-top: 20px;
+        }
+
+        .sidebar.collapsed .empty-sidebar-msg {
+            display: none;
+        }
+
+        /* --- 主內容區 --- */
+        .main-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background-color: var(--bg-main);
+            overflow: hidden;
+        }
+
+        .navbar {
+            display: flex;
+            justify-content: flex-end;
+            padding: 20px 30px;
+            gap: 15px;
+            position: relative;
+            z-index: 1;
+            flex-shrink: 0;
+        }
+
+        .nav-btn {
+            padding: 10px 24px;
+            border: none;
+            background: transparent;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-light);
+            cursor: pointer;
+            border-radius: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .nav-btn:hover {
+            color: var(--text-main);
+        }
+
+        .nav-btn.active {
+            color: #fff;
+        }
+
+        /* --- 新增：滑動的高亮塊 --- */
+        .nav-marker {
+            position: absolute;
+            background-color: var(--text-main);
+            height: 44px;
+            border-radius: 20px;
+            z-index: 0;
+            width: 0;
+            left: 0;
+            top: 20px;
+            opacity: 0;
+        }
+
+        .nav-marker.animate {
+            transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* --- 個人主頁內容 --- */
+        .profile-content {
+            flex: 1;
+            padding: 20px 8% 40px 8%;
+            overflow-y: auto;
+        }
+
+        /* --- 個人資訊卡片樣式 --- */
+        .profile-header-card {
+            background-color: rgba(255, 255, 255, 0.6);
+            border-radius: 24px;
+            padding: 30px;
+            display: flex;
+            align-items: center;
+            gap: 25px;
+            margin-bottom: 20px;
+        }
+
+        .header-avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            border: 4px solid #fff;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .header-info {
+            flex: 1;
+        }
+
+        .header-name {
+            font-size: 2rem;
+            font-weight: 900;
+            color: var(--accent-color);
+            margin-bottom: 5px;
+        }
+
+        .header-email {
+            font-size: 1rem;
+            color: var(--text-light);
+            margin-bottom: 15px;
+        }
+
+        /* 按鈕群組 (讓編輯和登出並排) */
+        .profile-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .btn-edit-profile {
+            background-color: var(--text-main);
+            color: #fff;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: 0.2s;
+        }
+
+        .btn-edit-profile:hover {
+            background-color: var(--accent-color);
+            transform: translateY(-2px);
+        }
+
+        /* 登出按鈕樣式 */
+        .btn-logout {
+            background-color: transparent;
+            color: #d32f2f;
+            /* 紅色 */
+            border: 2px solid #d32f2f;
+            padding: 8px 20px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: 0.2s;
+            font-weight: bold;
+        }
+
+        .btn-logout:hover {
+            background-color: #ffebee;
+            transform: translateY(-2px);
+        }
+
+        /* --- 彈出視窗 (Modal) 樣式 --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-card {
+            background: #fff;
+            padding: 30px;
+            border-radius: 24px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transform: translateY(20px);
+            transition: transform 0.3s;
+        }
+
+        .modal-overlay.active .modal-card {
+            transform: translateY(0);
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: var(--accent-color);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: var(--text-main);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #eee;
+            border-radius: 12px;
+            font-size: 1rem;
+            outline: none;
+            transition: 0.2s;
+        }
+
+        .form-input:focus {
+            border-color: var(--accent-color);
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .btn-cancel {
+            background: #eee;
+            color: #666;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+        }
+
+        .btn-save {
+            background: var(--text-main);
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+        }
+
+        /* 上傳按鈕樣式 */
+        .btn-upload {
+            background-color: #f0f0f0;
+            border: 2px dashed #ccc;
+            padding: 8px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #555;
+            transition: 0.2s;
+            font-weight: bold;
+        }
+
+        .btn-upload:hover {
+            background-color: #e0e0e0;
+            border-color: var(--text-main);
+            color: var(--text-main);
+        }
+
+        /* 確保裁切圖片響應式縮放 */
+        #cropContainer img {
+            display: block;
+            max-width: 100%;
+        }
+
+        /* ----------------------- */
+
+        .section-header {
+            margin-top: 40px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid rgba(78, 52, 46, 0.1);
+            padding-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: var(--text-main);
+        }
+
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .mini-shop-card {
+            background: var(--bg-card);
+            border-radius: 20px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            position: relative;
+        }
+
+        .mini-shop-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 24px rgba(67, 42, 0, 0.15);
+            border-color: rgba(67, 42, 0, 0.1);
+        }
+
+        .mini-img {
+            width: 70px;
+            height: 70px;
+            border-radius: 14px;
+            object-fit: cover;
+            margin-right: 15px;
+            flex-shrink: 0;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .mini-info {
+            flex: 1;
+            min-width: 0;
+            /* 防止文字溢出容器 */
+        }
+
+        .mini-name {
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 4px;
+            font-size: 1.05rem;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .mini-tag {
+            font-size: 0.85rem;
+            color: var(--text-light);
+            opacity: 0.8;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .mini-badge {
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .badge-fav {
+            background-color: rgb(160, 104, 112);
+            color: #ffe8f2;
+        }
+
+        .badge-visited {
+            background-color: #9EA66C;
+            color: #dfffe1;
+        }
+
+        .result-card {
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+            transition: 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .result-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .card-date {
+            font-size: 0.8rem;
+            color: var(--text-light);
+            background: #eee;
+            padding: 4px 10px;
+            border-radius: 10px;
+        }
+
+        .card-coffee-name {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: var(--accent-color);
+            margin-bottom: 10px;
+        }
+
+        .card-desc {
+            font-size: 0.9rem;
+            color: var(--text-main);
+            line-height: 1.5;
+            margin-bottom: 20px;
+            flex-grow: 1;
+        }
+
+        .use-context-btn {
+            background-color: var(--text-main);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: 0.2s;
+        }
+
+        .use-context-btn:hover {
+            background-color: var(--accent-color);
+        }
+
+        .empty-state {
+            grid-column: 1/-1;
+            text-align: center;
+            color: var(--text-light);
+            padding: 20px;
+            opacity: 0.6;
+            font-size: 0.95rem;
+            border: 2px dashed #e0e0e0;
+            border-radius: 15px;
+        }
+
+        .reset-section {
+            margin-top: 60px;
+            border-top: 2px dashed #e0e0e0;
+            padding-top: 30px;
+            text-align: center;
+        }
+
+        .btn-reset {
+            background-color: transparent;
+            color: #d32f2f;
+            border: 1px solid #d32f2f;
+            padding: 10px 24px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-reset:hover {
+            background-color: #ffebee;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="modal-overlay" id="editProfileModal">
+        <div class="modal-card">
+            <div class="modal-title">編輯個人資料</div>
+
+            <div class="form-group">
+                <label class="form-label">顯示名稱</label>
+                <input type="text" class="form-input" id="inputName" placeholder="請輸入您的暱稱">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">上傳頭像</label>
+
+                <input type="file" id="uploadInput" accept="image/*" style="display: none;"
+                    onchange="handleFileSelect(this)">
+
+                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
+                    <button type="button" class="btn-upload" onclick="document.getElementById('uploadInput').click()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        選擇圖片
+                    </button>
+                    <span id="fileName" style="font-size: 0.9rem; color: #888;">尚未選擇檔案</span>
+                </div>
+
+                <div id="cropContainer"
+                    style="display: none; width: 100%; height: 300px; background: #333; margin-bottom: 10px; border-radius: 8px; overflow: hidden;">
+                    <img id="imageToCrop" src="" style="max-width: 100%;">
+                </div>
+
+                <div id="cropActionBtns" style="display: none; gap: 10px; margin-bottom: 15px;">
+                    <button type="button" class="btn-cancel" style="flex: 1;" onclick="cancelCrop()">
+                        取消
+                    </button>
+                    <button type="button" class="btn-save" style="flex: 1; background-color: #555;"
+                        onclick="performCrop()">
+                        確認裁切
+                    </button>
+                </div>
+
+                <div style="text-align: center;">
+                    <p style="font-size: 0.8rem; color: #666; margin-bottom: 5px;">最終預覽：</p>
+                    <img id="avatarPreview" src=""
+                        style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 2px solid #eee; display: none;">
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeEditModal()">取消</button>
+                <button class="btn-save" onclick="saveProfile()">儲存變更</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 刪除帳號確認 Modal -->
+    <div class="modal-overlay" id="deleteConfirmModal">
+        <div class="modal-card">
+            <div class="modal-title" style="color: #d32f2f;">確認註銷帳號？</div>
+
+            <p style="color: var(--text-main); line-height: 1.6; margin-bottom: 20px;">
+                此動作<span style="color: #d32f2f; font-weight: bold;">無法復原</span>。<br>
+                將永久刪除您的所有資料，包括收藏店家與測驗紀錄。
+            </p>
+
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeDeleteModal()">取消</button>
+                <button class="btn-save" style="background-color: #d32f2f;"
+                    onclick="confirmDeleteAccount()">確認刪除</button>
+            </div>
+        </div>
+    </div>
+
+    <aside class="sidebar" id="sidebar">
+        <button class="toggle-sidebar-btn" id="toggleSidebarBtn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="3" x2="9" y2="21"></line>
+            </svg>
+        </button>
+
+        <button class="user-profile-btn" onclick="window.location.href='user_profile.html'">
+            <div class="user-avatar">U</div>
+            <span class="user-name text-label">使用者名稱</span>
+        </button>
+
+        <button class="new-chat-btn" onclick="handleSidebarNewChat()" title="新增對話">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span class="text-label">新增對話</span>
+        </button>
+
+        <div class="history-label text-label">對話紀錄</div>
+        <div class="chat-list" id="sidebarChatList">
+            <div class="empty-sidebar-msg" id="sidebarEmptyMsg">尚無對話紀錄</div>
+        </div>
+    </aside>
+
+    <main class="main-container">
+        <nav class="navbar">
+            <div class="nav-marker"></div>
+            <button class="nav-btn" onclick="window.location.href='chat.html'">對話</button>
+            <button class="nav-btn" onclick="window.location.href='explore.html'">探索</button>
+            <button class="nav-btn" onclick="window.location.href='quiz.html'">測驗</button>
+        </nav>
+
+        <div class="profile-content">
+
+            <div class="profile-header-card">
+                <div class="header-avatar" id="headerAvatar">
+                </div>
+                <div class="header-info">
+                    <div class="header-name" id="headerName">載入中...</div>
+                    <div class="header-email" id="headerEmail">...</div>
+
+                    <div class="profile-actions">
+                        <button class="btn-edit-profile" onclick="openEditModal()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                            編輯個人資料
+                        </button>
+                        <button class="btn-logout" onclick="logout()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                            登出
+                        </button>
+                    </div>
+
+                    <div style="margin-top: 10px;">
+                        <a href="#" onclick="deleteAccount()"
+                            style="color: #bbb; font-size: 0.8rem; text-decoration: none;">註銷帳號 (刪除所有資料)</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-header">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path
+                        d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z">
+                    </path>
+                </svg>
+                <div class="section-title">我的收藏</div>
+            </div>
+            <div class="cards-grid" id="favGrid"></div>
+
+            <div class="section-header">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                <div class="section-title">已去過的店</div>
+            </div>
+            <div class="cards-grid" id="visitedGrid"></div>
+
+            <div class="section-header">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <div class="section-title">測驗紀錄</div>
+            </div>
+            <div class="cards-grid" id="historyGrid"></div>
+
+        </div>
+    </main>
+
+    <script>
+        // ============================================
+        // 1. 初始化資料 (改為從後端 API 抓)
+        // ============================================
+
+        let currentUserData = null;
+
+        function initData() {
+            // A. 抓使用者基本資料
+            fetch('http://127.0.0.1:5000/api/me', { credentials: 'include' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.is_logged_in) {
+                        currentUserData = data;
+                        updateAllUI(data);
+                    } else {
+                        // 如果沒登入，踢回首頁
+                        window.location.href = 'index.html';
+                    }
+                })
+                .catch(err => console.error("連線錯誤:", err));
+
+            // B. 抓咖啡廳列表 (包含收藏狀態)
+            fetch('http://127.0.0.1:5000/api/cafes', { credentials: 'include' })
+                .then(res => res.json())
+                .then(data => {
+                    // 過濾出已收藏和已去過
+                    const favShops = data.filter(s => s.is_fav);
+                    const visitedShops = data.filter(s => s.is_visited);
+                    renderShopGrid('favGrid', favShops, 'fav');
+                    renderShopGrid('visitedGrid', visitedShops, 'visited');
+                });
+
+            // C. 抓測驗紀錄
+            fetch('http://127.0.0.1:5000/api/user/quiz', { credentials: 'include' })
+                .then(res => res.json())
+                .then(data => {
+                    renderHistoryGrid(data);
+                });
+        }
+
+        initData(); // 執行初始化
+
+        // 統一更新所有 UI (側欄 + 主頁上方卡片)
+        function updateAllUI(data) {
+            // A. 更新側欄
+            const sidebarAvatar = document.querySelector('.sidebar .user-avatar');
+            const sidebarName = document.querySelector('.sidebar .user-name');
+
+            if (data.picture) {
+                sidebarAvatar.innerHTML = `<img src="${data.picture}" style="width:100%; height:100%; border-radius:50%; object-fit: cover;">`;
+                sidebarAvatar.style.backgroundColor = 'transparent';
+            }
+            if (data.name) sidebarName.innerText = data.name;
+
+            // B. 更新主頁上方的大卡片
+            const headerName = document.getElementById('headerName');
+            const headerEmail = document.getElementById('headerEmail');
+            const headerAvatar = document.getElementById('headerAvatar');
+
+            if (headerName) headerName.innerText = data.name;
+            if (headerEmail) headerEmail.innerText = data.email || '未綁定 Email';
+            if (headerAvatar && data.picture) {
+                headerAvatar.innerHTML = `<img src="${data.picture}">`;
+            }
+        }
+
+        // ============================================
+        // 2. 渲染小卡函式 (共用)
+        // ============================================
+        function renderShopGrid(elementId, shops, type) {
+            const grid = document.getElementById(elementId);
+            grid.innerHTML = '';
+            if (shops.length === 0) {
+                grid.innerHTML = '<div class="empty-state">尚無紀錄</div>';
+                return;
+            }
+            shops.forEach(shop => {
+                const badge = type === 'fav' ? '<span class="mini-badge badge-fav">已收藏</span>' : '<span class="mini-badge badge-visited">已去過</span>';
+                const div = document.createElement('div');
+                div.className = 'mini-shop-card'; // 補回樣式 class
+                // 點擊跳轉到探索頁，並帶上 shop_id
+                div.onclick = () => { window.location.href = `explore.html?open_shop_id=${shop.id}`; };
+
+                div.innerHTML = `
+                    <div class="mini-img" style="background-color:${shop.color}"></div>
+                    <div class="mini-info">
+                        <div class="mini-name">${shop.name}</div>
+                        <div class="mini-tag">${shop.tags}</div>
+                    </div>
+                    ${badge}
+                `;
+                grid.appendChild(div);
+            });
+        }
+
+        // --- 渲染歷史紀錄 ---
+        function renderHistoryGrid(history) {
+            const grid = document.getElementById('historyGrid');
+            grid.innerHTML = '';
+            if (history.length === 0) {
+                grid.innerHTML = '<div class="empty-state">尚無測驗紀錄</div>';
+                return;
+            }
+            history.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'result-card';
+                card.innerHTML = `
+                    <div class="card-header"><span class="card-date">${item.date}</span></div>
+                    <div class="card-coffee-name">${item.resultName}</div>
+                    <div class="card-desc">${item.resultDesc}</div>
+                    <button class="use-context-btn" onclick="applyContext('${item.resultName}')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                        以此結果諮詢 AI
+                    </button>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function applyContext(resultName) {
+            // 這個功能可以保留 localStorage 暫存，方便傳遞到 chat.html
+            localStorage.setItem('targetQuizContext', resultName);
+            window.location.href = 'chat.html';
+        }
+
+        // ============================================
+        // 3. 編輯個人資料與裁切邏輯
+        // ============================================
+
+        let currentBase64Image = "";
+        let cropper = null;
+        const modal = document.getElementById('editProfileModal');
+        const inputName = document.getElementById('inputName');
+        const inputAvatar = document.getElementById('inputAvatar');
+
+        // 使用者選擇檔案
+        function handleFileSelect(input) {
+            const file = input.files[0];
+            if (file) {
+                if (file.size > 5 * 1024 * 1024) {
+                    alert("圖片太大囉！");
+                    input.value = '';
+                    return;
+                }
+                document.getElementById('fileName').innerText = file.name;
+
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const imageToCrop = document.getElementById('imageToCrop');
+                    const cropContainer = document.getElementById('cropContainer');
+                    const cropActionBtns = document.getElementById('cropActionBtns');
+                    const avatarPreview = document.getElementById('avatarPreview');
+
+                    imageToCrop.src = e.target.result;
+                    cropContainer.style.display = 'block';
+                    cropActionBtns.style.display = 'flex';
+                    avatarPreview.style.display = 'none';
+
+                    if (cropper) { cropper.destroy(); }
+
+                    cropper = new Cropper(imageToCrop, {
+                        aspectRatio: 1 / 1,
+                        viewMode: 1,
+                        autoCropArea: 0.8,
+                        dragMode: 'move'
+                    });
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // 執行裁切
+        function performCrop() {
+            if (!cropper) return;
+
+            const canvas = cropper.getCroppedCanvas({
+                width: 300,
+                height: 300,
+                fillColor: '#fff',
+            });
+
+            currentBase64Image = canvas.toDataURL('image/jpeg', 0.9);
+
+            const avatarPreview = document.getElementById('avatarPreview');
+            avatarPreview.src = currentBase64Image;
+            avatarPreview.style.display = 'inline-block';
+
+            // 隱藏裁切區與按鈕
+            document.getElementById('cropContainer').style.display = 'none';
+            document.getElementById('cropActionBtns').style.display = 'none';
+
+            cropper.destroy();
+            cropper = null;
+        }
+
+        // 取消裁切
+        function cancelCrop() {
+            if (cropper) {
+                cropper.destroy();
+                cropper = null;
+            }
+
+            document.getElementById('cropContainer').style.display = 'none';
+            document.getElementById('cropActionBtns').style.display = 'none';
+            document.getElementById('uploadInput').value = '';
+            document.getElementById('fileName').innerText = "尚未選擇檔案";
+
+            const preview = document.getElementById('avatarPreview');
+            // 回復舊頭像
+            if (currentUserData && currentUserData.picture) {
+                currentBase64Image = currentUserData.picture;
+                preview.src = currentUserData.picture;
+                preview.style.display = 'inline-block';
+                document.getElementById('fileName').innerText = "使用目前的頭像";
+            } else {
+                currentBase64Image = "";
+                preview.style.display = 'none';
+            }
+        }
+
+        function openEditModal() {
+            if (currentUserData) {
+                inputName.value = currentUserData.name || '';
+            }
+
+            // 重置 UI
+            document.getElementById('cropContainer').style.display = 'none';
+            document.getElementById('cropActionBtns').style.display = 'none';
+            document.getElementById('uploadInput').value = '';
+
+            if (cropper) { cropper.destroy(); cropper = null; }
+
+            const preview = document.getElementById('avatarPreview');
+            const fileName = document.getElementById('fileName');
+
+            if (currentUserData && currentUserData.picture) {
+                currentBase64Image = currentUserData.picture;
+                preview.src = currentUserData.picture;
+                preview.style.display = 'inline-block';
+                fileName.innerText = "使用目前的頭像";
+            } else {
+                currentBase64Image = "";
+                preview.style.display = 'none';
+                fileName.innerText = "尚未選擇檔案";
+            }
+            modal.classList.add('active');
+        }
+
+        function closeEditModal() {
+            modal.classList.remove('active');
+        }
+
+        // 儲存個人資料 (API)
+        function saveProfile() {
+            if (cropper) { performCrop(); }
+
+            const newName = inputName.value.trim();
+            const newAvatar = currentBase64Image;
+
+            if (!newName) {
+                alert('請輸入名稱');
+                return;
+            }
+
+            fetch('http://127.0.0.1:5000/api/user/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    name: newName,
+                    picture: newAvatar
+                })
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.success) {
+                        currentUserData.name = result.name;
+                        currentUserData.picture = result.picture;
+                        updateAllUI(currentUserData);
+                        closeEditModal();
+                    } else {
+                        alert('更新失敗');
+                    }
+                })
+                .catch(err => {
+                    console.error('Update error:', err);
+                    alert('連線錯誤，無法儲存');
+                });
+        }
+
+        // 點擊遮罩關閉
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeEditModal();
+        });
+
+        // ============================================
+        // 4. 側欄與聊天紀錄 (Local Storage 版，暫時保留)
+        // ============================================
+        let chats = JSON.parse(localStorage.getItem('allChats')) || [];
+        const chatListEl = document.getElementById('sidebarChatList');
+        const emptyMsgEl = document.getElementById('sidebarEmptyMsg');
+        const sidebar = document.getElementById('sidebar');
+        const toggleBtn = document.getElementById('toggleSidebarBtn');
+
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+        }
+
+        function renderSidebar() {
+            chatListEl.innerHTML = '';
+            if (chats.length === 0) {
+                chatListEl.appendChild(emptyMsgEl);
+                emptyMsgEl.style.display = 'block';
+                return;
+            } else {
+                emptyMsgEl.style.display = 'none';
+            }
+            chats.forEach(chat => {
+                const item = document.createElement('div');
+                item.className = 'chat-item';
+                item.title = chat.title;
+                item.onclick = () => {
+                    localStorage.setItem('targetChatId', chat.id);
+                    window.location.href = 'chat.html';
+                };
+                item.innerHTML = `<div class="chat-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></div><span class="chat-title text-label">${chat.title}</span>`;
+                chatListEl.appendChild(item);
+            });
+        }
+
+        function handleSidebarNewChat() {
+            localStorage.setItem('targetChatId', 'new');
+            window.location.href = 'chat.html';
+        }
+
+        renderSidebar();
+
+        // ============================================
+        // 5. 登出功能
+        // ============================================
+        function logout() {
+            if (confirm("確定要登出嗎？")) {
+                window.location.href = 'http://127.0.0.1:5000/logout';
+            }
+        }
+
+        // ============================================
+        // 6. 註銷帳號功能 (新增)
+        // ============================================
+        // ============================================
+        // 6. 註銷帳號功能 (改為 Modal 確認)
+        // ============================================
+        const deleteModal = document.getElementById('deleteConfirmModal');
+
+        function deleteAccount() {
+            deleteModal.classList.add('active');
+        }
+
+        function closeDeleteModal() {
+            deleteModal.classList.remove('active');
+        }
+
+        // 點擊遮罩關閉
+        deleteModal.addEventListener('click', (e) => {
+            if (e.target === deleteModal) closeDeleteModal();
+        });
+
+        function confirmDeleteAccount() {
+            // 改用 POST 方法，對應後端
+            fetch('http://127.0.0.1:5000/api/user/delete', {
+                method: 'POST',
+                credentials: 'include'
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert("帳號已成功刪除，後會有期！");
+                        window.location.href = 'index.html';
+                    } else {
+                        alert("刪除失敗：" + data.message);
+                        closeDeleteModal();
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("連線錯誤");
+                    closeDeleteModal();
+                });
+        }
+
+
+        // ============================================
+        // 7. 導覽列滑塊動畫 (新增)
+        // ============================================
+        function initNavMarker() {
+            const marker = document.querySelector('.nav-marker');
+            const navButtons = document.querySelectorAll('.nav-btn');
+            const activeBtn = document.querySelector('.nav-btn.active'); // Profile usually has no active btn, or we can make none active
+            const navContainer = document.querySelector('.navbar');
+
+            if (!marker) return;
+
+            // 設定位置函式
+            function setMarker(target, animate = true) {
+                if (!target) {
+                    marker.style.opacity = '0'; // 沒目標就隱藏
+                    return;
+                }
+
+                if (!animate) {
+                    marker.classList.remove('animate');
+                } else {
+                    marker.classList.add('animate');
+                }
+
+                marker.style.width = `${target.offsetWidth}px`;
+                marker.style.left = `${target.offsetLeft}px`;
+                marker.style.top = `${target.offsetTop}px`;
+                marker.style.opacity = '1';
+
+                // 更新文字顏色
+                navButtons.forEach(btn => {
+                    if (btn === target) btn.style.color = '#fff';
+                    else btn.style.color = '';
+                });
+            }
+
+            // 檢查是否有上一頁的紀錄
+            const savedLeft = sessionStorage.getItem('navMarkerLeft');
+            const savedWidth = sessionStorage.getItem('navMarkerWidth');
+
+            if (savedLeft && savedWidth) {
+                // 有紀錄：先瞬間設定到舊位置
+                marker.classList.remove('animate');
+                marker.style.left = savedLeft;
+                marker.style.width = savedWidth;
+                marker.style.top = '20px';
+                marker.style.opacity = '1';
+
+                void marker.offsetWidth;
+
+                // 個人頁通常沒有 active 按鈕，所以滑塊應該會消失，或者停在原位然後消失
+                // 為了視覺順暢，稍微延遲後消失 (因為這裡沒有 activeBtn)
+                setTimeout(() => {
+                    setMarker(null, true);
+                }, 50);
+
+            } else {
+                // 無紀錄
+                setMarker(null, false);
+                setTimeout(() => marker.classList.add('animate'), 100);
+            }
+
+            // 事件監聽
+            navButtons.forEach(btn => {
+                btn.addEventListener('mouseenter', (e) => setMarker(e.target, true));
+
+                btn.addEventListener('click', (e) => {
+                    sessionStorage.setItem('navMarkerLeft', `${e.currentTarget.offsetLeft}px`);
+                    sessionStorage.setItem('navMarkerWidth', `${e.currentTarget.offsetWidth}px`);
+
+                    navButtons.forEach(b => b.classList.remove('active'));
+                    e.currentTarget.classList.add('active');
+                    setMarker(e.currentTarget, true);
+                });
+            });
+
+            navContainer.addEventListener('mouseleave', () => {
+                // 離開時，如果有 active 就回去，沒有就消失
+                const currentActive = document.querySelector('.nav-btn.active');
+                setMarker(currentActive, true);
+            });
+        }
+
+        // 頁面載入後初始化
+        setTimeout(initNavMarker, 50);
+        window.addEventListener('resize', initNavMarker);
+
+    </script>
+</body>
+
+</html>

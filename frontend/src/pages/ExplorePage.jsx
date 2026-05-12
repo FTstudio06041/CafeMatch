@@ -1,0 +1,225 @@
+import React, { useState, useEffect, useContext } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
+import '../ExplorePage.css';
+import Navbar from '../components/Navbar';
+
+export default function ExplorePage() {
+  const { user, API_BASE_URL } = useContext(AuthContext);
+  const navigate = useNavigate();
+
+  // 狀態管理
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [chats, setChats] = useState([]);
+  
+  // 探索頁專用狀態
+  const [shops, setShops] = useState([]);
+  const [currentFilter, setCurrentFilter] = useState('all'); // 'all', 'fav', 'visited'
+  const [selectedShop, setSelectedShop] = useState(null); // 控制 Modal 顯示的店家資料
+
+  // 1. 初始化：讀取側欄對話紀錄與抓取咖啡廳資料
+  useEffect(() => {
+    const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
+    setChats(savedChats);
+    fetchCafes();
+  }, []);
+
+  const fetchCafes = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/cafes`, { credentials: 'include' });
+      const data = await response.json();
+      setShops(data);
+    } catch (error) {
+      console.error('Failed to fetch cafes:', error);
+    }
+  };
+
+  // 2. 篩選邏輯 (根據 currentFilter 狀態自動過濾)
+  const filteredShops = shops.filter(shop => {
+    if (currentFilter === 'fav') return shop.is_fav;
+    if (currentFilter === 'visited') return shop.is_visited;
+    return true;
+  });
+
+  // 3. 點擊收藏/去過的 API 呼叫
+  const toggleAction = async (type) => {
+    if (!selectedShop) return;
+
+    // 提前鎖定當前操作的店家 ID，避免狀態在非同步過程中錯亂
+    const targetId = selectedShop.id;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/user/shop_state`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ cafe_id: targetId, type: type })
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        // 修正 1：乾淨地更新所有的 shops 列表 (純函數)
+        setShops(prevShops => prevShops.map(shop => {
+          if (shop.id === targetId) {
+            return {
+              ...shop,
+              is_fav: type === 'fav' ? result.fav : shop.is_fav,
+              is_visited: type === 'visited' ? result.visited : shop.is_visited
+            };
+          }
+          return shop;
+        }));
+
+        // 修正 2：獨立且乾淨地更新當前 Modal 顯示的 selectedShop
+        setSelectedShop(prevSelected => {
+          // 雙重確認更新的是同一家店
+          if (prevSelected && prevSelected.id === targetId) {
+            return {
+              ...prevSelected,
+              is_fav: type === 'fav' ? result.fav : prevSelected.is_fav,
+              is_visited: type === 'visited' ? result.visited : prevSelected.is_visited
+            };
+          }
+          return prevSelected;
+        });
+
+      } else {
+        alert("請先登入才能使用此功能！");
+      }
+    } catch (error) {
+      console.error("Error updating state:", error);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', width: '100%' }}>
+      {/* --- 左側欄 (與 ChatPage 共用邏輯) --- */}
+      <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
+        <button className="toggle-sidebar-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+          </svg>
+        </button>
+
+        <button className="user-profile-btn" onClick={() => navigate('/profile')}>
+          <div className="user-avatar" style={{ backgroundColor: user?.picture ? 'transparent' : 'var(--accent-color)' }}>
+            {user?.picture ? <img src={user.picture} alt="avatar" style={{width: '100%', borderRadius: '50%'}} /> : 'U'}
+          </div>
+          <span className="user-name text-label">{user?.name || '使用者名稱'}</span>
+        </button>
+
+        <button className="new-chat-btn" onClick={() => { localStorage.setItem('targetChatId', 'new'); navigate('/chat'); }}>
+           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+           <span className="text-label">新增對話</span>
+        </button>
+
+        <div className="history-label text-label">對話紀錄</div>
+        <div className="chat-list">
+          {chats.length === 0 ? (
+            <div className="empty-sidebar-msg">尚無對話紀錄</div>
+          ) : (
+            chats.map(chat => (
+              <div key={chat.id} className="chat-item" onClick={() => { localStorage.setItem('targetChatId', chat.id); navigate('/chat'); }}>
+                <div className="chat-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                </div>
+                <span className="chat-title text-label">{chat.title}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </aside>
+
+      {/* --- 主內容區 --- */}
+      <main className="main-container">
+        <nav className="navbar">
+          <Navbar />
+        </nav>
+
+        <div className="explore-content">
+          {/* 篩選標籤 */}
+          <div className="filter-bar">
+            <div className={`filter-chip ${currentFilter === 'all' ? 'active' : ''}`} onClick={() => setCurrentFilter('all')}>全部</div>
+            <div className={`filter-chip ${currentFilter === 'fav' ? 'active' : ''}`} onClick={() => setCurrentFilter('fav')}>已收藏</div>
+            <div className={`filter-chip ${currentFilter === 'visited' ? 'active' : ''}`} onClick={() => setCurrentFilter('visited')}>已去過</div>
+          </div>
+
+          {/* 咖啡廳網格 */}
+          <div className="shop-grid">
+            {filteredShops.length === 0 ? (
+               <div style={{ gridColumn: '1/-1', textAlign: 'center', marginTop: '50px' }}>沒有符合條件的咖啡廳</div>
+            ) : (
+              filteredShops.map(shop => (
+                <div key={shop.id} className={`shop-card ${shop.is_fav ? 'is-fav' : ''} ${shop.is_visited ? 'is-visited' : ''}`} onClick={() => setSelectedShop(shop)}>
+                  <div className="card-img" style={{ backgroundColor: shop.color }}></div>
+                  <div className="card-status-icons">
+                    <div className="status-dot fav" style={{ opacity: shop.is_fav ? 1 : 0 }}>❤</div>
+                    <div className="status-dot visited" style={{ opacity: shop.is_visited ? 1 : 0 }}>✔</div>
+                  </div>
+                  <div className="card-info">
+                    <div className="shop-name">{shop.name}</div>
+                    <div className="shop-tags">{shop.tags}</div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </main>
+
+      {/* --- Modal 彈窗 (只有當 selectedShop 有資料時才渲染) --- */}
+      {selectedShop && (
+        <div className="modal-overlay open" style={{ pointerEvents: 'auto' }} onClick={() => setSelectedShop(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-img-wrapper">
+              <button className="modal-close-btn" onClick={() => setSelectedShop(null)}>×</button>
+              <div className="modal-img" style={{ backgroundColor: selectedShop.color }}></div>
+
+              <div className="overlay-actions">
+                <button className={`overlay-btn btn-fav ${selectedShop.is_fav ? 'active' : ''}`} onClick={() => toggleAction('fav')}>
+                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                   收藏
+                </button>
+                <button className={`overlay-btn btn-visited ${selectedShop.is_visited ? 'active' : ''}`} onClick={() => toggleAction('visited')}>
+                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                   已去過
+                </button>
+              </div>
+            </div>
+
+            <div className="modal-content">
+              <div className="modal-header-row">
+                <div className="header-left">
+                  <div className="modal-title">{selectedShop.name}</div>
+                  <div style={{ fontSize: '0.9rem', color: '#795548', marginTop: '5px' }}>
+                    <span>{selectedShop.rating}</span> ★ | <span>{selectedShop.hours}</span>
+                  </div>
+                </div>
+                <div className="modal-desc">{selectedShop.desc}</div>
+              </div>
+
+              <div className="info-row">
+                <svg className="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                <span>{selectedShop.phone}</span>
+              </div>
+
+              <div className="info-row">
+                <svg className="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                <span>{selectedShop.address}</span>
+              </div>
+
+              <div className="map-placeholder">
+                {selectedShop.address && selectedShop.address !== "地址未知" ? (
+                  <iframe width="100%" height="100%" frameBorder="0" style={{ border: 0, borderRadius: '16px' }} src={`https://maps.google.com/maps?q=$$${encodeURIComponent(selectedShop.address)}&t=&z=15&ie=UTF8&iwloc=&output=embed`} allowFullScreen></iframe>
+                ) : selectedShop.map_url ? (
+                  <button onClick={() => window.open(selectedShop.map_url, '_blank')} style={{ padding: '10px 20px', cursor: 'pointer' }}>開啟地圖</button>
+                ) : '尚無地圖資料'}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

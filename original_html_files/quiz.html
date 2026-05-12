@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>啡你莫屬 - 咖啡喜好測驗</title>
+    <style>
+        :root {
+            /* 延續主色調 */
+            --bg-main: #ddccb9;
+            --bg-sidebar: #d6c2a5;
+            --bg-card: #FFFFFF;
+            --accent-color: #432a00;
+            --text-main: #4E342E;
+            --text-light: #795548;
+            --btn-active: #bcaaa4;
+
+            --border-radius: 24px;
+            --sidebar-width: 280px;
+            --sidebar-width-collapsed: 88px;
+            --transition-speed: 0.3s;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft JhengHei", sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+        }
+
+        /* 全域卷軸樣式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background-color: #d6c2a5;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: #b5a191;
+        }
+
+        /* --- 側欄 --- */
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--bg-sidebar);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            flex-shrink: 0;
+            transition: width var(--transition-speed) ease;
+            position: relative;
+        }
+
+        .sidebar.collapsed {
+            width: var(--sidebar-width-collapsed);
+            padding: 20px 10px;
+        }
+
+        .toggle-sidebar-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .sidebar.collapsed .toggle-sidebar-btn {
+            transform: rotate(180deg);
+            right: 50%;
+            margin-right: -15px;
+        }
+
+        .user-profile-btn {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            background: #FFFFFF;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            margin-bottom: 30px;
+            margin-top: 40px;
+            height: 70px;
+            overflow: hidden;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background-color: var(--accent-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .user-name {
+            font-weight: bold;
+            color: var(--text-main);
+            white-space: nowrap;
+            transition: opacity 0.2s;
+        }
+
+        .sidebar.collapsed .user-name {
+            opacity: 0;
+            width: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        .sidebar.collapsed .user-profile-btn {
+            justify-content: center;
+            padding: 15px 0;
+        }
+
+        .sidebar.collapsed .user-avatar {
+            margin-right: 0;
+        }
+
+        /* 新增對話按鈕樣式 */
+        .new-chat-btn {
+            width: 100%;
+            padding: 12px;
+            background-color: transparent;
+            border: 2px dashed var(--text-light);
+            border-radius: 16px;
+            color: var(--text-main);
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            height: 50px;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .new-chat-btn:hover {
+            background-color: rgba(255, 255, 255, 0.5);
+            border-color: var(--text-main);
+        }
+
+        .sidebar.collapsed .new-chat-btn {
+            justify-content: center;
+            padding: 0;
+        }
+
+        .text-label {
+            opacity: 1;
+            white-space: nowrap;
+            transition: opacity 0.2s;
+        }
+
+        .sidebar.collapsed .text-label {
+            opacity: 0;
+            width: 0;
+            margin: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .history-label {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin-bottom: 10px;
+            padding-left: 10px;
+            white-space: nowrap;
+        }
+
+        .sidebar.collapsed .history-label {
+            opacity: 0;
+            width: 0;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* 側欄列表 */
+        .chat-list {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .chat-list::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .chat-list::-webkit-scrollbar-thumb {
+            background-color: #E0C0A0;
+            border-radius: 10px;
+        }
+
+        .chat-item {
+            padding: 12px 15px;
+            border-radius: 16px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            color: var(--text-main);
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            position: relative;
+            height: 50px;
+            flex-shrink: 0;
+        }
+
+        .chat-item:hover {
+            background-color: rgba(255, 255, 255, 0.6);
+        }
+
+        .sidebar.collapsed .chat-item {
+            justify-content: center;
+            padding: 0;
+        }
+
+        .chat-icon {
+            margin-right: 10px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .sidebar.collapsed .chat-icon {
+            margin-right: 0;
+        }
+
+        .chat-title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 160px;
+            flex-grow: 1;
+        }
+
+        .empty-sidebar-msg {
+            text-align: center;
+            color: var(--text-light);
+            opacity: 0.6;
+            font-size: 0.9rem;
+            margin-top: 20px;
+        }
+
+        .sidebar.collapsed .empty-sidebar-msg {
+            display: none;
+        }
+
+        /* --- 主內容區 --- */
+        .main-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background-color: var(--bg-main);
+            overflow: hidden;
+        }
+
+        /* 導覽列 */
+        .navbar {
+            display: flex;
+            justify-content: flex-end;
+            padding: 20px 30px;
+            gap: 15px;
+            position: relative;
+            z-index: 1;
+            flex-shrink: 0;
+        }
+
+        /* 滑塊設定：預設無 transition，由 JS 加入 class 控制 */
+        .nav-marker {
+            position: absolute;
+            background-color: var(--text-main);
+            height: 44px;
+            border-radius: 20px;
+            z-index: 0;
+            width: 0;
+            left: 0;
+            top: 20px;
+            opacity: 0;
+        }
+
+        .nav-marker.animate {
+            transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .nav-btn {
+            padding: 10px 24px;
+            border: none;
+            background: transparent;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-light);
+            cursor: pointer;
+            border-radius: 20px;
+            transition: color 0.2s;
+            position: relative;
+            z-index: 1;
+        }
+
+        .nav-btn:hover {
+            color: var(--text-main);
+        }
+
+        .nav-btn.active {
+            color: #fff;
+        }
+
+        /* --- 測驗專用樣式 --- */
+        .quiz-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .quiz-card {
+            background: var(--bg-card);
+            width: 100%;
+            max-width: 600px;
+            border-radius: 30px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(78, 52, 46, 0.1);
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            animation: fadeIn 0.5s ease;
+            min-height: 400px;
+            justify-content: center;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 進度條 */
+        .progress-container {
+            width: 100%;
+            height: 8px;
+            background-color: #eee;
+            border-radius: 4px;
+            margin-bottom: 30px;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background-color: var(--accent-color);
+            width: 0%;
+            transition: width 0.5s ease;
+        }
+
+        .question-text {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--text-main);
+            margin-bottom: 40px;
+            line-height: 1.4;
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+            width: 100%;
+        }
+
+        .option-btn {
+            padding: 20px;
+            border: 2px solid var(--text-light);
+            background: transparent;
+            border-radius: 15px;
+            color: var(--text-main);
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .option-btn:hover {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+            color: white;
+            transform: scale(1.02);
+        }
+
+        /* --- 起始與結果頁 --- */
+        .intro-view,
+        .result-view {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+
+        .intro-view {
+            display: flex;
+        }
+
+        .result-view {
+            display: none;
+        }
+
+        .view-title {
+            font-size: 1.2rem;
+            color: var(--text-light);
+            margin-bottom: 10px;
+        }
+
+        .view-highlight {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--accent-color);
+            margin-bottom: 20px;
+        }
+
+        .view-desc {
+            color: var(--text-main);
+            margin-bottom: 30px;
+            line-height: 1.6;
+            max-width: 80%;
+        }
+
+        .btn-primary {
+            background-color: var(--text-main);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 30px;
+            border: none;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: 0.2s;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--accent-color);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+
+<body>
+
+    <aside class="sidebar" id="sidebar">
+        <button class="toggle-sidebar-btn" id="toggleSidebarBtn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="3" x2="9" y2="21"></line>
+            </svg>
+        </button>
+
+        <button class="user-profile-btn" onclick="window.location.href='user_profile.html'">
+            <div class="user-avatar">U</div>
+            <span class="user-name text-label">使用者名稱</span>
+        </button>
+
+        <button class="new-chat-btn" onclick="handleSidebarNewChat()" title="新增對話">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span class="text-label">新增對話</span>
+        </button>
+
+        <div class="history-label text-label">對話紀錄</div>
+
+        <div class="chat-list" id="sidebarChatList">
+            <div class="empty-sidebar-msg" id="sidebarEmptyMsg">尚無對話紀錄</div>
+        </div>
+    </aside>
+
+    <main class="main-container">
+        <nav class="navbar">
+            <div class="nav-marker"></div>
+            <button class="nav-btn" onclick="window.location.href='chat.html'">對話</button>
+            <button class="nav-btn" onclick="window.location.href='explore.html'">探索</button>
+            <button class="nav-btn active" onclick="window.location.href='quiz.html'">測驗</button>
+        </nav>
+
+        <div class="quiz-content">
+            <div class="quiz-card">
+                <div class="progress-container" id="progressBarContainer">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+
+                <div id="introView" class="intro-view">
+                    <div class="view-title">咖啡喜好探索</div>
+                    <div class="view-highlight">找到你的命定風味</div>
+                    <div class="view-desc">
+                        透過簡單的心理測驗，分析您的味蕾偏好。<br>
+                        完成後，AI 將能為您提供更精準、個人化的咖啡廳推薦。
+                    </div>
+                    <button class="btn-primary" onclick="startQuiz()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polygon points="10 8 16 12 10 16 10 8"></polygon>
+                        </svg>
+                        開始測驗
+                    </button>
+                </div>
+
+                <div id="questionView" style="display: none; width: 100%;">
+                    <h2 class="question-text" id="questionText">題目載入中...</h2>
+                    <div class="options-grid" id="optionsGrid"></div>
+                </div>
+
+                <div id="resultView" class="result-view">
+                    <div class="view-title">測驗結果出爐！最適合你的咖啡是...</div>
+                    <div class="view-highlight" id="resultName">衣索比亞 耶加雪菲</div>
+                    <div class="view-desc" id="resultDesc">
+                        你喜歡層次豐富且帶有明亮果酸的風味。這款咖啡帶有柑橘與茉莉花香，清爽不厚重，非常適合你的味蕾！
+                    </div>
+
+                    <button class="btn-primary" onclick="goToChat()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        帶著結果去諮詢 AI
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // ============================================
+        // 1. 側欄資料連動邏輯
+        // ============================================
+        let chats = JSON.parse(localStorage.getItem('allChats')) || [];
+        const chatListEl = document.getElementById('sidebarChatList');
+        const emptyMsgEl = document.getElementById('sidebarEmptyMsg');
+        const sidebar = document.getElementById('sidebar');
+        const toggleBtn = document.getElementById('toggleSidebarBtn');
+
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+        }
+
+        function renderSidebar() {
+            chatListEl.innerHTML = '';
+
+            if (chats.length === 0) {
+                chatListEl.appendChild(emptyMsgEl);
+                emptyMsgEl.style.display = 'block';
+                return;
+            } else {
+                emptyMsgEl.style.display = 'none';
+            }
+
+            chats.forEach(chat => {
+                const item = document.createElement('div');
+                item.className = 'chat-item';
+                item.title = chat.title;
+
+                item.onclick = () => {
+                    localStorage.setItem('targetChatId', chat.id);
+                    window.location.href = 'chat.html';
+                };
+
+                const iconDiv = document.createElement('div');
+                iconDiv.className = 'chat-icon';
+                iconDiv.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
+
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'chat-title text-label';
+                titleSpan.innerText = chat.title;
+
+                item.appendChild(iconDiv);
+                item.appendChild(titleSpan);
+                chatListEl.appendChild(item);
+            });
+        }
+
+        function handleSidebarNewChat() {
+            localStorage.setItem('targetChatId', 'new');
+            window.location.href = 'chat.html';
+        }
+
+        // ============================================
+        // 2. 測驗邏輯
+        // ============================================
+        const questions = [
+            {
+                question: "早晨醒來，你最希望聞到什麼樣的香氣？",
+                options: [
+                    { text: "清新的柑橘或花香", type: "light" },
+                    { text: "濃郁的焦糖或堅果香", type: "dark" },
+                    { text: "淡淡的茶香", type: "light" }
+                ]
+            },
+            {
+                question: "喝咖啡時，你通常習慣怎麼喝？",
+                options: [
+                    { text: "什麼都不加，喝黑咖啡", type: "light" },
+                    { text: "一定要加牛奶做成拿鐵", type: "dark" },
+                    { text: "偶爾會加點糖", type: "medium" }
+                ]
+            },
+            {
+                question: "你比較喜歡哪種口感？",
+                options: [
+                    { text: "像果汁一樣酸甜清爽", type: "light" },
+                    { text: "像巧克力一樣醇厚苦甜", type: "dark" }
+                ]
+            }
+        ];
+
+        let currentStep = 0;
+        let scores = { light: 0, dark: 0, medium: 0 };
+
+        const introView = document.getElementById('introView');
+        const questionView = document.getElementById('questionView');
+        const resultView = document.getElementById('resultView');
+        const progressBarContainer = document.getElementById('progressBarContainer');
+        const progressBar = document.getElementById('progressBar');
+        const questionText = document.getElementById('questionText');
+        const optionsGrid = document.getElementById('optionsGrid');
+
+        // 頁面載入初始化
+        window.addEventListener('load', () => {
+            // 1. 強制收起側欄
+            sidebar.classList.add('collapsed');
+
+            // 2. 渲染側欄列表 (修復：之前可能漏了這行)
+            renderSidebar();
+
+            // 3. 執行導覽列動畫初始化
+            // 延遲一點點，確保側欄收起動畫不影響 navbar 位置計算
+            setTimeout(initNavMarker, 100);
+        });
+
+        function startQuiz() {
+            introView.style.display = 'none';
+            questionView.style.display = 'block';
+            progressBarContainer.style.display = 'block';
+            renderQuestion();
+        }
+
+        function renderQuestion() {
+            const q = questions[currentStep];
+            const progress = ((currentStep) / questions.length) * 100;
+            progressBar.style.width = `${progress}%`;
+
+            questionText.innerText = q.question;
+            optionsGrid.innerHTML = '';
+
+            q.options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.innerText = opt.text;
+                btn.onclick = () => handleAnswer(opt.type);
+                optionsGrid.appendChild(btn);
+            });
+        }
+
+        function handleAnswer(type) {
+            if (scores[type] !== undefined) scores[type]++;
+            else scores.dark++;
+
+            currentStep++;
+
+            if (currentStep < questions.length) {
+                questionView.style.opacity = '0';
+                setTimeout(() => {
+                    renderQuestion();
+                    questionView.style.opacity = '1';
+                }, 200);
+            } else {
+                showResult();
+            }
+        }
+        // ... (前面的 questions 與變數定義保持不變) ...
+
+        function showResult() {
+            progressBar.style.width = '100%';
+            questionView.style.display = 'none';
+            resultView.style.display = 'flex';
+
+            const resultNameEl = document.getElementById('resultName');
+            const resultDescEl = document.getElementById('resultDesc');
+
+            let rName = "", rDesc = "";
+
+            if (scores.light >= scores.dark) {
+                rName = "衣索比亞 耶加雪菲 (淺焙)";
+                rDesc = "測驗顯示你偏好清爽、帶有果酸與花香的風味。這款豆子如同水果茶般的回甘口感，絕對能給你驚喜！";
+            } else {
+                rName = "黃金曼特寧 (深焙)";
+                rDesc = "測驗顯示你喜歡濃郁、厚實且低酸度的口感。這款豆子帶有藥草與香料的沈穩香氣，非常適合搭配牛奶。";
+            }
+
+            resultNameEl.innerText = rName;
+            resultDescEl.innerText = rDesc;
+
+            // --- 新增：儲存到歷史紀錄 ---
+            const newRecord = {
+                id: Date.now(),
+                date: new Date().toLocaleDateString(), // 存下日期
+                resultName: rName,
+                resultDesc: rDesc
+            };
+
+            let history = JSON.parse(localStorage.getItem('quizHistory')) || [];
+            history.push(newRecord);
+            localStorage.setItem('quizHistory', JSON.stringify(history));
+
+            // 順便存最新的，給直接按按鈕的人用
+            localStorage.setItem('currentQuizResult', rName);
+        }
+
+        // --- 新增：重測功能 (請在 HTML 結果頁補一個按鈕呼叫此函式) ---
+        /* 在 resultView 的 HTML 裡加入：
+           <button class="btn-secondary" onclick="resetQuiz()">再測一次</button> 
+           (需補 CSS: background: transparent; border: 2px solid var(--text-main); ...)
+        */
+        function resetQuiz() {
+            currentStep = 0;
+            scores = { light: 0, dark: 0, medium: 0 };
+
+            resultView.style.display = 'none';
+            introView.style.display = 'flex'; // 回到介紹頁
+            progressBar.style.width = '0%';
+            progressBarContainer.style.display = 'none';
+        }
+
+        function goToChat() {
+            // 如果是剛測完直接去聊，帶最新的結果
+            const latest = document.getElementById('resultName').innerText;
+            localStorage.setItem('targetQuizContext', latest);
+            window.location.href = 'chat.html';
+        }
+
+        // ============================================
+        // 3. 導覽列滑塊動畫
+        // ============================================
+        // ============================================
+        // 3. 導覽列滑塊動畫 (優化版)
+        // ============================================
+        function initNavMarker() {
+            const marker = document.querySelector('.nav-marker');
+            const navButtons = document.querySelectorAll('.nav-btn');
+            const activeBtn = document.querySelector('.nav-btn.active');
+            const navContainer = document.querySelector('.navbar');
+
+            if (!marker || !activeBtn) return;
+
+            // 設定位置函式
+            function setMarker(target, animate = true) {
+                if (!target) return;
+
+                if (!animate) {
+                    marker.classList.remove('animate');
+                } else {
+                    marker.classList.add('animate');
+                }
+
+                marker.style.width = `${target.offsetWidth}px`;
+                marker.style.left = `${target.offsetLeft}px`;
+                marker.style.top = `${target.offsetTop}px`;
+                marker.style.opacity = '1';
+
+                // 更新文字顏色
+                navButtons.forEach(btn => {
+                    if (btn === target) btn.style.color = '#fff';
+                    else btn.style.color = '';
+                });
+            }
+
+            // 檢查是否有上一頁的紀錄
+            const savedLeft = sessionStorage.getItem('navMarkerLeft');
+            const savedWidth = sessionStorage.getItem('navMarkerWidth');
+
+            if (savedLeft && savedWidth) {
+                // 有紀錄：先瞬間設定到舊位置
+                marker.classList.remove('animate');
+                marker.style.left = savedLeft;
+                marker.style.width = savedWidth;
+                marker.style.top = '20px'; // 假設 top 固定
+                marker.style.opacity = '1';
+
+                // 強制重繪 (Force Reflow)
+                void marker.offsetWidth;
+
+                // 再滑動到新位置
+                setTimeout(() => {
+                    setMarker(activeBtn, true);
+                }, 50);
+            } else {
+                // 無紀錄 (從首頁進來)：直接定位，不執行動畫
+                setMarker(activeBtn, false);
+
+                // 之後的操作要有動畫
+                setTimeout(() => marker.classList.add('animate'), 100);
+            }
+
+            // 事件監聽
+            navButtons.forEach(btn => {
+                btn.addEventListener('mouseenter', (e) => setMarker(e.target, true));
+
+                btn.addEventListener('click', (e) => {
+                    // 記錄當前位置，供下一頁使用
+                    sessionStorage.setItem('navMarkerLeft', `${e.currentTarget.offsetLeft}px`);
+                    sessionStorage.setItem('navMarkerWidth', `${e.currentTarget.offsetWidth}px`);
+
+                    // 點擊瞬間設為 active (雖然會跳頁，但視覺上比較順)
+                    navButtons.forEach(b => b.classList.remove('active'));
+                    e.currentTarget.classList.add('active');
+                    setMarker(e.currentTarget, true);
+                });
+            });
+
+            navContainer.addEventListener('mouseleave', () => {
+                const currentActive = document.querySelector('.nav-btn.active');
+                if (currentActive) {
+                    setMarker(currentActive, true);
+                }
+            });
+        }
+
+        fetch('http://127.0.0.1:5000/api/me', {
+            method: 'GET',
+            credentials: 'include'
+        })
+            .then(response => {
+                if (response.status === 401) {
+                    // 如果是 401，代表後端沒收到 Cookie 或 Session 過期
+                    // 暫時不強制踢人，先觀察 Console
+                    console.log("未登入或 Session 失效");
+                    return null;
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data && data.is_logged_in) {
+                    console.log("登入成功，資料為:", data); // 這裡應該要印出名字跟圖片網址
+
+                    // 更新畫面上的頭像
+                    const avatarElements = document.querySelectorAll('.user-avatar');
+                    avatarElements.forEach(el => {
+                        if (data.picture) {
+                            el.innerText = '';
+                            el.innerHTML = `<img src="${data.picture}" style="width:100%; height:100%; border-radius:50%; object-fit: cover;">`;
+                            el.style.backgroundColor = 'transparent';
+                        }
+                    });
+
+                    // 更新畫面上的名字
+                    const nameElements = document.querySelectorAll('.user-name');
+                    nameElements.forEach(el => {
+                        if (data.name) el.innerText = data.name;
+                    });
+                }
+            })
+            .catch(err => {
+                console.error("連線錯誤:", err);
+            });
+
+        window.addEventListener('resize', initNavMarker);
+
+    </script>
+</body>
+
+</html>

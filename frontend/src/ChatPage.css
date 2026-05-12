@@ -1,0 +1,762 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+    /* 您的自訂配色 */
+    --bg-main: #ddccb9;
+    --bg-sidebar: #d6c2a5;
+    --bg-input: #FFFFFF;
+    --accent-color: #432a00;
+    --text-main: #4E342E;
+    --text-light: #795548;
+    --msg-user: #cbbaac;
+    --msg-ai: #cdb09a;
+    --hover-color: #b5a191;
+
+    --border-radius: 24px;
+    --sidebar-width: 280px;
+    --sidebar-width-collapsed: 88px;
+    --transition-speed: 0.3s;
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.708 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --radius: 0.625rem;
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-ring: oklch(0.708 0 0);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
+}
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+}
+
+/* --- 左側欄 --- */
+.sidebar {
+    width: var(--sidebar-width);
+    background-color: var(--bg-sidebar);
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    transition: width var(--transition-speed) ease;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.sidebar.collapsed {
+    width: var(--sidebar-width-collapsed);
+    padding: 20px 10px;
+}
+
+/* 收合按鈕 */
+.toggle-sidebar-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: var(--transition-speed);
+    z-index: 10;
+}
+
+.toggle-sidebar-btn:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+.sidebar.collapsed .toggle-sidebar-btn {
+    transform: rotate(180deg);
+    right: 50%;
+    margin-right: -15px;
+}
+
+.text-label {
+    opacity: 1;
+    white-space: nowrap;
+    transition: opacity 0.2s;
+}
+
+.sidebar.collapsed .text-label {
+    opacity: 0;
+    width: 0;
+    margin: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.sidebar.collapsed .user-profile-btn,
+.sidebar.collapsed .new-chat-btn,
+.sidebar.collapsed .chat-item {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+/* 使用者按鈕 */
+.user-profile-btn {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    background: #FFFFFF;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    margin-bottom: 20px;
+    margin-top: 40px;
+    transition: 0.2s;
+    overflow: hidden;
+    height: 70px;
+}
+
+.user-profile-btn:hover {
+    background-color: var(--hover-color);
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    background-color: var(--accent-color);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.sidebar.collapsed .user-avatar {
+    margin-right: 0;
+}
+
+.user-name {
+    font-weight: bold;
+    color: var(--text-main);
+}
+
+/* 新增對話按鈕 */
+.new-chat-btn {
+    width: 100%;
+    padding: 12px;
+    background-color: transparent;
+    border: 2px dashed var(--text-light);
+    border-radius: 16px;
+    color: var(--text-main);
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 50px;
+    overflow: hidden;
+}
+
+.new-chat-btn:hover {
+    background-color: #ddccb9;
+    border-color: var(--text-main);
+}
+
+.history-label {
+    font-size: 0.9rem;
+    color: var(--text-light);
+    margin-bottom: 10px;
+    padding-left: 10px;
+    white-space: nowrap;
+}
+
+.sidebar.collapsed .history-label {
+    display: none;
+}
+
+/* 動態列表區域 */
+.chat-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.chat-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.chat-list::-webkit-scrollbar-thumb {
+    background-color: #E0C0A0;
+    border-radius: 10px;
+}
+
+.chat-item {
+    padding: 12px 15px;
+    border-radius: 16px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    color: var(--text-main);
+    transition: 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    position: relative;
+    height: 50px;
+}
+
+.chat-item:hover {
+    background-color: rgba(255, 255, 255, 0.6);
+}
+
+.chat-item.active {
+    background-color: var(--accent-color);
+    color: #fff;
+}
+
+.chat-icon {
+    margin-right: 10px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+.sidebar.collapsed .chat-icon {
+    margin-right: 0;
+}
+
+.chat-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 160px;
+    flex-grow: 1;
+}
+
+.delete-btn {
+    opacity: 0;
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: 0.2s;
+    flex-shrink: 0;
+}
+
+.chat-item:hover .delete-btn {
+    opacity: 1;
+}
+
+.delete-btn:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+    color: #D32F2F;
+}
+
+.sidebar.collapsed .delete-btn {
+    display: none !important;
+}
+
+.empty-sidebar-msg {
+    text-align: center;
+    color: var(--text-light);
+    opacity: 0.6;
+    font-size: 0.9rem;
+    margin-top: 20px;
+}
+
+.sidebar.collapsed .empty-sidebar-msg {
+    display: none;
+}
+
+/* --- 中間與右側 --- */
+.main-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background-color: var(--bg-main);
+    transition: margin 0.3s;
+}
+
+/* --- 導覽列容器 --- */
+.navbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 20px 30px;
+    gap: 15px;
+    position: relative;
+    /* 為了讓滑塊絕對定位 */
+    z-index: 1;
+}
+
+/* --- 新增：滑動的高亮塊 --- */
+.nav-marker {
+    position: absolute;
+    background-color: var(--text-main);
+    height: 44px;
+    border-radius: 20px;
+    z-index: 0;
+
+    /* 這裡把 transition 拿掉，改由 JS 動態添加 class 來控制 */
+    /* transition: all 0.35s ... (移除這行) */
+
+    width: 0;
+    left: 0;
+    top: 20px;
+    opacity: 0;
+}
+
+/* 新增一個 class 專門負責動畫 */
+.nav-marker.animate {
+    transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* --- 按鈕樣式調整 --- */
+.nav-btn {
+    padding: 10px 24px;
+    border: none;
+    background: transparent;
+    /* 重要：按鈕本身背景透明 */
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-light);
+    cursor: pointer;
+    border-radius: 20px;
+    transition: color 0.2s;
+    position: relative;
+    z-index: 1;
+    /* 確保文字在滑塊上面 */
+}
+
+.nav-btn:hover {
+    color: var(--text-main);
+    /* 移除原本的 hover 背景色，改用文字變色即可 */
+}
+
+/* 當按鈕被選中時 */
+.nav-btn.active {
+    color: #fff;
+    /* 文字變白 */
+    /* 移除原本的 background-color */
+}
+
+.chat-window {
+    flex: 1;
+    padding: 20px 10%;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    position: relative;
+}
+
+.placeholder-zone {
+    margin: auto;
+    text-align: center;
+    border-radius: 20px;
+    padding: 40px;
+    color: var(--text-light);
+    background-color: rgba(255, 255, 255, 0.5);
+    max-width: 500px;
+    /* 稍微加寬以容納文字 */
+    width: 100%;
+}
+
+.placeholder-zone h3 {
+    margin-bottom: 15px;
+    color: var(--text-main);
+    font-size: 1.4rem;
+}
+
+.placeholder-zone p {
+    line-height: 1.6;
+}
+
+/* 特殊連結樣式 */
+.quiz-link {
+    color: var(--accent-color);
+    font-weight: bold;
+    text-decoration: underline;
+    cursor: pointer;
+    padding: 0 4px;
+    transition: 0.2s;
+}
+
+.quiz-link:hover {
+    color: #000;
+    background-color: rgba(255, 255, 255, 0.5);
+    border-radius: 4px;
+}
+
+.message {
+    max-width: 80%;
+    padding: 15px 20px;
+    border-radius: 20px;
+    line-height: 1.5;
+    word-wrap: break-word;
+}
+
+.message.user {
+    align-self: flex-end;
+    background-color: var(--msg-user);
+    border-bottom-right-radius: 5px;
+}
+
+.input-area {
+    padding: 20px 10%;
+    padding-bottom: 20px;
+    background-color: var(--bg-main);
+}
+
+.input-wrapper {
+    background-color: var(--bg-input);
+    display: flex;
+    align-items: center;
+    padding: 8px 15px;
+    border-radius: 30px;
+}
+
+.input-wrapper:focus-within {
+    border-color: var(--accent-color);
+}
+
+.chat-input {
+    flex: 1;
+    border: none;
+    outline: none;
+    padding: 10px;
+    background: transparent;
+}
+
+.send-btn {
+    background-color: var(--text-main);
+    color: white;
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin-left: 10px;
+    flex-shrink: 0;
+}
+
+.disclaimer-text {
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text-light);
+    margin-top: 10px;
+    opacity: 0.8;
+    user-select: none;
+}
+
+/* --- 打字中動畫 (Typing Indicator) --- */
+.typing-indicator {
+    display: flex;
+    gap: 6px;
+    padding: 15px 20px;
+    background-color: var(--msg-ai);
+    /* 與 AI 訊息同色 */
+    border-radius: 20px;
+    border-bottom-left-radius: 5px;
+    /* 對話框小尾巴方向 */
+    width: fit-content;
+    align-self: flex-start;
+    margin-bottom: 10px;
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.05);
+    animation: fadeIn 0.3s ease;
+}
+
+.typing-dot {
+    width: 8px;
+    height: 8px;
+    background-color: #ffffff;
+    /* 淺咖啡色圓點 */
+    border-radius: 50%;
+    animation: typingBounce 1.4s infinite ease-in-out both;
+}
+
+.typing-dot:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.typing-dot:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+.welcome-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    /* 半透明黑底 */
+    backdrop-filter: blur(4px);
+    /* 背景模糊效果 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    opacity: 0;
+    pointer-events: none;
+    /* 預設隱藏 */
+    transition: opacity 0.3s ease;
+}
+
+.welcome-modal-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.welcome-card {
+    background: #fff;
+    padding: 40px;
+    border-radius: 24px;
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+    transform: translateY(20px);
+    transition: transform 0.3s ease;
+}
+
+.welcome-modal-overlay.active .welcome-card {
+    transform: translateY(0);
+}
+
+.welcome-icon {
+    font-size: 3rem;
+    margin-bottom: 20px;
+}
+
+.welcome-title {
+    font-size: 1.5rem;
+    color: var(--accent-color);
+    margin-bottom: 15px;
+    font-weight: 900;
+}
+
+.welcome-text {
+    color: var(--text-main);
+    line-height: 1.6;
+    margin-bottom: 30px;
+}
+
+.welcome-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.btn-primary {
+    background: var(--accent-color);
+    color: #fff;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 50px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.2s;
+}
+
+.btn-primary:hover {
+    background: var(--text-main);
+}
+
+.btn-secondary {
+    background: #eee;
+    color: #666;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 50px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.2s;
+}
+
+.btn-secondary:hover {
+    background: #e0e0e0;
+}
+
+@keyframes typingBounce {
+
+    0%,
+    80%,
+    100% {
+        transform: scale(0);
+        opacity: 0.5;
+    }
+
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.chat-item:focus,
+.chat-item:active,
+.delete-btn:focus,
+.delete-btn:active,
+button:focus {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.chat-item {
+    -webkit-tap-highlight-color: transparent;
+}
+
+@theme inline {
+    --font-heading: var(--font-sans);
+    --font-sans: 'Geist Variable', sans-serif;
+    --color-sidebar-ring: var(--sidebar-ring);
+    --color-sidebar-border: var(--sidebar-border);
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+    --color-sidebar-accent: var(--sidebar-accent);
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+    --color-sidebar-primary: var(--sidebar-primary);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar: var(--sidebar);
+    --color-chart-5: var(--chart-5);
+    --color-chart-4: var(--chart-4);
+    --color-chart-3: var(--chart-3);
+    --color-chart-2: var(--chart-2);
+    --color-chart-1: var(--chart-1);
+    --color-ring: var(--ring);
+    --color-input: var(--input);
+    --color-border: var(--border);
+    --color-destructive: var(--destructive);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-accent: var(--accent);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-muted: var(--muted);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-secondary: var(--secondary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-primary: var(--primary);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-popover: var(--popover);
+    --color-card-foreground: var(--card-foreground);
+    --color-card: var(--card);
+    --color-foreground: var(--foreground);
+    --color-background: var(--background);
+    --radius-sm: calc(var(--radius) * 0.6);
+    --radius-md: calc(var(--radius) * 0.8);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) * 1.4);
+    --radius-2xl: calc(var(--radius) * 1.8);
+    --radius-3xl: calc(var(--radius) * 2.2);
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+.dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    }
+  body {
+    @apply bg-background text-foreground;
+    }
+  html {
+    @apply font-sans;
+    }
+}
