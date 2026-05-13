@@ -136,6 +136,22 @@ export default function AdminPage() {
     } catch (e) { console.error(e); }
   };
 
+  const deleteModel = async (modelName) => {
+    if (!confirm(`確定要刪除模型 ${modelName} 嗎？此操作無法復原。`)) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/model/delete`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: modelName })
+      });
+      if (res.ok) fetchModel();
+      else {
+        const data = await res.json();
+        alert(data.error || '刪除失敗');
+      }
+    } catch (e) { console.error(e); }
+  };
+
   // --- 搜尋過濾 ---
   const filteredUsers = users.filter(u =>
     u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -420,9 +436,14 @@ export default function AdminPage() {
                             </div>
                             <div className="model-size">大小：{formatSize(m.size)}</div>
                           </div>
-                          {m.name !== modelInfo.current_model && (
-                            <button className="admin-btn primary" onClick={() => switchModel(m.name)}>切換至此模型</button>
-                          )}
+                          <div className="admin-actions">
+                            {m.name !== modelInfo.current_model && (
+                              <>
+                                <button className="admin-btn primary" onClick={() => switchModel(m.name)}>切換至此模型</button>
+                                <button className="admin-btn danger" onClick={() => deleteModel(m.name)}>刪除模型</button>
+                              </>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>

@@ -446,25 +446,146 @@ def chat_with_ai():
         if not user_message:
             return jsonify({"error": "未提供訊息"}), 400
 
-        # 3. 準備發送給 Ollama 的資料
+        # ★ 防呆機制：先快速檢查 Ollama 是否在線
+        try:
+            health_check = requests.get("http://localhost:11434/", timeout=3)
+        except Exception:
+            return jsonify({"error": "Ollama 連線失敗，請確認是否已啟動 Ollama。"}), 503
+
+        # 3. ★ 意圖分類 + 選擇性 RAG ★
+        #    判斷使用者是否在問咖啡/推薦相關問題
+        CAFE_KEYWORDS = [
+            '咖啡', '推薦', '咖啡廳', '咖啡店', 'café', 'cafe', '喝', '甜點',
+            '花蓮', '安靜', '讀書', '工作', '約會', '聚會', '早午餐', '下午茶',
+            '便宜', '平價', '好喝', '好吃', '哪裡', '哪家', '附近', '營業',
+            '幾點', '開門', '關門', '休息', '地址', '電話', '價格', '消費',
+            '文青', '氛圍', '氣氛', '環境', '貓', '寵物', '座位', 'wifi',
+            '拿鐵', '手沖', '濾掛', '豆子', '烘焙', '評價', '評論', '打卡',
+            '測驗', '結果', '適合', '口感', '風味', '酸', '苦', '甜',
+            '司康', '蛋糕', '鬆餅', '可頌', '冰', '熱'
+        ]
+
+        is_cafe_related = any(kw in user_message.lower() for kw in CAFE_KEYWORDS)
+        cafe_context = ""
+
+        if is_cafe_related:
+            try:
+                from sqlalchemy import or_
+                # 從使用者訊息中提取命中的關鍵字
+                matched_keywords = [kw for kw in CAFE_KEYWORDS if kw in user_message.lower()]
+                
+                # 用關鍵字搜尋相關的咖啡廳（透過名稱、地址、標籤）
+                query = Cafes.query
+                
+                # 嘗試用標籤和名稱匹配
+                tag_filters = []
+                name_filters = []
+                for kw in matched_keywords:
+                    tag_filters.append(Tags.tag_name.contains(kw))
+                    name_filters.append(Cafes.name.contains(kw))
+                    name_filters.append(Cafes.address.contains(kw))
+
+                # 先找標籤匹配的咖啡廳
+                tagged_cafes = Cafes.query.join(Cafes.tags).filter(
+                    or_(*tag_filters)
+                ).distinct().limit(5).all() if tag_filters else []
+
+                # 再找名稱/地址匹配的
+                name_cafes = Cafes.query.filter(
+                    or_(*name_filters)
+                ).limit(3).all() if name_filters else []
+
+                # 合併去重（最多取 5 家）
+                seen_ids = set()
+                relevant_cafes = []
+                for cafe in tagged_cafes + name_cafes:
+                    if cafe.id not in seen_ids and len(relevant_cafes) < 5:
+                        seen_ids.add(cafe.id)
+                        relevant_cafes.append(cafe)
+                
+                # 如果關鍵字匹配不到，就拿最熱門的 5 家
+                if not relevant_cafes:
+                    relevant_cafes = Cafes.query.order_by(Cafes.num.desc()).limit(5).all()
+
+                # 組裝上下文
+                cafe_lines = []
+                DAY_NAMES = ['', '一', '二', '三', '四', '五', '六', '日']
+                for cafe in relevant_cafes:
+                    tags_str = ', '.join([t.tag_name for t in cafe.tags[:8]])
+                    
+                    # 營業時間簡要
+                    hours_parts = []
+                    for h in sorted(cafe.hours, key=lambda x: x.day_of_week or 0):
+                        if h.is_closed:
+                            hours_parts.append(f"週{DAY_NAMES[h.day_of_week]}:公休")
+                        elif h.open_time and h.close_time:
+                            hours_parts.append(f"週{DAY_NAMES[h.day_of_week]}:{h.open_time.strftime('%H:%M')}-{h.close_time.strftime('%H:%M')}")
+                    hours_str = '、'.join(hours_parts) if hours_parts else '未提供'
+
+                    cafe_lines.append(
+                        f"- {cafe.name} | 地址：{cafe.address or '未提供'} | 消費：{cafe.cost or '未提供'} | "
+                        f"標籤：{tags_str or '無'} | 營業：{hours_str}"
+                    )
+                
+                cafe_context = "\n\n【以下是系統資料庫中的咖啡廳資料，請優先參考這些資料來回答】\n" + "\n".join(cafe_lines) + "\n"
+            except Exception as e:
+                print(f"RAG 查詢失敗: {e}")
+                cafe_context = ""
+
+        # 4. 組裝最終 Prompt
         ollama_url = "http://localhost:11434/api/generate"
+        model_name = app.config.get('OLLAMA_MODEL', 'llama3.2:3b')
+
+        if is_cafe_related:
+            system_prompt = "你是「啡你莫屬」系統的專業台灣咖啡廳推薦助手。請用繁體中文自然地回答使用者的問題，像朋友一樣聊天。如果系統提供了咖啡廳資料，請優先根據這些真實資料來推薦，不要自己編造店名。"
+        else:
+            system_prompt = "你是「啡你莫屬」系統的友善助手。請用繁體中文自然地回答使用者的問題，像朋友一樣聊天即可。不要每次都自我介紹。"
+
+        prompt_text = f"{system_prompt}{cafe_context}\n\n使用者：{user_message}\n助手："
+        
         payload = {
-            "model": app.config.get('OLLAMA_MODEL', 'qwen3.5:397b-cloud'),
-            "prompt": f"你是一個專業的台灣咖啡廳推薦助手。請用繁體中文自然地回答使用者的問題，像朋友一樣聊天即可。不要每次都自我介紹。\n\n使用者：{user_message}\n助手：",
-            "stream": False # 讓 AI 一次把整段話講完再傳回前端
+            "model": model_name,
+            "prompt": prompt_text,
+            "stream": True
         }
 
-        # 4. 發送請求給本機的 Ollama
-        response = requests.post(ollama_url, json=payload)
-        response.raise_for_status() # 檢查 HTTP 狀態碼
-        
-        # 5. 取出 AI 的回答並回傳給前端
-        ai_reply = response.json().get("response", "抱歉，我現在腦筋有點打結，請再說一次。")
-        return jsonify({"reply": ai_reply})
+        # 4. 使用 Generator 轉發資料流給前端
+        #    重點：先送出 debug_info，再連線 Ollama，讓前端不用等
+        def generate():
+            import json
+            # ★ 先送出第一包 debug_info — 前端立刻就能顯示
+            initial_debug = {
+                "type": "debug_info",
+                "model": model_name,
+                "prompt": prompt_text,
+                "is_cafe_related": is_cafe_related,
+                "rag_context": cafe_context if cafe_context else "(未注入資料庫資料)"
+            }
+            yield json.dumps(initial_debug, ensure_ascii=False) + "\n"
 
-    except requests.exceptions.ConnectionError:
-        print("Ollama 連線失敗，請檢查 Ollama 主程式是否開啟")
-        return jsonify({"error": "AI 伺服器未啟動，請聯絡管理員。"}), 500
+            # ★ 然後才去連 Ollama（這裡可能會卡一段時間等模型載入）
+            try:
+                response = requests.post(ollama_url, json=payload, stream=True, timeout=300)
+                response.raise_for_status()
+
+                for line in response.iter_lines():
+                    if line:
+                        yield line.decode('utf-8') + "\n"
+            except requests.exceptions.ConnectionError:
+                error_msg = json.dumps({"error": "Ollama 連線失敗，請確認 Ollama 是否已啟動。", "done": True}, ensure_ascii=False)
+                yield error_msg + "\n"
+            except requests.exceptions.Timeout:
+                error_msg = json.dumps({"error": "Ollama 回應逾時，模型可能正在載入中，請稍後再試。", "done": True}, ensure_ascii=False)
+                yield error_msg + "\n"
+            except Exception as e:
+                error_msg = json.dumps({"error": f"Ollama 發生錯誤：{str(e)}", "done": True}, ensure_ascii=False)
+                yield error_msg + "\n"
+
+        resp = app.response_class(generate(), mimetype='application/x-ndjson')
+        resp.headers['Cache-Control'] = 'no-cache'
+        resp.headers['X-Accel-Buffering'] = 'no'
+        return resp
+
     except Exception as e:
         print("Chat API Error:", e)
         return jsonify({"error": "系統發生未知的錯誤"}), 500
@@ -587,7 +708,7 @@ def admin_get_logs():
 def admin_get_model():
     """取得目前使用的模型和 Ollama 已安裝的模型列表"""
     # 目前使用的模型（從 chat API 中的設定讀取）
-    current_model = app.config.get('OLLAMA_MODEL', 'qwen3.5:397b-cloud')
+    current_model = app.config.get('OLLAMA_MODEL', 'llama3.2:3b')
     
     # 嘗試從 Ollama 取得已安裝的模型列表
     installed_models = []
@@ -624,6 +745,33 @@ def admin_switch_model():
     current_email = session.get('user_email')
     log_action(current_email, '切換模型', f'切換至 {new_model}')
     return jsonify({'success': True, 'current_model': new_model})
+
+@app.route('/api/admin/model/delete', methods=['POST'])
+@admin_required
+def admin_delete_model():
+    """刪除 Ollama 模型"""
+    data = request.json
+    model_name = data.get('model')
+    if not model_name:
+        return jsonify({'error': '請指定模型名稱'}), 400
+    
+    # 防止刪除目前正在使用的模型
+    current_model = app.config.get('OLLAMA_MODEL', 'llama3.2:3b')
+    if model_name == current_model:
+        return jsonify({'error': '不能刪除目前正在使用的模型'}), 400
+
+    try:
+        # 發送刪除請求給 Ollama
+        # Ollama API: DELETE /api/delete {"name": "..."}
+        resp = requests.delete('http://localhost:11434/api/delete', json={'name': model_name})
+        if resp.ok:
+            current_email = session.get('user_email')
+            log_action(current_email, '刪除模型', f'刪除模型 {model_name}')
+            return jsonify({'success': True})
+        else:
+            return jsonify({'error': f'Ollama 刪除失敗: {resp.text}'}), 500
+    except Exception as e:
+        return jsonify({'error': f'連線失敗: {str(e)}'}), 500
 
 
 if __name__ == '__main__':

@@ -393,12 +393,15 @@ body {
 
 .chat-window {
     flex: 1;
-    padding: 20px 10%;
+    padding: 20px 15px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 20px;
     position: relative;
+    max-width: 860px;
+    width: 100%;
+    margin: 0 auto;
 }
 
 .placeholder-zone {
@@ -440,10 +443,10 @@ body {
 }
 
 .message {
-    max-width: 80%;
+    max-width: 85%;
     padding: 15px 20px;
     border-radius: 20px;
-    line-height: 1.5;
+    line-height: 1.6;
     word-wrap: break-word;
 }
 
@@ -453,10 +456,19 @@ body {
     border-bottom-right-radius: 5px;
 }
 
+.message.ai {
+    align-self: flex-start;
+    background-color: var(--msg-ai);
+    border-bottom-left-radius: 5px;
+}
+
 .input-area {
-    padding: 20px 10%;
-    padding-bottom: 20px;
-    background-color: var(--bg-main);
+    padding: 20px 15px;
+    padding-bottom: 30px;
+    background-color: transparent;
+    max-width: 860px;
+    width: 100%;
+    margin: 0 auto;
 }
 
 .input-wrapper {
@@ -747,6 +759,100 @@ button:focus {
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* --- 選項按鈕與選單 --- */
+.options-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-light);
+    cursor: pointer;
+    padding: 8px;
+    margin-right: 10px;
+    border-radius: 50%;
+    transition: 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.options-btn:hover {
+    background-color: rgba(0,0,0,0.05);
+    color: var(--text-main);
+}
+
+.options-menu {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    margin-bottom: 10px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    overflow: hidden;
+    z-index: 100;
+    min-width: 150px;
+}
+
+.options-menu-item {
+    width: 100%;
+    text-align: left;
+    padding: 12px 16px;
+    background: transparent;
+    border: none;
+    color: var(--text-main);
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: 0.2s;
+}
+
+.options-menu-item:hover {
+    background: var(--bg-main);
+}
+
+/* --- Debug Console --- */
+.debug-console {
+    align-self: flex-start;
+    max-width: 85%;
+    width: 100%;
+    margin-top: -10px; /* 貼緊上方訊息泡泡 */
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: 8px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 0.8rem;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.debug-header {
+    background-color: #2d2d2d;
+    padding: 4px 10px;
+    font-weight: bold;
+    color: #9cdcfe;
+    border-bottom: 1px solid #444;
+}
+
+.debug-content {
+    padding: 10px;
+    line-height: 1.5;
+}
+
+.debug-content > div {
+    margin-bottom: 6px;
+}
+
+.debug-content strong {
+    color: #ce9178;
+}
+
+.debug-prompt {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed #444;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: #b5cea8;
 }
 
 @layer base {

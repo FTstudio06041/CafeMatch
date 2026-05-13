@@ -15,14 +15,45 @@ export default function ChatPage() {
   const [currentChatId, setCurrentChatId] = useState(null);
   const [inputMsg, setInputMsg] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [loadingChatId, setLoadingChatId] = useState(null);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [isDebugMode, setIsDebugMode] = useState(false);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   
   const chatWindowRef = useRef(null);
+  const abortControllerRef = useRef(null);
 
   // 初始化載入 LocalStorage 的對話紀錄
   useEffect(() => {
     const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
-    setChats(savedChats);
+    let updatedChats = [...savedChats];
+    
+    // 檢查從其他頁面傳來的目標對話 ID
+    const targetChatId = localStorage.getItem('targetChatId');
+    const lastChatId = localStorage.getItem('lastChatId');
+
+    if (targetChatId) {
+      if (targetChatId === 'new') {
+        const newId = Date.now();
+        updatedChats = [{ id: newId, title: `新對話 ${savedChats.length + 1}`, messages: [] }, ...savedChats];
+        setCurrentChatId(newId);
+      } else {
+        setCurrentChatId(Number(targetChatId));
+      }
+      localStorage.removeItem('targetChatId');
+    } else if (lastChatId) {
+      const id = Number(lastChatId);
+      if (updatedChats.find(c => c.id === id)) {
+        setCurrentChatId(id);
+      } else if (updatedChats.length > 0) {
+        setCurrentChatId(updatedChats[0].id);
+      }
+    } else if (updatedChats.length > 0) {
+      // 預設打開第一個對話
+      setCurrentChatId(updatedChats[0].id);
+    }
+
+    setChats(updatedChats);
 
     // 檢查 URL 參數是否需要顯示歡迎彈窗
     const params = new URLSearchParams(location.search);
@@ -33,10 +64,14 @@ export default function ChatPage() {
     }
   }, [location, navigate]);
 
-  // 當 chats 變動時，存回 LocalStorage
+  // (已移除原先依賴 useEffect 的 allChats 同步機制，改採各行為強制同步寫入)
+
+  // 記住最後一個開啟的對話
   useEffect(() => {
-    localStorage.setItem('allChats', JSON.stringify(chats));
-  }, [chats]);
+    if (currentChatId) {
+      localStorage.setItem('lastChatId', currentChatId);
+    }
+  }, [currentChatId]);
 
   // 自動捲動到底部
   useEffect(() => {
@@ -49,7 +84,9 @@ export default function ChatPage() {
   const handleNewChat = () => {
     const newId = Date.now();
     const newChat = { id: newId, title: `新對話 ${chats.length + 1}`, messages: [] };
-    setChats([newChat, ...chats]);
+    const tempChats = [newChat, ...chats];
+    setChats(tempChats);
+    localStorage.setItem('allChats', JSON.stringify(tempChats));
     setCurrentChatId(newId);
   };
 
@@ -57,7 +94,9 @@ export default function ChatPage() {
   const handleDeleteChat = (e, id) => {
     e.stopPropagation();
     if (window.confirm('確定要刪除此對話嗎？')) {
-      setChats(chats.filter(c => c.id !== id));
+      const tempChats = chats.filter(c => c.id !== id);
+      setChats(tempChats);
+      localStorage.setItem('allChats', JSON.stringify(tempChats));
       if (currentChatId === id) setCurrentChatId(null);
     }
   };
@@ -66,61 +105,197 @@ export default function ChatPage() {
   const sendMessage = async () => {
     if (!inputMsg.trim() || isTyping) return;
 
+    const messageToSend = inputMsg.trim();
     let targetChatId = currentChatId;
+    let currentAiContent = "";
+    let currentDebugInfo = null;
+
+    // --- 同步區塊：建立對話與使用者訊息 ---
     let updatedChats = [...chats];
 
-    // 如果沒有選中對話，先建立一個新的
     if (!targetChatId) {
       targetChatId = Date.now();
-      updatedChats = [{ id: targetChatId, title: inputMsg.substring(0, 10) + '...', messages: [] }, ...updatedChats];
+      updatedChats = [{ id: targetChatId, title: messageToSend.substring(0, 10) + '...', messages: [] }, ...updatedChats];
       setCurrentChatId(targetChatId);
     }
 
     const currentChatIndex = updatedChats.findIndex(c => c.id === targetChatId);
-    
-    // 更新標題 (如果是新對話)
-    if (updatedChats[currentChatIndex].title.startsWith('新對話')) {
-       updatedChats[currentChatIndex].title = inputMsg.substring(0, 10) + '...';
+
+    if (currentChatIndex !== -1 && updatedChats[currentChatIndex].title && updatedChats[currentChatIndex].title.startsWith('新對話')) {
+      updatedChats[currentChatIndex].title = messageToSend.substring(0, 10) + '...';
     }
 
-    // 加入使用者訊息
-    updatedChats[currentChatIndex].messages.push({ role: 'user', content: inputMsg });
+    if (currentChatIndex !== -1) {
+      updatedChats[currentChatIndex].messages.push({ role: 'user', content: messageToSend });
+    } else {
+      updatedChats = [{ id: targetChatId, title: messageToSend.substring(0, 10) + '...', messages: [{ role: 'user', content: messageToSend }] }, ...updatedChats];
+      setCurrentChatId(targetChatId);
+    }
+
+    // 預先插入一個空的 AI 訊息佔位，方便後續串流即時更新
+    const chatIdx = updatedChats.findIndex(c => c.id === targetChatId);
+    if (chatIdx !== -1) {
+      updatedChats[chatIdx].messages.push({ role: 'ai', content: '', debug_info: null });
+    }
+
     setChats(updatedChats);
+    localStorage.setItem('allChats', JSON.stringify(updatedChats));
     setInputMsg('');
     setIsTyping(true);
+    setLoadingChatId(targetChatId);
+    abortControllerRef.current = new AbortController();
 
+    // --- 非同步區塊：串流讀取 AI 回覆 ---
     try {
       const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ message: inputMsg })
-      });
-      const data = await response.json();
-      
-      // 確保拿到最新的 chats 狀態再來更新
-      setChats(prevChats => {
-        const newChats = [...prevChats];
-        const idx = newChats.findIndex(c => c.id === targetChatId);
-        if (idx !== -1) {
-          newChats[idx].messages.push({ role: 'ai', content: data.reply || data.error });
-        }
-        return newChats;
+        body: JSON.stringify({ message: messageToSend }),
+        signal: abortControllerRef.current.signal
       });
 
-    } catch (error) {
-      console.error("AI Error:", error);
-      setChats(prevChats => {
-        const newChats = [...prevChats];
-        const idx = newChats.findIndex(c => c.id === targetChatId);
-        if (idx !== -1) {
-          newChats[idx].messages.push({ role: 'ai', content: "抱歉，連線發生錯誤。" });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: '伺服器回傳錯誤' }));
+        throw new Error(errorData.error || '伺服器回傳錯誤');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunkStr = decoder.decode(value, { stream: true });
+        const lines = chunkStr.split('\n').filter(l => l.trim() !== '');
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+
+            if (data.type === 'debug_info') {
+              currentDebugInfo = {
+                model: data.model, prompt: data.prompt,
+                is_cafe_related: data.is_cafe_related ? '✅ 是 (已注入資料庫)' : '❌ 否 (一般聊天)',
+                rag_context: data.rag_context || '',
+                total_duration_ms: '...', eval_count: '...',
+                eval_duration_ms: '...', tokens_per_sec: '...'
+              };
+            } else if (data.response) {
+              currentAiContent += data.response;
+            } else if (data.error) {
+              currentAiContent += '\n[系統錯誤: ' + data.error + ']';
+            }
+
+            if (data.done && currentDebugInfo) {
+              currentDebugInfo.total_duration_ms = (data.total_duration / 1e6).toFixed(2);
+              currentDebugInfo.eval_count = data.eval_count;
+              currentDebugInfo.eval_duration_ms = (data.eval_duration / 1e6).toFixed(2);
+              currentDebugInfo.tokens_per_sec = data.eval_duration > 0
+                ? (data.eval_count / (data.eval_duration / 1e9)).toFixed(2)
+                : 0;
+            }
+          } catch (_) { /* 忽略不完整的 chunk */ }
         }
-        return newChats;
-      });
+
+        // 即時更新畫面
+        setChats(prev => {
+          const nc = [...prev];
+          const i = nc.findIndex(c => c.id === targetChatId);
+          if (i !== -1) {
+            const msgs = nc[i].messages;
+            const last = msgs[msgs.length - 1];
+            if (last && last.role === 'ai') {
+              last.content = currentAiContent;
+              if (currentDebugInfo) last.debug_info = { ...currentDebugInfo };
+            }
+          }
+          return nc;
+        });
+      }
+
+      // 串流正常結束 → 寫入 LocalStorage
+      const saved = JSON.parse(localStorage.getItem('allChats')) || [];
+      const si = saved.findIndex(c => c.id === targetChatId);
+      if (si !== -1) {
+        const msgs = saved[si].messages;
+        const last = msgs[msgs.length - 1];
+        if (last && last.role === 'ai') {
+          last.content = currentAiContent;
+          last.debug_info = currentDebugInfo;
+          localStorage.setItem('allChats', JSON.stringify(saved));
+        }
+      }
+
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        // 使用者按了停止 → 保存已生成的部分
+        const saved = JSON.parse(localStorage.getItem('allChats')) || [];
+        const si = saved.findIndex(c => c.id === targetChatId);
+        if (si !== -1) {
+          const msgs = saved[si].messages;
+          const last = msgs[msgs.length - 1];
+          if (last && last.role === 'ai') {
+            last.content = currentAiContent + ' [已停止生成]';
+            last.debug_info = currentDebugInfo;
+            localStorage.setItem('allChats', JSON.stringify(saved));
+          }
+        }
+        // 同步更新 React 畫面
+        setChats(prev => {
+          const nc = [...prev];
+          const i = nc.findIndex(c => c.id === targetChatId);
+          if (i !== -1) {
+            const msgs = nc[i].messages;
+            const last = msgs[msgs.length - 1];
+            if (last && last.role === 'ai') {
+              last.content = currentAiContent + ' [已停止生成]';
+              last.debug_info = currentDebugInfo;
+            }
+          }
+          return nc;
+        });
+      } else {
+        console.error('AI Error:', error);
+        // 連線錯誤 → 顯示錯誤訊息
+        setChats(prev => {
+          const nc = [...prev];
+          const i = nc.findIndex(c => c.id === targetChatId);
+          if (i !== -1) {
+            const msgs = nc[i].messages;
+            const last = msgs[msgs.length - 1];
+            if (last && last.role === 'ai') {
+              last.content = '抱歉，連線發生錯誤：' + error.message;
+            }
+          }
+          return nc;
+        });
+        const saved = JSON.parse(localStorage.getItem('allChats')) || [];
+        const si = saved.findIndex(c => c.id === targetChatId);
+        if (si !== -1) {
+          const msgs = saved[si].messages;
+          const last = msgs[msgs.length - 1];
+          if (last && last.role === 'ai') {
+            last.content = '抱歉，連線發生錯誤：' + error.message;
+            localStorage.setItem('allChats', JSON.stringify(saved));
+          }
+        }
+      }
     } finally {
       setIsTyping(false);
+      setLoadingChatId(null);
+      abortControllerRef.current = null;
     }
+  };
+
+  // 停止生成
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setIsTyping(false);
+    setLoadingChatId(null);
   };
 
   const hasProcessedQuiz = useRef(false);
@@ -155,30 +330,130 @@ export default function ChatPage() {
     };
     
     // 更新狀態
-    setChats(prev => [newChat, ...prev]);
+    const currentSaved = JSON.parse(localStorage.getItem('allChats')) || [];
+    const tempChats = [newChat, ...currentSaved];
+    setChats(tempChats);
+    localStorage.setItem('allChats', JSON.stringify(tempChats));
+
     setCurrentChatId(newId);
+    setLoadingChatId(newId);
+
+    abortControllerRef.current = new AbortController();
+
+    let currentAiContent = "";
+    let currentDebugInfo = null;
 
     try {
+        setChats(prev => {
+            const newChats = [...prev];
+            const idx = newChats.findIndex(c => c.id === newId);
+            if (idx !== -1) {
+                newChats[idx].messages.push({ role: 'ai', content: "", debug_info: null });
+            }
+            return newChats;
+        });
+
         const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ message: text })
+        body: JSON.stringify({ message: text }),
+        signal: abortControllerRef.current.signal
         });
-        const data = await response.json();
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
         
-        setChats(prev => {
-        const newChats = [...prev];
-        const idx = newChats.findIndex(c => c.id === newId);
-        if (idx !== -1) {
-            newChats[idx].messages.push({ role: 'ai', content: data.reply || data.error });
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+                const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
+                const savedIdx = savedChats.findIndex(c => c.id === newId);
+                if (savedIdx !== -1) {
+                    const msgs = savedChats[savedIdx].messages;
+                    if (msgs.length > 0) {
+                        msgs[msgs.length - 1].content = currentAiContent;
+                        msgs[msgs.length - 1].debug_info = currentDebugInfo;
+                        localStorage.setItem('allChats', JSON.stringify(savedChats));
+                    }
+                }
+                break;
+            }
+            
+            const chunkStr = decoder.decode(value, { stream: true });
+            const lines = chunkStr.split('\n').filter(line => line.trim() !== '');
+            
+            for (const line of lines) {
+                try {
+                    const data = JSON.parse(line);
+                    if (data.type === "debug_info") {
+                        currentDebugInfo = {
+                            model: data.model,
+                            prompt: data.prompt,
+                            total_duration_ms: "...",
+                            eval_count: "...",
+                            eval_duration_ms: "...",
+                            tokens_per_sec: "..."
+                        };
+                    } else if (data.response) {
+                        currentAiContent += data.response;
+                    } else if (data.error) {
+                        currentAiContent += "\n[系統錯誤: " + data.error + "]";
+                    }
+                    
+                    if (data.done && currentDebugInfo) {
+                        currentDebugInfo.total_duration_ms = (data.total_duration / 1000000).toFixed(2);
+                        currentDebugInfo.eval_count = data.eval_count;
+                        currentDebugInfo.eval_duration_ms = (data.eval_duration / 1000000).toFixed(2);
+                        if (data.eval_duration > 0) {
+                            currentDebugInfo.tokens_per_sec = (data.eval_count / (data.eval_duration / 1000000000)).toFixed(2);
+                        } else {
+                            currentDebugInfo.tokens_per_sec = 0;
+                        }
+                    }
+                } catch (e) {}
+            }
+            
+            setChats(prev => {
+                const newChats = [...prev];
+                const idx = newChats.findIndex(c => c.id === newId);
+                if (idx !== -1) {
+                    const msgs = newChats[idx].messages;
+                    if (msgs.length > 0) {
+                        const lastMsg = msgs[msgs.length - 1];
+                        lastMsg.content = currentAiContent;
+                        if (currentDebugInfo) lastMsg.debug_info = {...currentDebugInfo};
+                    }
+                }
+                return newChats;
+            });
         }
-        return newChats;
-        });
     } catch (error) {
+        if (error.name === 'AbortError') {
+            const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
+            const savedIdx = savedChats.findIndex(c => c.id === newId);
+            if (savedIdx !== -1) {
+                const msgs = savedChats[savedIdx].messages;
+                if (msgs.length > 0) {
+                    msgs[msgs.length - 1].content = currentAiContent + " [已停止生成]";
+                    msgs[msgs.length - 1].debug_info = currentDebugInfo;
+                    localStorage.setItem('allChats', JSON.stringify(savedChats));
+                }
+            }
+            return;
+        }
         console.error("AI Error:", error);
+        
+        const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
+        const savedIdx = savedChats.findIndex(c => c.id === newId);
+        if (savedIdx !== -1) {
+          savedChats[savedIdx].messages.push({ role: 'ai', content: "抱歉，連線發生錯誤。" });
+          localStorage.setItem('allChats', JSON.stringify(savedChats));
+        }
     } finally {
         setIsTyping(false);
+        setLoadingChatId(null);
+        abortControllerRef.current = null;
     }
     };
 
@@ -245,33 +520,74 @@ export default function ChatPage() {
             </div>
           ) : (
             currentChat.messages.map((msg, idx) => (
-              <div key={idx} className={`message ${msg.role}`}>
-                {msg.content}
-              </div>
+              <React.Fragment key={idx}>
+                <div className={`message ${msg.role}`}>
+                  {msg.role === 'ai' && msg.content === '' ? (
+                    <div className="typing-indicator" style={{ margin: 0, padding: 0, background: 'transparent' }}>
+                      <div className="typing-dot"></div><div className="typing-dot"></div><div className="typing-dot"></div>
+                    </div>
+                  ) : (
+                    msg.content
+                  )}
+                </div>
+                {isDebugMode && msg.debug_info && (
+                  <div className="debug-console">
+                    <div className="debug-header">Debug Console</div>
+                    <div className="debug-content">
+                      <div><strong>Model:</strong> {msg.debug_info.model}</div>
+                      <div><strong>Intent (意圖分類):</strong> {msg.debug_info.is_cafe_related}</div>
+                      <div><strong>Generation Speed:</strong> {msg.debug_info.tokens_per_sec} tokens/s ({msg.debug_info.eval_count} tokens in {msg.debug_info.eval_duration_ms} ms)</div>
+                      <div><strong>Total Duration:</strong> {msg.debug_info.total_duration_ms} ms</div>
+                      {msg.debug_info.rag_context && msg.debug_info.rag_context !== '(未注入資料庫資料)' && (
+                        <div className="debug-prompt"><strong>RAG 注入資料:</strong><br/>{msg.debug_info.rag_context}</div>
+                      )}
+                      <div className="debug-prompt"><strong>完整 Prompt:</strong><br/>{msg.debug_info.prompt}</div>
+                    </div>
+                  </div>
+                )}
+              </React.Fragment>
             ))
-          )}
-          
-          {isTyping && (
-             <div className="typing-indicator">
-               <div className="typing-dot"></div><div className="typing-dot"></div><div class="typing-dot"></div>
-             </div>
           )}
         </div>
 
         <div className="input-area">
           <div className="input-wrapper">
+            {user?.is_admin && (
+              <div style={{ position: 'relative' }}>
+                <button 
+                  className="options-btn" 
+                  onClick={() => setShowOptionsMenu(!showOptionsMenu)}
+                  title="選項"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
+                </button>
+                {showOptionsMenu && (
+                  <div className="options-menu">
+                    <button className="options-menu-item" onClick={() => { setIsDebugMode(!isDebugMode); setShowOptionsMenu(false); }}>
+                      {isDebugMode ? '關閉 Debug 模式' : '開啟 Debug 模式'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             <input 
               type="text" 
               className="chat-input" 
               placeholder={isTyping ? "AI 正在思考中..." : "輸入訊息..."} 
               value={inputMsg}
               onChange={(e) => setInputMsg(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+              onKeyPress={(e) => e.key === 'Enter' && !isTyping && sendMessage()}
               disabled={isTyping}
             />
-            <button className="send-btn" onClick={sendMessage} disabled={isTyping}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-            </button>
+            {isTyping ? (
+              <button className="send-btn" onClick={handleStop} style={{ backgroundColor: '#D32F2F' }} title="停止生成">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="6" width="12" height="12"></rect></svg>
+              </button>
+            ) : (
+              <button className="send-btn" onClick={sendMessage} disabled={!inputMsg.trim()}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+              </button>
+            )}
           </div>
           <div className="disclaimer-text">AI 生成內容可能含有錯誤，請斟酌採納生成內容。</div>
         </div>
