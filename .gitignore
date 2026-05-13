@@ -13,6 +13,8 @@ env/
 # 忽略 VS Code 設定檔
 .vscode/
 
+node_modules/
+
 # 忽略作業系統縮圖
 .DS_Store
 Thumbs.db

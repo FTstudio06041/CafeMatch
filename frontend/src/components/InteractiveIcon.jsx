@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { motion, useSpring } from 'framer-motion';
 
-const InteractiveIcon = ({ Component, size, top, left, delay, duration }) => {
+const InteractiveIcon = ({ Component, size, top, left }) => {
   const ref = useRef(null);
 
   // 使用 useSpring 讓移動更有彈性
@@ -44,16 +44,13 @@ const InteractiveIcon = ({ Component, size, top, left, delay, duration }) => {
   }, [offsetX, offsetY]);
 
   return (
-    // 外層：負責定位 + CSS 漂浮動畫
+    // 外層：負責定位
     <div
       ref={ref}
-      className="animate-floating"
       style={{
         position: 'absolute',
         top,
         left,
-        animationDelay: delay,
-        animationDuration: duration,
       }}
     >
       {/* 內層：負責 framer-motion 滑鼠排斥位移 */}

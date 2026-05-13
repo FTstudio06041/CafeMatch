@@ -424,25 +424,9 @@ body {
 }
 
 .status-dot {
-    width: 24px;
-    height: 24px;
-    background: rgba(255, 255, 255, 0.9);
-    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.8rem;
-    opacity: 0;
-    transition: 0.2s;
-    color: var(--accent-color);
-}
-
-.shop-card.is-fav .status-dot.fav {
-    opacity: 1;
-}
-
-.shop-card.is-visited .status-dot.visited {
-    opacity: 1;
 }
 
 /* --- 彈窗 (Modal) --- */

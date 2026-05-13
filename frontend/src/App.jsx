@@ -6,6 +6,7 @@ import ChatPage from './pages/ChatPage';
 import ExplorePage from './pages/ExplorePage';
 import ProfilePage from './pages/ProfilePage';
 import QuizPage from './pages/QuizPage'; // 引入測驗頁
+import AdminPage from './pages/AdminPage'; // 引入管理員頁
 
 function AppContent() {
   const { user, isLoading } = useContext(AuthContext);
@@ -20,6 +21,7 @@ function AppContent() {
         <Route path="/explore" element={user ? <ExplorePage /> : <Navigate to="/" />} />
         <Route path="/profile" element={user ? <ProfilePage /> : <Navigate to="/" />} />
         <Route path="/quiz" element={user ? <QuizPage /> : <Navigate to="/" />} />
+        <Route path="/admin" element={user?.is_admin ? <AdminPage /> : <Navigate to="/" />} />
       </Routes>
     </Router>
   );

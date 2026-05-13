@@ -152,10 +152,20 @@ export default function ExplorePage() {
             ) : (
               filteredShops.map(shop => (
                 <div key={shop.id} className={`shop-card ${shop.is_fav ? 'is-fav' : ''} ${shop.is_visited ? 'is-visited' : ''}`} onClick={() => setSelectedShop(shop)}>
-                  <div className="card-img" style={{ backgroundColor: shop.color }}></div>
+                  <div className="card-img" style={{ backgroundColor: shop.color }}>
+                    {shop.image && <img src={shop.image} alt={shop.name} style={{width:'100%',height:'100%',objectFit:'cover'}} />}
+                  </div>
                   <div className="card-status-icons">
-                    <div className="status-dot fav" style={{ opacity: shop.is_fav ? 1 : 0 }}>❤</div>
-                    <div className="status-dot visited" style={{ opacity: shop.is_visited ? 1 : 0 }}>✔</div>
+                    {shop.is_fav && (
+                      <div className="status-dot fav">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="#e53935" stroke="#e53935" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                      </div>
+                    )}
+                    {shop.is_visited && (
+                      <div className="status-dot visited">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      </div>
+                    )}
                   </div>
                   <div className="card-info">
                     <div className="shop-name">{shop.name}</div>
@@ -174,7 +184,9 @@ export default function ExplorePage() {
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             <div className="modal-img-wrapper">
               <button className="modal-close-btn" onClick={() => setSelectedShop(null)}>×</button>
-              <div className="modal-img" style={{ backgroundColor: selectedShop.color }}></div>
+              <div className="modal-img" style={{ backgroundColor: selectedShop.color }}>
+                {selectedShop.image && <img src={selectedShop.image} alt={selectedShop.name} style={{width:'100%',height:'100%',objectFit:'cover'}} />}
+              </div>
 
               <div className="overlay-actions">
                 <button className={`overlay-btn btn-fav ${selectedShop.is_fav ? 'active' : ''}`} onClick={() => toggleAction('fav')}>
