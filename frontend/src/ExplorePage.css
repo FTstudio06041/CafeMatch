@@ -330,7 +330,7 @@ body {
 }
 
 .nav-btn.active {
-    color: #fff;
+    color: white;
 }
 
 /* --- 探索區塊 --- */
@@ -338,6 +338,11 @@ body {
     flex: 1;
     padding: 0 40px 40px 40px;
     overflow-y: auto;
+}
+
+.explore-content.detail-mode {
+    padding: 0 32px 24px 32px;
+    overflow: hidden;
 }
 
 .filter-bar {
@@ -363,7 +368,7 @@ body {
 
 .filter-chip.active {
     background-color: var(--accent-color);
-    color: #fff;
+    color: white;
 }
 
 .shop-grid {
@@ -427,6 +432,241 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+/* --- 店家全頁檢視 --- */
+.shop-detail-page {
+    width: min(100%, 1220px);
+    height: 100%;
+    min-height: 0;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-bottom: 0;
+}
+
+.detail-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.detail-back-btn {
+    min-height: 42px;
+    padding: 0 16px;
+    border: 1px solid rgba(78, 52, 46, 0.22);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.6);
+    color: var(--text-main);
+    cursor: pointer;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+.detail-back-btn:hover {
+    background: rgba(255, 255, 255, 0.88);
+    transform: translateX(-2px);
+}
+
+.detail-status {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.detail-status-pill {
+    padding: 7px 12px;
+    border-radius: 999px;
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.detail-status-pill.fav {
+    background: rgb(160, 104, 112);
+}
+
+.detail-status-pill.visited {
+    background: #7c8750;
+}
+
+.detail-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 340px);
+    gap: 22px;
+    align-items: start;
+}
+
+.detail-hero-img {
+    width: 100%;
+    height: clamp(150px, 22vh, 250px);
+    border-radius: 18px;
+    overflow: hidden;
+    background: #eee;
+    box-shadow: 0 14px 34px rgba(78, 52, 46, 0.14);
+}
+
+.detail-hero-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.detail-hero-info {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 0;
+}
+
+.detail-tags {
+    color: var(--text-light);
+    font-size: 0.94rem;
+    font-weight: 700;
+    line-height: 1.5;
+    margin-bottom: 10px;
+}
+
+.detail-title {
+    color: var(--text-main);
+    font-size: clamp(2rem, 4vw, 3.45rem);
+    line-height: 1.08;
+    letter-spacing: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 14px;
+    color: var(--text-main);
+    font-weight: 700;
+}
+
+.detail-meta span {
+    padding: 9px 13px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.52);
+}
+
+.detail-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.detail-action-btn {
+    min-height: 44px;
+    padding: 0 18px;
+    border: 1px solid rgba(78, 52, 46, 0.18);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.72);
+    color: var(--text-main);
+    font-weight: 800;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background-color 0.2s, color 0.2s, transform 0.2s;
+}
+
+.detail-action-btn:hover {
+    background: #fff;
+    transform: translateY(-2px);
+}
+
+.detail-action-btn.active {
+    color: white;
+    border-color: transparent;
+}
+
+.detail-action-btn.btn-fav.active {
+    background: rgb(160, 104, 112);
+}
+
+.detail-action-btn.btn-visited.active {
+    background: #7c8750;
+}
+
+.detail-body {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+}
+
+.detail-info-panel {
+    margin-top: 18px;
+}
+
+.detail-section-title {
+    font-size: 1.15rem;
+    color: var(--text-main);
+    font-weight: 800;
+    margin-bottom: 10px;
+}
+
+.detail-desc {
+    color: var(--text-main);
+    line-height: 1.65;
+    font-size: 0.96rem;
+    margin-bottom: 14px;
+    max-width: 760px;
+}
+
+.detail-info-list {
+    display: grid;
+    gap: 14px;
+}
+
+.detail-info-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    color: var(--text-main);
+    font-size: 0.98rem;
+    line-height: 1.55;
+}
+
+.detail-map-panel {
+    width: 100%;
+    height: 100%;
+    min-height: 230px;
+    max-height: 360px;
+    border-radius: 22px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.46);
+    border: 2px dashed #BCAAA4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #757575;
+    font-weight: 700;
+}
+
+.detail-map-panel iframe {
+    border: 0;
+    display: block;
+}
+
+.detail-map-link {
+    padding: 12px 20px;
+    border: 0;
+    border-radius: 16px;
+    background: var(--accent-color);
+    color: white;
+    cursor: pointer;
+    font-weight: 800;
 }
 
 /* --- 彈窗 (Modal) --- */
@@ -623,4 +863,65 @@ body {
     /* 讓簡介填滿右邊剩餘空間 */
     margin-bottom: 0;
     /* 移除原本的底部距離，因為已經在上面了 */
+}
+
+@media (max-width: 980px) {
+    .detail-hero {
+        grid-template-columns: 1fr;
+    }
+
+    .detail-hero-img {
+        height: clamp(150px, 30vw, 230px);
+    }
+
+    .detail-body {
+        min-height: 0;
+    }
+
+   .detail-map-panel {
+        min-height: 220px;
+        max-height: 300px;
+    }
+}
+
+@media (max-width: 720px) {
+    .explore-content {
+        padding: 0 20px 28px 20px;
+    }
+
+    .explore-content.detail-mode {
+        overflow-y: auto;
+    }
+
+    .filter-bar {
+        overflow-x: auto;
+        padding-bottom: 4px;
+    }
+
+    .detail-topbar {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .detail-status {
+        justify-content: flex-start;
+    }
+
+    .detail-title {
+        font-size: 2.25rem;
+    }
+
+    .detail-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .detail-action-btn {
+        padding: 0 12px;
+    }
+
+   .detail-map-panel {
+        min-height: 220px;
+        max-height: 280px;
+    }
 }

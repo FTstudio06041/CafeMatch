@@ -3,6 +3,7 @@ import { AuthContext } from '../context/AuthContext';
 import '../LandingPage.css'; // 引入剛才建立的 CSS
 import FloatingBackgroundIcons from '../components/FloatingBackgroundIcon';
 import CoffeeAskBar from '../components/AskBar';
+import LiquidSurface from '../components/LiquidSurface';
 
 export default function LandingPage() {
   const { login } = useContext(AuthContext);
@@ -10,6 +11,7 @@ export default function LandingPage() {
   return (
     <div className="landing-body">
       <FloatingBackgroundIcons />
+      <LiquidSurface />
       <header className="landing-header">
         <div className="brand-logo" onClick={() => window.location.reload()}>
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -31,7 +33,7 @@ export default function LandingPage() {
 
       <div className="landing-container">
         <div className="intro-section">
-          <h1 className="main-title">找到你的 命定風味</h1>
+          <h1 className="main-title">找到你的 夢中情店</h1>
           <CoffeeAskBar />
           <div className="glow-wrapper">
             <button className="btn-google-login" onClick={login}>
