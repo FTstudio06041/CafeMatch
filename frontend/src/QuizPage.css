@@ -1,6 +1,9 @@
-@import "tailwindcss";
+/* ============================================
+   QuizPage.css — 午後散策人格解析 測驗系統樣式
+   ============================================ */
 
-:root {
+.quiz-page-container {
+    animation: quizPageEnter 0.6s ease-out both;
     /* 延續主色調 */
     --bg-main: #ddccb9;
     --bg-sidebar: #d6c2a5;
@@ -14,21 +17,29 @@
     --sidebar-width: 280px;
     --sidebar-width-collapsed: 88px;
     --transition-speed: 0.3s;
-}
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: "Microsoft JhengHei", sans-serif;
-}
+    /* 測驗擴充色票 */
+    --accent-warm: #8a7066;
+    --accent-gold: #93807a;
+    --accent-cream: #f5ebe0;
+    --glass-bg: rgba(255, 255, 255, 0.55);
+    --glass-border: rgba(255, 255, 255, 0.35);
+    --glass-shadow: rgba(78, 52, 46, 0.08);
+    --radar-fill: rgba(67, 42, 0, 0.18);
+    --radar-stroke: rgba(67, 42, 0, 0.7);
 
-body {
+    /* 將背景色與文字色綁定在容器上，不再污染全域 body */
     background-color: var(--bg-main);
     color: var(--text-main);
-    height: 100vh;
-    display: flex;
-    overflow: hidden;
+}
+
+@keyframes quizPageEnter {
+    0% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 1;
+    }
 }
 
 /* 全域卷軸樣式 */
@@ -50,7 +61,9 @@ body {
     background-color: #b5a191;
 }
 
-/* --- 側欄 --- */
+/* =============================================
+   側欄（完全保留原樣）
+   ============================================= */
 .sidebar {
     width: var(--sidebar-width);
     background-color: var(--bg-sidebar);
@@ -58,8 +71,10 @@ body {
     flex-direction: column;
     padding: 20px;
     flex-shrink: 0;
-    transition: width var(--transition-speed) ease;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+                padding 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
+    overflow: hidden;
 }
 
 .sidebar.collapsed {
@@ -88,6 +103,10 @@ body {
     transform: rotate(180deg);
     right: 50%;
     margin-right: -15px;
+}
+
+.toggle-sidebar-btn {
+    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .user-profile-btn {
@@ -175,7 +194,9 @@ body {
 .text-label {
     opacity: 1;
     white-space: nowrap;
-    transition: opacity 0.2s;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                margin 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar.collapsed .text-label {
@@ -275,7 +296,9 @@ body {
     display: none;
 }
 
-/* --- 主內容區 --- */
+/* =============================================
+   主內容區（保留原始框架）
+   ============================================= */
 .main-container {
     flex: 1;
     display: flex;
@@ -332,149 +355,967 @@ body {
 }
 
 .nav-btn.active {
-    color: #fff;
+    color: white;
 }
 
-/* --- 測驗專用樣式 --- */
+/* ===== Quiz 頁面專屬導覽列（深棕色背景） ===== */
+.quiz-page .navbar {
+    background: #4a3728;
+}
+.quiz-page .nav-btn {
+    color: #ddccb9;
+}
+.quiz-page .nav-btn:hover {
+    color: #fff;
+}
+.quiz-page .nav-btn.active {
+    color: #4E342E;
+}
+.quiz-page .nav-marker {
+    background-color: #ddccb9;
+}
+
+/* =============================================
+   測驗系統 — 主內容區域（全頁佈局）
+   ============================================= */
 .quiz-content {
     flex: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding: 20px;
+    justify-content: flex-start;
+    padding: 32px 48px;
+    overflow-y: auto;
 }
 
+/* intro 狀態：去掉 padding，讓背景佈滿 */
+.quiz-content.intro-active {
+    padding: 0;
+}
+
+/* 全頁式卡片 — 去掉毛玻璃箱體限制 */
 .quiz-card {
-    background: var(--bg-card);
     width: 100%;
-    max-width: 600px;
-    border-radius: 30px;
-    padding: 40px;
-    box-shadow: 0 10px 30px rgba(78, 52, 46, 0.1);
+    max-width: 780px;
+    padding: 20px 0;
     text-align: center;
     display: flex;
     flex-direction: column;
     align-items: center;
-    animation: fadeIn 0.5s ease;
-    min-height: 400px;
+    animation: cardAppear 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    min-height: 420px;
     justify-content: center;
+    position: relative;
 }
 
-@keyframes fadeIn {
+/* 結果頁寬度加大，容納左右並排 */
+.quiz-card.result-mode {
+    max-width: 960px;
+    padding: 20px 0;
+}
+
+@keyframes cardAppear {
     from {
         opacity: 0;
-        transform: translateY(10px);
+        transform: translateY(24px) scale(0.97);
     }
-
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
     }
 }
 
-/* 進度條 */
+/* =============================================
+   進度條（分段式）
+   ============================================= */
 .progress-container {
     width: 100%;
-    height: 8px;
-    background-color: #eee;
-    border-radius: 4px;
-    margin-bottom: 30px;
+    margin-bottom: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.progress-track {
+    width: 100%;
+    height: 6px;
+    background: rgba(78, 52, 46, 0.1);
+    border-radius: 3px;
     overflow: hidden;
-    display: none;
+    position: relative;
 }
 
-.progress-bar {
+.progress-fill {
     height: 100%;
-    background-color: var(--accent-color);
-    width: 0%;
-    transition: width 0.5s ease;
+    background: linear-gradient(90deg, var(--accent-color), var(--accent-gold));
+    border-radius: 3px;
+    transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+    position: relative;
 }
 
-.question-text {
-    font-size: 1.5rem;
-    font-weight: bold;
+/* 進度條光澤動畫 */
+.progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    animation: progressShimmer 2s infinite;
+}
+
+@keyframes progressShimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.progress-label {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+/* =============================================
+   介紹頁（MBTI 風格 — 上深下淺雙色佈局）
+   ============================================= */
+.intro-view {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-height: 100%;
+    animation: fadeSlideIn 0.5s ease;
+}
+
+/* 上半部：深色區域 */
+.intro-upper {
+    width: 100%;
+    background: #ddccb9;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 56px 50px 0;
+    position: relative;
+    padding-bottom: 150px;  /* 為波浪留空間 */
+}
+
+/* 波浪分隔線 — 填充下半部顏色 */
+.intro-wave {
+    display: block;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 80px;
+}
+.intro-wave path {
+    fill: #d6c2a5;
+}
+
+/* 下半部：淺色區域 */
+.intro-lower {
+    width: 100%;
+    background: #d6c2a5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 48px 56px;
+    flex: 1;
+}
+
+
+.intro-title {
+    font-size: 5rem;
+    font-weight: 800;
+    color: #4E342E;
+    margin-bottom: 10px;
+    letter-spacing: 2px;
+}
+
+.intro-subtitle {
+    font-size: 2rem;
+    color: #795548;
+    margin-bottom: 24px;
+    font-weight: 500;
+}
+
+
+/* === 三步驟卡片 === */
+.step-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    width: 100%;
+    max-width: 1250px;
+    margin-bottom: 44px;
+    position: relative;
+    z-index: 10;
+    margin-top: -120px; 
+}
+
+.step-card {
+    flex: 1 1 300px;
+    border-radius: 20px;
+    padding: 80px 32px 32px;
+    text-align: left;
+    position: relative;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(1.5px);
+    -webkit-backdrop-filter: blur(1.5px);
+     border: 2px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 16px 48px rgba(78, 52, 46, 0.06);
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+                box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    cursor: default;
+    min-height: 280px;
+}
+
+.step-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 12px 32px rgba(78, 52, 46, 0.12);
+}
+
+/* 卡片背景大 icon */
+.step-card-bg {
+    position: absolute;
+    top: 20px;
+    right: 35px;
+    color: #432a00;
+}
+
+/* 步驟標籤 pill */
+.step-badge {
+    display: inline-block;
+    padding: 5px 16px;
+    border-radius: 20px;
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+    letter-spacing: 0.5px;
+}
+.step-card-1 .step-badge {
+    background: var(--accent-gold);
+    color: white;
+}
+.step-card-2 .step-badge {
+    background: var(--accent-warm);
+    color: white;
+}
+.step-card-3 .step-badge {
+    background: var(--accent-color);
+    color: white;
+}
+
+.step-card-1 {
+    border-top: 6px solid var(--accent-gold);
+}
+.step-card-2 {
+    border-top: 6px solid var(--accent-warm);
+}
+.step-card-3 {
+    border-top: 6px solid var(--text-light); 
+}
+
+.step-card-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent-color);
+    margin-bottom: 10px;
+}
+
+.step-card-desc {
+    font-size: 1.1rem;
+    color: var(--text-light);
+    line-height: 1.7;
+    font-weight: 600;
+}
+
+/* 開始按鈕加大 */
+.btn-start {
+    padding: 16px 48px;
+    font-size: 1.1rem;
+}
+
+/* =============================================
+   按鈕系統
+   ============================================= */
+.btn-primary {
+    background: linear-gradient(135deg, var(--text-main), var(--accent-color));
+    color: white;
+    padding: 14px 36px;
+    border-radius: 30px;
+    border: none;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: 0 4px 16px rgba(67, 42, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.btn-primary::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+    transition: left 0.5s;
+}
+
+.btn-primary:hover::before {
+    left: 100%;
+}
+
+.btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(67, 42, 0, 0.3);
+}
+
+.btn-primary:active {
+    transform: translateY(-1px);
+}
+
+.btn-outline {
+    background: transparent;
     color: var(--text-main);
-    margin-bottom: 40px;
+    padding: 14px 36px;
+    border-radius: 30px;
+    border: 2px solid var(--text-main);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.3s ease;
+}
+
+.btn-outline:hover {
+    background: var(--text-main);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(78, 52, 46, 0.15);
+}
+
+/* =============================================
+   情境標籤（pill badge）
+   ============================================= */
+.scenario-tag {
+    display: inline-block;
+    padding: 6px 16px;
+    background: linear-gradient(135deg, var(--accent-cream), rgba(196, 148, 58, 0.15));
+    color: var(--accent-warm);
+    font-size: 0.78rem;
+    font-weight: 700;
+    border-radius: 20px;
+    margin-bottom: 20px;
+    letter-spacing: 0.5px;
+    border: 1px solid rgba(196, 148, 58, 0.25);
+}
+
+/* =============================================
+   題目文案
+   ============================================= */
+.question-text {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 32px;
+    line-height: 1.7;
+    max-width: 95%;
+}
+
+/* =============================================
+   答題頁 — 題目切換動畫
+   ============================================= */
+.question-wrapper {
+    width: 100%;
+    position: relative;
+}
+
+.question-slide {
+    width: 100%;
+    animation: fadeSlideIn 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.question-slide.fading-out {
+    animation: fadeSlideOut 0.25s ease forwards;
+}
+
+@keyframes fadeSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes fadeSlideOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(-30px);
+    }
+}
+
+/* =============================================
+   選項卡片（單選 Q1-Q8）
+   ============================================= */
+.options-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}
+
+.option-card {
+    padding: 20px 24px;
+    border: 2px solid rgba(78, 52, 46, 0.12);
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(8px);
+    border-radius: 18px;
+    color: var(--text-main);
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    position: relative;
+    overflow: hidden;
+}
+
+.option-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, var(--accent-color), var(--accent-warm));
+    opacity: 0;
+    transition: opacity 0.3s;
+    border-radius: 16px;
+    z-index: 0;
+}
+
+.option-card:hover {
+    border-color: var(--accent-color);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(67, 42, 0, 0.12);
+}
+
+.option-card:hover::before {
+    opacity: 0.06;
+}
+
+.option-card.selected {
+    border-color: var(--accent-color);
+    background: linear-gradient(135deg, var(--accent-color), var(--accent-warm));
+    color: white;
+    transform: scale(0.98);
+    box-shadow: 0 4px 20px rgba(67, 42, 0, 0.25);
+}
+
+.option-card.selected .option-subtext {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.option-main-text {
+    font-size: 1.05rem;
+    font-weight: 600;
+    position: relative;
+    z-index: 1;
+}
+
+.option-subtext {
+    font-size: 0.82rem;
+    color: var(--text-light);
+    line-height: 1.5;
+    position: relative;
+    z-index: 1;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition: all 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    margin-top: 0;
+}
+
+/* hover 或選中時展開 subtext */
+.option-card:hover .option-subtext,
+.option-card.selected .option-subtext {
+    max-height: 100px;
+    opacity: 1;
+    margin-top: 6px;
+}
+
+/* =============================================
+   Q9 多選 — 自定義 checkbox
+   ============================================= */
+.multi-select-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    margin-bottom: 28px;
+}
+
+.checkbox-card {
+    padding: 18px 24px;
+    border: 2px solid rgba(78, 52, 46, 0.12);
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(8px);
+    border-radius: 18px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    text-align: left;
+}
+
+.checkbox-card:hover {
+    border-color: var(--accent-color);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(67, 42, 0, 0.1);
+}
+
+.checkbox-card.checked {
+    border-color: var(--accent-color);
+    background: rgba(67, 42, 0, 0.06);
+}
+
+/* 自定義 checkbox 圓角方塊 */
+.custom-checkbox {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--text-light);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.25s ease;
+    position: relative;
+}
+
+.checkbox-card.checked .custom-checkbox {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+/* checkbox 打勾動畫 */
+.custom-checkbox::after {
+    content: '';
+    width: 6px;
+    height: 12px;
+    border: solid white;
+    border-width: 0 2.5px 2.5px 0;
+    transform: rotate(45deg) scale(0);
+    transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+    position: relative;
+    top: -1px;
+}
+
+.checkbox-card.checked .custom-checkbox::after {
+    transform: rotate(45deg) scale(1);
+}
+
+.checkbox-label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.checkbox-main-text {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.checkbox-subtext {
+    font-size: 0.8rem;
+    color: var(--text-light);
     line-height: 1.4;
 }
 
-.options-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 15px;
-    width: 100%;
+.multi-select-hint {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    margin-bottom: 16px;
+    font-style: italic;
 }
 
-.option-btn {
-    padding: 20px;
-    border: 2px solid var(--text-light);
-    background: transparent;
-    border-radius: 15px;
-    color: var(--text-main);
-    font-size: 1.1rem;
-    cursor: pointer;
-    transition: 0.2s;
+/* =============================================
+   載入動畫（旋轉咖啡杯 spinner）
+   ============================================= */
+.loading-view {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    min-height: 200px;
+    animation: fadeSlideIn 0.3s ease;
 }
 
-.option-btn:hover {
-    background-color: var(--accent-color);
-    border-color: var(--accent-color);
-    color: white;
-    transform: scale(1.02);
+.spinner-cup {
+    width: 60px;
+    height: 60px;
+    position: relative;
+    animation: spinPulse 1.5s ease-in-out infinite;
 }
 
-/* --- 起始與結果頁 --- */
-.intro-view,
+.spinner-cup::before {
+    content: '☕';
+    font-size: 3rem;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+@keyframes spinPulse {
+    0% { transform: scale(1) rotate(0deg); opacity: 0.7; }
+    50% { transform: scale(1.1) rotate(180deg); opacity: 1; }
+    100% { transform: scale(1) rotate(360deg); opacity: 0.7; }
+}
+
+.loading-text {
+    font-size: 0.95rem;
+    color: var(--text-light);
+    font-weight: 500;
+    animation: loadingDots 1.5s infinite;
+}
+
+@keyframes loadingDots {
+    0%, 20% { opacity: 0.4; }
+    50% { opacity: 1; }
+    80%, 100% { opacity: 0.4; }
+}
+
+/* =============================================
+   結果頁
+   ============================================= */
 .result-view {
     display: flex;
     flex-direction: column;
     align-items: center;
     width: 100%;
+    animation: resultReveal 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    font-weight: 1000;
 }
 
-.intro-view {
-    display: flex;
+@keyframes resultReveal {
+    from {
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
-.result-view {
-    display: none;
-}
-
-.view-title {
-    font-size: 1.2rem;
+/* 結果稱號 */
+.result-title-badge {
+    font-size: 1rem;
     color: var(--text-light);
+    margin-bottom: 8px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-weight: 1000;
+}
+
+.result-title {
+    font-size: 4rem;
+    font-weight: 900;
+    margin-bottom: 24px;
+    line-height: 1.3;
+    background: linear-gradient(135deg, var(--accent-color), var(--accent-gold), var(--accent-warm));
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradientShift 4s ease infinite;
+}
+
+@keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* 內心獨白（引用區塊） */
+.result-quote {
+    width: 100%;
+    padding: 24px 28px;
+    background: rgba(245, 235, 224, 0.6);
+    border-left: 4px solid var(--accent-gold);
+    border-radius: 0 16px 16px 0;
+    margin-bottom: 28px;
+    text-align: left;
+}
+
+.result-quote p {
+    font-style: italic;
+    color: var(--accent-warm);
+    line-height: 1.8;
+    font-size: 1.3rem;
+}
+
+/* 特質側寫 */
+.result-profile {
+    width: 100%;
+    text-align: left;
+    margin-bottom: 32px;
+}
+
+.result-section-label {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--accent-gold);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
     margin-bottom: 10px;
 }
 
-.view-highlight {
-    font-size: 2rem;
-    font-weight: bold;
-    color: var(--accent-color);
-    margin-bottom: 20px;
-}
-
-.view-desc {
+.result-profile p {
     color: var(--text-main);
-    margin-bottom: 30px;
-    line-height: 1.6;
-    max-width: 80%;
+    line-height: 1.8;
+    font-size: 1.3rem;
 }
 
-.btn-primary {
-    background-color: var(--text-main);
-    color: white;
-    padding: 12px 30px;
-    border-radius: 30px;
-    border: none;
-    font-size: 1rem;
-    cursor: pointer;
+/* 結果頁主體：左右並排容器 */
+.result-body {
+    display: flex;
+    gap: 32px;
+    width: 100%;
+    align-items: flex-start;
+    margin-bottom: 28px;
+}
+
+.result-body-left {
+    flex: 1;
+    min-width: 0;
+}
+
+.result-body-right {
+    flex-shrink: 0;
+    width: 300px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    transition: 0.2s;
+    justify-content: center;
 }
 
-.btn-primary:hover {
-    background-color: var(--accent-color);
-    transform: translateY(-2px);
+/* 花蓮隱藏氛圍對應 */
+.result-cafe-match {
+    width: 100%;
+    padding: 24px 28px;
+    background: linear-gradient(135deg, rgba(67, 42, 0, 0.05), rgba(196, 148, 58, 0.08));
+    border-radius: 18px;
+    margin-bottom: 32px;
+    text-align: left;
+    border: 1px solid rgba(196, 148, 58, 0.15);
+}
+
+.result-cafe-match .match-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--accent-color);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.result-cafe-match p {
+    color: var(--text-main);
+    line-height: 1.7;
+    font-size: 1.2rem;
+}
+
+/* =============================================
+   SVG 雷達圖
+   ============================================= */
+.radar-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 0;
+}
+
+.radar-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--accent-gold);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 16px;
+}
+
+.radar-svg {
+    width: 100%;
+    max-width: 280px;
+    height: auto;
+}
+
+/* 雷達圖數據多角形動畫 */
+.radar-data-polygon {
+    fill: var(--radar-fill);
+    stroke: var(--radar-stroke);
+    stroke-width: 2;
+    animation: radarGrow 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    transform-origin: center;
+}
+
+@keyframes radarGrow {
+    from {
+        opacity: 0;
+        transform: scale(0.3);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.radar-grid-polygon {
+    fill: none;
+    stroke: rgba(78, 52, 46, 0.1);
+    stroke-width: 1;
+}
+
+.radar-axis-line {
+    stroke: rgba(78, 52, 46, 0.12);
+    stroke-width: 1;
+}
+
+.radar-label {
+    font-size: 1.2rem;
+    fill: var(--text-main);
+    font-weight: 600;
+    text-anchor: middle;
+    dominant-baseline: central;
+}
+
+.radar-score {
+    font-size: 14px;
+    fill: var(--accent-color);
+    font-weight: 700;
+    text-anchor: middle;
+    dominant-baseline: central;
+}
+
+.radar-dot {
+    fill: var(--accent-color);
+    r: 4;
+    animation: radarGrow 1s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* =============================================
+   結果頁底部按鈕區
+   ============================================= */
+.result-actions {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* =============================================
+   錯誤提示
+   ============================================= */
+.error-view {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    animation: fadeSlideIn 0.3s ease;
+}
+
+.error-icon {
+    font-size: 2.5rem;
+}
+
+.error-message {
+    color: var(--text-light);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    text-align: center;
+}
+
+/* =============================================
+   響應式調整
+   ============================================= */
+@media (max-width: 768px) {
+    .quiz-content {
+        padding: 24px 20px;
+    }
+
+    .intro-upper {
+        padding: 40px 24px 0;
+    }
+
+    .intro-lower {
+        padding: 0 24px 40px;
+    }
+
+    .intro-title {
+        font-size: 1.8rem;
+    }
+
+    .intro-desc {
+        font-size: 0.95rem;
+    }
+
+    .result-title {
+        font-size: 1.7rem;
+    }
+
+    .step-cards {
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    /* 小螢幕回退為上下排列 */
+    .result-body {
+        flex-direction: column;
+    }
+
+    .result-body-right {
+        width: 100%;
+    }
+
+    .result-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .result-actions .btn-primary,
+    .result-actions .btn-outline {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .radar-svg {
+        max-width: 260px;
+    }
 }

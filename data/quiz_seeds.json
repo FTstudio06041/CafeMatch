@@ -1,0 +1,439 @@
+{
+  "questions": [
+    {
+      "order": 1,
+      "scenario_tag": "出發的裝備",
+      "question_text": "午後兩點的花蓮陽光正好。準備出門找間咖啡廳坐坐，你背包裡塞得最沉的那樣東西是什麼？",
+      "is_multiple": false,
+      "options": [
+        {
+          "code": "A",
+          "text": "微熱的筆電，和一本厚厚的原文書",
+          "subtext": "在熱鬧裡築起一道隱形牆，現在只想專注在自己的世界。",
+          "score_work": 2,
+          "score_env": 1,
+          "score_social": 0,
+          "score_taste": 0,
+          "score_cp": 0,
+          "filter_tag": null
+        },
+        {
+          "code": "B",
+          "text": "底片相機，還有精心搭配的墨鏡",
+          "subtext": "光影對了，故事就對了。我是來捕捉花蓮日常碎片的。",
+          "score_work": 0,
+          "score_env": 2,
+          "score_social": 1,
+          "score_taste": 1,
+          "score_cp": 0,
+          "filter_tag": null
+        },
+        {
+          "code": "C",
+          "text": "什麼都沒帶，只帶了想和朋友大聊特聊的心情",
+          "subtext": "想溺在溫暖的人聲裡！那種太安靜、講話要用氣音的店先不要。",
+          "score_work": 0,
+          "score_env": 0,
+          "score_social": 3,
+          "score_taste": 1,
+          "score_cp": 0,
+          "filter_tag": null
+        }
+      ]
+    },
+    {
+      "order": 2,
+      "scenario_tag": "踏入店內的第一眼",
+      "question_text": "推開沉重的木門，風鈴聲響起。當視線落下的那一刻，最先吸引你目光的是？",
+      "is_multiple": false,
+      "options": [
+        {
+          "code": "A",
+          "text": "吧台那台發亮的義式咖啡機，和手沖壺的熱氣",
+          "subtext": "略帶苦澀的香氣才是這間店的靈魂，我是來認真喝一杯的。",
+          "score_work": 0,
+          "score_env": 1,
+          "score_social": 0,
+          "score_taste": 3,
+          "score_cp": 0,
+          "filter_tag": null
+        },
+        {
+          "code": "B",
+          "text": "角落那個靠窗、有陽光灑落的慵懶沙發座",
+          "subtext": "這個包容感剛剛好，我想在這裡浪費掉一整個下午的日光。",
+          "score_work": 1,
+          "score_env": 2,
+          "score_social": 1,
+          "score_taste": 0,
+          "score_cp": 0,
+          "filter_tag": null
+        },
+        {
+          "code": "C",
+          "text": "櫃檯上方的小黑板，看看有沒有今日特餐或低消規定",
+          "subtext": "在浪漫與現實之間，我依舊謹慎地守護著荷包的分寸。",
+          "score_work": 0,
+          "score_env": 0,
+          "score_social": 0,
+          "score_taste": 1,
+          "score_cp": 3,
+          "filter_tag": null
+        }
+      ]
+    },
+    {
+      "order": 3,
+      "scenario_tag": "聲音的頻率",
+      "question_text": "找好位置坐下，店內的背景聲音開始包圍你。你希望耳邊流淌著哪一種頻率？",
+      "is_multiple": false,
+      "options": [
+        {
+          "code": "A",
+          "text": "只有磨豆機的規律低鳴，大家都輕聲細語",
+          "subtext": "這片接近真空的安靜，是店家給予我最溫柔的邊界感。",
+          "score_work": 2,
+          "score_env": 2,
+          "score_social": 0,
+          "score_taste": 0,
+          "score_cp": 0,
+          "filter_tag": null
+        },
+        {
+          "code": "B",
+          "text": "杯盤碰撞聲與陌生人的交談，揉成剛剛好的白噪音",
+          "subtext": "過度的安靜反而會尷尬，這種帶有生活溫度的隨性讓我最踏實。",
+          "score_work": 1,
+          "score_env": 0,
+          "score_social": 2,
+          "score_taste": 1,
+          "score_cp": 0,
+          "filter_tag": null
+        },
+        {
+          "code": "C",
+          "text": "老闆正在跟熟客聊著豆子的產地，還有昨天花蓮的海浪",
+          "subtext": "比起孤島般的冷漠，我更喜歡這種帶有在地人情味的溫度。",
+          "score_work": 0,
+          "score_env": 1,
+          "score_social": 2,
+          "score_taste": 2,
+          "score_cp": 0,
+          "filter_tag": null
+        }
+      ]
+    },
+    {
+      "order": 4,
+      "scenario_tag": "點餐時刻",
+      "question_text": "翻開微微泛黃的菜單。最終，你選擇用哪一種組合來填滿這段午後的留白？",
+      "is_multiple": false,
+      "options": [
+        {
+          "code": "A",
+          "text": "招牌單品手沖 ＋ 限量手工甜點",
+          "subtext": "我願意為了匠人靈魂稍微揮霍，這是我對這場散策最高的致敬。",
+          "score_work": 0,
+          "score_env": 1,
+          "score_social": 0,
+          "score_taste": 3,
+          "score_cp": 0,
+          "filter_tag": null
+        },
+        {
+          "code": "B",
+          "text": "一杯冰美式 ＋ 一份抹上奶油的烤吐司",
+          "subtext": "生活越簡單越好，百元內的清爽知足，就是日常的小確幸。",
+          "score_work": 1,
+          "score_env": 0,
+          "score_social": 0,
+          "score_taste": 1,
+          "score_cp": 3,
+          "filter_tag": null
+        },
+        {
+          "code": "C",
+          "text": "色澤浮誇的季節氣泡飲 ＋ 一塊長得怪可愛的蛋糕",
+          "subtext": "相機先食！將這份精緻定格在鏡頭裡，就是完美的相遇。",
+          "score_work": 0,
+          "score_env": 3,
+          "score_social": 1,
+          "score_taste": 1,
+          "score_cp": 0,
+          "filter_tag": null
+        }
+      ]
+    },
+    {
+      "order": 5,
+      "scenario_tag": "空間的密度",
+      "question_text": "隨著時間過去，店內的人漸漸多了起來。面對這樣的變化，你的感受是？",
+      "is_multiple": false,
+      "options": [
+        {
+          "code": "A",
+          "text": "每張桌子都坐了人，甚至有人開始在等位，稍微有些擁擠",
+          "subtext": "我需要一點呼吸的空間，人太多、太吵雜會讓我無法專心或放鬆。",
+          "score_work": 2,
+          "score_env": 1,
+          "score_social": 0,
+          "score_taste": 0,
+          "score_cp": 0,
+          "filter_tag": null
+        },
+        {
+          "code": "B",
+          "text": "隔壁桌坐了家庭客或一群朋友，聊天聲音稍微大聲了一些",
+          "subtext": "出來喝咖啡本來就是圖個輕鬆，熱鬧一點我也能自在地和朋友講話。",
+          "score_work": 0,
+          "score_env": 0,
+          "score_social": 3,
+          "score_taste": 0,
+          "score_cp": 1,
+          "filter_tag": null
+        },
+        {
+          "code": "C",
+          "text": "就算人變多，大家依然很有默契地保持社交距離與低音量",
+          "subtext": "大家都能遵守空間的隱形規則，那我就還想多待一會兒。",
+          "score_work": 1,
+          "score_env": 2,
+          "score_social": 1,
+          "score_taste": 0,
+          "score_cp": 0,
+          "filter_tag": null
+        }
+      ]
+    },
+    {
+      "order": 6,
+      "scenario_tag": "時間的流逝",
+      "question_text": "如果沒有其他行程，你通常會如何在咖啡廳裡消耗你的時間？",
+      "is_multiple": false,
+      "options": [
+        {
+          "code": "A",
+          "text": "一口咖啡、一頁書，不知不覺就看到店內亮起黃昏的燈光",
+          "subtext": "我不喜歡被時間追著跑，能不限時、讓我好好沉浸進去的店最棒了。",
+          "score_work": 2,
+          "score_env": 2,
+          "score_social": 0,
+          "score_taste": 0,
+          "score_cp": 1,
+          "filter_tag": null
+        },
+        {
+          "code": "B",
+          "text": "和朋友從最近的生活聊到未來的計畫，每隔一陣子就點一份新點心",
+          "subtext": "好聊的氛圍、好吃的東西，和對的人，就是最完美的時光浪費。",
+          "score_work": 0,
+          "score_env": 1,
+          "score_social": 2,
+          "score_taste": 2,
+          "score_cp": 0,
+          "filter_tag": null
+        },
+        {
+          "code": "C",
+          "text": "把咖啡喝完、甜點拍完照，回味一下剛才的美味就準備動身",
+          "subtext": "我是快充型的旅人，體驗到這間店最精華的部分就足夠了。",
+          "score_work": 0,
+          "score_env": 2,
+          "score_social": 0,
+          "score_taste": 2,
+          "score_cp": 0,
+          "filter_tag": null
+        }
+      ]
+    },
+    {
+      "order": 7,
+      "scenario_tag": "店家的個性",
+      "question_text": "如果菜單上有一個區塊寫著「店主碎碎念」或「空間使用守則」，你的第一反應是？",
+      "is_multiple": false,
+      "options": [
+        {
+          "code": "A",
+          "text": "認真看完，覺得有這些堅持的店，咖啡或空間品質一定很有水準",
+          "subtext": "我很尊重店家的靈魂，有個性、有原則的店反而很有吸引力。",
+          "score_work": 1,
+          "score_env": 1,
+          "score_social": 0,
+          "score_taste": 2,
+          "score_cp": 0,
+          "filter_tag": null
+        },
+        {
+          "code": "B",
+          "text": "稍微掃過一眼，只要規定不要太嚴苛、能讓我放鬆聊天就好",
+          "subtext": "出門在外放鬆最重要，規定太多、氣氛太緊繃的店會讓我很有壓力。",
+          "score_work": 0,
+          "score_env": 0,
+          "score_social": 3,
+          "score_taste": 0,
+          "score_cp": 1,
+          "filter_tag": null
+        },
+        {
+          "code": "C",
+          "text": "主要是看看有沒有最低消費、禁止外食這類基本的實用規定",
+          "subtext": "規矩合理、合乎常理就好，我比較在意實際的花費與規則是否透明。",
+          "score_work": 0,
+          "score_env": 0,
+          "score_social": 1,
+          "score_taste": 0,
+          "score_cp": 3,
+          "filter_tag": null
+        }
+      ]
+    },
+    {
+      "order": 8,
+      "scenario_tag": "菜單的延伸",
+      "question_text": "除了咖啡之外，如果這家店還提供其他品項，哪一種會特別讓你想要點點看？",
+      "is_multiple": false,
+      "options": [
+        {
+          "code": "A",
+          "text": "花蓮在地小農研發的茶飲，或是結合當地食材的手作鹹派",
+          "subtext": "除了咖啡，我也想透過舌尖品嚐看看這座島嶼當季的在地風味。",
+          "score_work": 0,
+          "score_env": 1,
+          "score_social": 0,
+          "score_taste": 3,
+          "score_cp": 0,
+          "filter_tag": null
+        },
+        {
+          "code": "B",
+          "text": "香氣撲鼻的咖哩飯或早午餐，份量看起來非常有誠意",
+          "subtext": "可以一次解決正餐跟下午茶，省時又省荷包，簡直是完美行程。",
+          "score_work": 1,
+          "score_env": 0,
+          "score_social": 0,
+          "score_taste": 1,
+          "score_cp": 3,
+          "filter_tag": null
+        },
+        {
+          "code": "C",
+          "text": "各種無咖啡因的精緻特調，或是盤飾非常藝術、適合拍照的特製聖代",
+          "subtext": "美感就藏在這些細節裡，點一份放在桌上，看著心情就很好。",
+          "score_work": 0,
+          "score_env": 3,
+          "score_social": 1,
+          "score_taste": 0,
+          "score_cp": 0,
+          "filter_tag": null
+        }
+      ]
+    },
+    {
+      "order": 9,
+      "scenario_tag": "最後的小細節",
+      "question_text": "對了，這趟午後漫步，你是否還帶著某些小小的堅持？",
+      "is_multiple": true,
+      "options": [
+        {
+          "code": "A",
+          "text": "身旁還跟著一隻毛茸茸的靈魂",
+          "subtext": null,
+          "score_work": 0,
+          "score_env": 0,
+          "score_social": 0,
+          "score_taste": 0,
+          "score_cp": 0,
+          "filter_tag": "pet_friendly"
+        },
+        {
+          "code": "B",
+          "text": "我是駕著坐騎、御風而來的旅人",
+          "subtext": null,
+          "score_work": 0,
+          "score_env": 0,
+          "score_social": 0,
+          "score_taste": 0,
+          "score_cp": 0,
+          "filter_tag": "parking"
+        },
+        {
+          "code": "C",
+          "text": "我打算在這裡，一路坐到夜幕低垂",
+          "subtext": null,
+          "score_work": 0,
+          "score_env": 0,
+          "score_social": 0,
+          "score_taste": 0,
+          "score_cp": 0,
+          "filter_tag": "night"
+        }
+      ]
+    }
+  ],
+  "result_types": [
+    {
+      "type_key": "work",
+      "condition": "single_max",
+      "title": "時空邊界的精神築牆師",
+      "inner_voice": "在喧囂的世界裡，我只需要一張桌子、一盞燈，和一段不被打擾的真空時光。",
+      "profile": "你擁有極高的專注力與內省特質。對你而言，咖啡廳不只是消費場所，而是一個能安放思緒、向內挖掘的臨時庇護所。你極度看重空間的邊界感，能在環境的白噪音中築起屬於自己的專注之牆。",
+      "cafe_match": "適合那些帶著主理人堅持、嚴謹安靜、座位間距舒適且充滿秩序感的「圖書館型」隱密空間。"
+    },
+    {
+      "type_key": "env",
+      "condition": "single_max",
+      "title": "日常碎片的視覺採集者",
+      "inner_voice": "光影的剪影對了，故事就成立了。生活的美感，藏在那些被定格的角落裡。",
+      "profile": "你是一個感官敏銳的浪漫主義者。比起功能性的滿足，你更沈迷於空間帶給你的情緒價值——不論是一抹剛好灑在沙發上的島嶼陽光、精心挑選的植栽，還是器皿與擺盤的藝術。你擅長在日常中捕捉美，並將其定格。",
+      "cafe_match": "適合採光極佳、老宅改建、裝潢充滿設計美感與細節，能讓人一眼驚艷並徹底放鬆的「美學先決」療癒空間。"
+    },
+    {
+      "type_key": "social",
+      "condition": "single_max",
+      "title": "人間煙火的溫度敘事者",
+      "inner_voice": "比起孤島般的冷漠，我更迷戀人與人之間不期而遇的流動感。",
+      "profile": "你是一個熱愛生活、情感豐沛的人。你喜歡溫暖的人聲、杯盤碰撞的煙火氣，那些過度安靜、講話需要用氣音的拘束感會讓你窒息。你享受與朋友暢聊的痛快，甚至著迷於在吧台聽老闆漫談在地故事與昨日海浪的人情溫度。",
+      "cafe_match": "適合氣氛隨性喧鬧、充滿生活感與人情味、店主樂於交流且毫無壓力的「開放式」舒適空間。"
+    },
+    {
+      "type_key": "taste",
+      "condition": "single_max",
+      "title": "風味象限的靈魂品鑑家",
+      "inner_voice": "略帶苦澀的匠人香氣，才是一棟空間無可替代的真正餽贈。",
+      "profile": "你在生活品質上從不妥協，是個標準的細節控與老饕。比起華麗的裝潢或行銷噱頭，你更直奔本質——豆子的產地、處理法、手沖的流速，或是手工甜點的層次。你願意為了匠人靈魂揮霍預算，為真正的品質買單。",
+      "cafe_match": "適合由專業咖啡師坐鎮、專注於自家烘焙、對風味有著極致堅持與職人精神的「硬核實力派」咖啡專門店。"
+    },
+    {
+      "type_key": "cp",
+      "condition": "single_max",
+      "title": "生活分寸的實用主義哲學家",
+      "inner_voice": "在詩意與現實的邊界上，百元內的知足，是日常最踏實的微小確幸。",
+      "profile": "你是一位理性與感性兼具的生活智者。你追求浪漫的下午，但拒絕當冤大頭；你謹慎地守護著荷包的分寸，看重規則的透明與高性價比。一杯清爽的美式、一份厚實的烤吐司或高飽足感的正餐，這種簡單知足的踏實感最能打動你。",
+      "cafe_match": "適合價格親民、低消合理、份量誠意十足，且提供高續航（如不限時）的「高性價比」實用友善空間。"
+    },
+    {
+      "type_key": "work_env",
+      "condition": "dual_max",
+      "title": "在靈感邊界流浪的游牧創作者",
+      "inner_voice": "一邊是嚴謹的生產力，一邊是流動的光影。我在這兩者的交界處，尋找最舒適的平衡。",
+      "profile": "你不是那種能在死板、毫無美感的Ｋ書中心待上一整天的人。你追求專注（work），但你更需要高度的美感體驗（env）來滋養你的靈感。一扇看得到風景的窗戶、店內播放的獨立音樂，都是你開機工作的儀式感。你最擅長把日常的咖啡廳，變成自己最高產的行動工作室。",
+      "cafe_match": "適合空間設計極具美感，同時擁有隱蔽角落、獨立插座，且在安靜與放鬆之間拿捏得剛剛好的「高質感留白空間」。"
+    },
+    {
+      "type_key": "taste_cp",
+      "condition": "dual_max",
+      "title": "生活防線背後的老饕精算師",
+      "inner_voice": "品質是我的底線，而聰明的消費是我的哲學。",
+      "profile": "你對食物與咖啡的風味（taste）有著不容妥協的敏銳度，但你同時也是個極度理性的生活智者。你拒絕為了空洞的網美打卡噱頭買單，你精準地計算著每一分花費的價值（cp）。對你而言，真正厲害的店不是最貴的，而是那些藏在巷弄裡、用料扎實、低消合理且美味得讓人心服口服的隱藏實力派。",
+      "cafe_match": "適合由職人主理、沒有過多奢華裝飾、菜單價格親民且品項實力極強的「街角手作/自家烘焙」友善空間。"
+    },
+    {
+      "type_key": "balanced",
+      "condition": "balanced",
+      "title": "隨遇而安的島嶼日常散策者",
+      "inner_voice": "今天想專注還是想聊天？其實都好，我只是想將自己揮霍在花蓮的午後裡。",
+      "profile": "你是一個彈性極大、極具包容力的環境變色龍。你沒有強烈的偏執，不管是安靜讀書（work）、拍照打卡（env）、與朋友大聊特聊（social），還是鑽研單品豆（taste），你都能在當下找到最享受的姿態。你隨遇而安，咖啡廳對你而言沒有硬性定義，只要推開門的氛圍順眼，那就是你今天的專屬宇宙。",
+      "cafe_match": "適合包容度極高、氛圍輕鬆隨性、各面向發展均衡且讓人沒有絲毫拘束感的「全能型生活感空間」。"
+    }
+  ]
+}

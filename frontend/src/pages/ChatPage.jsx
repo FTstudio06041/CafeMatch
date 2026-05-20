@@ -27,12 +27,18 @@ export default function ChatPage() {
   useEffect(() => {
     const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
     let updatedChats = [...savedChats];
+
+    // 如果有測驗結果等待處理，就不要在這裡設定 currentChatId，
+    // 讓後續的 quiz useEffect 全權建立新對話並切換過去
+    const hasQuizPending = !!localStorage.getItem('targetQuizContext');
     
     // 檢查從其他頁面傳來的目標對話 ID
     const targetChatId = localStorage.getItem('targetChatId');
     const lastChatId = localStorage.getItem('lastChatId');
 
-    if (targetChatId) {
+    if (hasQuizPending) {
+      // 不設定 currentChatId，交給 quiz useEffect 處理
+    } else if (targetChatId) {
       if (targetChatId === 'new') {
         const newId = Date.now();
         updatedChats = [{ id: newId, title: `新對話 ${savedChats.length + 1}`, messages: [] }, ...savedChats];
@@ -300,36 +306,60 @@ export default function ChatPage() {
 
   const hasProcessedQuiz = useRef(false);
 
-    useEffect(() => {
-    // 確保使用者已登入，且還沒處理過這次的測驗結果
-    if (user && !hasProcessedQuiz.current) {
-        const quizContext = localStorage.getItem('targetQuizContext');
-        
-        if (quizContext) {
+  useEffect(() => {
+    // 不需等待 user 載入，只要有結果就發送（支援未登入聊天）
+    if (!hasProcessedQuiz.current) {
+      const rawContext = localStorage.getItem('targetQuizContext');
+
+      if (rawContext) {
         hasProcessedQuiz.current = true; // 標記為已處理
         localStorage.removeItem('targetQuizContext'); // 隨即移除，避免重新整理頁面時又跑一次
 
-        const promptText = `我剛做完測驗，結果適合「${quizContext}」，請根據這個結果推薦我類似的咖啡廳或豆子。`;
-        
-        // 自動執行發送邏輯
-        handleAutoSendMessage(promptText);
-        }
-    }
-    }, [user]); // 當 user 狀態確認後執行
+        let promptText = '';
 
-    // 2. 建立一個專門給自動觸發使用的發送函式（邏輯與你的 sendMessage 類似）
-    const handleAutoSendMessage = async (text) => {
+        // 嘗試解析 JSON（新格式：包含完整測驗結果）
+        try {
+          const quizData = JSON.parse(rawContext);
+          const scoreParts = [];
+          const scoreLabels = { work: '工作讀書', env: '空間氛圍', social: '社交舒適', taste: '餐飲口味', cp: 'CP值' };
+          if (quizData.scores) {
+            for (const [key, val] of Object.entries(quizData.scores)) {
+              scoreParts.push(`${scoreLabels[key] || key}：${val}`);
+            }
+          }
+
+          promptText = `我剛完成了咖啡人格測驗，以下是我的完整結果：\n`
+            + `\n【咖啡人格】${quizData.title}`
+            + (quizData.inner_voice ? `\n【內心獨白】${quizData.inner_voice}` : '')
+            + (quizData.profile ? `\n【特質側寫】${quizData.profile}` : '')
+            + (scoreParts.length > 0 ? `\n【五維分數】${scoreParts.join('、')}` : '')
+            + (quizData.cafe_match ? `\n【氛圍對應】${quizData.cafe_match}` : '')
+            + `\n\n請根據以上測驗結果，推薦適合我的花蓮咖啡廳，並說明為什麼適合我。`;
+        } catch {
+          // 舊格式（純字串，例如從 ProfilePage 傳來的）
+          promptText = `我剛做完測驗，結果適合「${rawContext}」，請根據這個結果推薦我類似的咖啡廳或豆子。`;
+        }
+
+        // 自動建立新對話並發送
+        handleAutoSendMessage(promptText);
+      }
+    }
+  }, []); // 元件掛載時就執行一次
+
+  // 專門給自動觸發使用的發送函式
+  const handleAutoSendMessage = async (text) => {
     setIsTyping(true);
-    
+
     // 建立新對話
     const newId = Date.now();
-    const newChat = { 
-        id: newId, 
-        title: text.substring(0, 10) + '...', 
-        messages: [{ role: 'user', content: text }] 
+    const chatTitle = '我做完測驗，結果...';
+    const newChat = {
+      id: newId,
+      title: chatTitle,
+      messages: [{ role: 'user', content: text }]
     };
-    
-    // 更新狀態
+
+    // 更新狀態與 localStorage
     const currentSaved = JSON.parse(localStorage.getItem('allChats')) || [];
     const tempChats = [newChat, ...currentSaved];
     setChats(tempChats);
@@ -344,118 +374,156 @@ export default function ChatPage() {
     let currentDebugInfo = null;
 
     try {
-        setChats(prev => {
-            const newChats = [...prev];
-            const idx = newChats.findIndex(c => c.id === newId);
-            if (idx !== -1) {
-                newChats[idx].messages.push({ role: 'ai', content: "", debug_info: null });
-            }
-            return newChats;
-        });
+      // 插入空的 AI 訊息佔位
+      setChats(prev => {
+        const newChats = [...prev];
+        const idx = newChats.findIndex(c => c.id === newId);
+        if (idx !== -1) {
+          newChats[idx].messages.push({ role: 'ai', content: "", debug_info: null });
+        }
+        return newChats;
+      });
 
-        const response = await fetch(`${API_BASE_URL}/api/chat`, {
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ message: text }),
         signal: abortControllerRef.current.signal
-        });
+      });
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder("utf-8");
-        
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-                const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
-                const savedIdx = savedChats.findIndex(c => c.id === newId);
-                if (savedIdx !== -1) {
-                    const msgs = savedChats[savedIdx].messages;
-                    if (msgs.length > 0) {
-                        msgs[msgs.length - 1].content = currentAiContent;
-                        msgs[msgs.length - 1].debug_info = currentDebugInfo;
-                        localStorage.setItem('allChats', JSON.stringify(savedChats));
-                    }
-                }
-                break;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: '伺服器回傳錯誤' }));
+        throw new Error(errorData.error || '伺服器回傳錯誤');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          // 串流結束，寫入 localStorage
+          const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
+          const savedIdx = savedChats.findIndex(c => c.id === newId);
+          if (savedIdx !== -1) {
+            const msgs = savedChats[savedIdx].messages;
+            const last = msgs[msgs.length - 1];
+            if (last && last.role === 'ai') {
+              last.content = currentAiContent;
+              last.debug_info = currentDebugInfo;
+              localStorage.setItem('allChats', JSON.stringify(savedChats));
             }
-            
-            const chunkStr = decoder.decode(value, { stream: true });
-            const lines = chunkStr.split('\n').filter(line => line.trim() !== '');
-            
-            for (const line of lines) {
-                try {
-                    const data = JSON.parse(line);
-                    if (data.type === "debug_info") {
-                        currentDebugInfo = {
-                            model: data.model,
-                            prompt: data.prompt,
-                            total_duration_ms: "...",
-                            eval_count: "...",
-                            eval_duration_ms: "...",
-                            tokens_per_sec: "..."
-                        };
-                    } else if (data.response) {
-                        currentAiContent += data.response;
-                    } else if (data.error) {
-                        currentAiContent += "\n[系統錯誤: " + data.error + "]";
-                    }
-                    
-                    if (data.done && currentDebugInfo) {
-                        currentDebugInfo.total_duration_ms = (data.total_duration / 1000000).toFixed(2);
-                        currentDebugInfo.eval_count = data.eval_count;
-                        currentDebugInfo.eval_duration_ms = (data.eval_duration / 1000000).toFixed(2);
-                        if (data.eval_duration > 0) {
-                            currentDebugInfo.tokens_per_sec = (data.eval_count / (data.eval_duration / 1000000000)).toFixed(2);
-                        } else {
-                            currentDebugInfo.tokens_per_sec = 0;
-                        }
-                    }
-                } catch (e) {}
-            }
-            
-            setChats(prev => {
-                const newChats = [...prev];
-                const idx = newChats.findIndex(c => c.id === newId);
-                if (idx !== -1) {
-                    const msgs = newChats[idx].messages;
-                    if (msgs.length > 0) {
-                        const lastMsg = msgs[msgs.length - 1];
-                        lastMsg.content = currentAiContent;
-                        if (currentDebugInfo) lastMsg.debug_info = {...currentDebugInfo};
-                    }
-                }
-                return newChats;
-            });
+          }
+          break;
         }
+
+        const chunkStr = decoder.decode(value, { stream: true });
+        const lines = chunkStr.split('\n').filter(line => line.trim() !== '');
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+            if (data.type === "debug_info") {
+              currentDebugInfo = {
+                model: data.model,
+                prompt: data.prompt,
+                is_cafe_related: data.is_cafe_related ? '✅ 是 (已注入資料庫)' : '❌ 否 (一般聊天)',
+                rag_context: data.rag_context || '',
+                total_duration_ms: "...",
+                eval_count: "...",
+                eval_duration_ms: "...",
+                tokens_per_sec: "..."
+              };
+            } else if (data.response) {
+              currentAiContent += data.response;
+            } else if (data.error) {
+              currentAiContent += "\n[系統錯誤: " + data.error + "]";
+            }
+
+            if (data.done && currentDebugInfo) {
+              currentDebugInfo.total_duration_ms = (data.total_duration / 1e6).toFixed(2);
+              currentDebugInfo.eval_count = data.eval_count;
+              currentDebugInfo.eval_duration_ms = (data.eval_duration / 1e6).toFixed(2);
+              currentDebugInfo.tokens_per_sec = data.eval_duration > 0
+                ? (data.eval_count / (data.eval_duration / 1e9)).toFixed(2)
+                : 0;
+            }
+          } catch (_) { /* 忽略不完整的 chunk */ }
+        }
+
+        // 即時更新畫面
+        setChats(prev => {
+          const newChats = [...prev];
+          const idx = newChats.findIndex(c => c.id === newId);
+          if (idx !== -1) {
+            const msgs = newChats[idx].messages;
+            const lastMsg = msgs[msgs.length - 1];
+            if (lastMsg && lastMsg.role === 'ai') {
+              lastMsg.content = currentAiContent;
+              if (currentDebugInfo) lastMsg.debug_info = { ...currentDebugInfo };
+            }
+          }
+          return newChats;
+        });
+      }
     } catch (error) {
-        if (error.name === 'AbortError') {
-            const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
-            const savedIdx = savedChats.findIndex(c => c.id === newId);
-            if (savedIdx !== -1) {
-                const msgs = savedChats[savedIdx].messages;
-                if (msgs.length > 0) {
-                    msgs[msgs.length - 1].content = currentAiContent + " [已停止生成]";
-                    msgs[msgs.length - 1].debug_info = currentDebugInfo;
-                    localStorage.setItem('allChats', JSON.stringify(savedChats));
-                }
-            }
-            return;
-        }
-        console.error("AI Error:", error);
-        
+      if (error.name === 'AbortError') {
         const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
         const savedIdx = savedChats.findIndex(c => c.id === newId);
         if (savedIdx !== -1) {
-          savedChats[savedIdx].messages.push({ role: 'ai', content: "抱歉，連線發生錯誤。" });
+          const msgs = savedChats[savedIdx].messages;
+          const last = msgs[msgs.length - 1];
+          if (last && last.role === 'ai') {
+            last.content = currentAiContent + " [已停止生成]";
+            last.debug_info = currentDebugInfo;
+            localStorage.setItem('allChats', JSON.stringify(savedChats));
+          }
+        }
+        setChats(prev => {
+          const nc = [...prev];
+          const i = nc.findIndex(c => c.id === newId);
+          if (i !== -1) {
+            const msgs = nc[i].messages;
+            const last = msgs[msgs.length - 1];
+            if (last && last.role === 'ai') {
+              last.content = currentAiContent + ' [已停止生成]';
+              last.debug_info = currentDebugInfo;
+            }
+          }
+          return nc;
+        });
+        return;
+      }
+      console.error("AI Error:", error);
+      setChats(prev => {
+        const nc = [...prev];
+        const i = nc.findIndex(c => c.id === newId);
+        if (i !== -1) {
+          const msgs = nc[i].messages;
+          const last = msgs[msgs.length - 1];
+          if (last && last.role === 'ai') {
+            last.content = '抱歉，連線發生錯誤：' + error.message;
+          }
+        }
+        return nc;
+      });
+      const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
+      const savedIdx = savedChats.findIndex(c => c.id === newId);
+      if (savedIdx !== -1) {
+        const msgs = savedChats[savedIdx].messages;
+        const last = msgs[msgs.length - 1];
+        if (last && last.role === 'ai') {
+          last.content = '抱歉，連線發生錯誤：' + error.message;
           localStorage.setItem('allChats', JSON.stringify(savedChats));
         }
+      }
     } finally {
-        setIsTyping(false);
-        setLoadingChatId(null);
-        abortControllerRef.current = null;
+      setIsTyping(false);
+      setLoadingChatId(null);
+      abortControllerRef.current = null;
     }
-    };
+  };
 
   const currentChat = chats.find(c => c.id === currentChatId);
 

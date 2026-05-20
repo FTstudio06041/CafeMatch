@@ -139,6 +139,60 @@ class UserShopState(db.Model):
     is_visited = db.Column(db.Boolean, default=False) # 是否去過
 
 # ==========================================
+# 心理測驗系統：資料表模型
+# ==========================================
+
+class QuizQuestion(db.Model):
+    """心理測驗題目"""
+    __tablename__ = 'quiz_questions'
+    id = db.Column(db.Integer, primary_key=True)
+    order = db.Column(db.Integer, nullable=False)
+    scenario_tag = db.Column(db.String(100))
+    question_text = db.Column(db.Text, nullable=False)
+    is_multiple = db.Column(db.Boolean, default=False)
+    options = db.relationship('QuizOption', backref='question', order_by='QuizOption.code')
+
+class QuizOption(db.Model):
+    """心理測驗選項"""
+    __tablename__ = 'quiz_options'
+    id = db.Column(db.Integer, primary_key=True)
+    question_id = db.Column(db.Integer, db.ForeignKey('quiz_questions.id'), nullable=False)
+    code = db.Column(db.String(5), nullable=False)
+    text = db.Column(db.Text, nullable=False)
+    subtext = db.Column(db.Text)
+    score_work = db.Column(db.Integer, default=0)
+    score_env = db.Column(db.Integer, default=0)
+    score_social = db.Column(db.Integer, default=0)
+    score_taste = db.Column(db.Integer, default=0)
+    score_cp = db.Column(db.Integer, default=0)
+    filter_tag = db.Column(db.String(50))
+
+class QuizResultType(db.Model):
+    """心理測驗結果類型"""
+    __tablename__ = 'quiz_result_types'
+    id = db.Column(db.Integer, primary_key=True)
+    type_key = db.Column(db.String(50), unique=True, nullable=False)
+    condition = db.Column(db.String(20), nullable=False)
+    title = db.Column(db.String(100), nullable=False)
+    inner_voice = db.Column(db.Text)
+    profile = db.Column(db.Text)
+    cafe_match = db.Column(db.Text)
+
+class UserQuizResult(db.Model):
+    """使用者測驗結果紀錄"""
+    __tablename__ = 'user_quiz_results'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    result_type_key = db.Column(db.String(50), nullable=False)
+    score_work = db.Column(db.Integer, default=0)
+    score_env = db.Column(db.Integer, default=0)
+    score_social = db.Column(db.Integer, default=0)
+    score_taste = db.Column(db.Integer, default=0)
+    score_cp = db.Column(db.Integer, default=0)
+    filter_tags = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+# ==========================================
 # 新增：API 接口
 # ==========================================
 
@@ -772,6 +826,244 @@ def admin_delete_model():
             return jsonify({'error': f'Ollama 刪除失敗: {resp.text}'}), 500
     except Exception as e:
         return jsonify({'error': f'連線失敗: {str(e)}'}), 500
+
+
+# ==========================================
+# 心理測驗系統：結果判定函式
+# ==========================================
+
+def determine_result_type(scores):
+    """
+    根據五維分數判定使用者所屬的測驗結果類型。
+    判定邏輯：
+    1. 若所有維度的最大值與最小值差距 ≤ 2 → balanced（隨遇而安型）
+    2. 若 work 與 env 同時突出 → work_env（游牧創作者）
+    3. 若 taste 與 cp 同時突出 → taste_cp（老饕精算師）
+    4. 否則取最高分維度作為單一結果
+    """
+    work = scores['work']
+    env = scores['env']
+    social = scores['social']
+    taste = scores['taste']
+    cp = scores['cp']
+    all_scores = [work, env, social, taste, cp]
+    max_score = max(all_scores)
+    avg = sum(all_scores) / 5
+
+    # 判定：平衡型
+    if max(all_scores) - min(all_scores) <= 2:
+        return 'balanced'
+
+    # 判定：work + env 雙高型
+    if abs(work - env) <= 2 and work >= avg + 2 and env >= avg + 2:
+        others = [social, taste, cp]
+        if all(work > o + 3 for o in others) and all(env > o + 3 for o in others):
+            return 'work_env'
+
+    # 判定：taste + cp 雙高型
+    if abs(taste - cp) <= 2 and taste >= avg + 2 and cp >= avg + 2:
+        others = [work, env, social]
+        if all(taste > o + 3 for o in others) and all(cp > o + 3 for o in others):
+            return 'taste_cp'
+
+    # 判定：單一最高維度
+    dimension_keys = ['work', 'env', 'social', 'taste', 'cp']
+    max_idx = all_scores.index(max_score)
+    return dimension_keys[max_idx]
+
+
+# ==========================================
+# 心理測驗系統：API 端點
+# ==========================================
+
+@app.route('/api/quiz/questions', methods=['GET'])
+def quiz_get_questions():
+    """取得所有測驗題目（不需登入），不含分數欄位"""
+    questions = QuizQuestion.query.order_by(QuizQuestion.order).all()
+    result = []
+    for q in questions:
+        options_list = []
+        for opt in q.options:
+            options_list.append({
+                'id': opt.id,
+                'code': opt.code,
+                'text': opt.text,
+                'subtext': opt.subtext
+            })
+        result.append({
+            'id': q.id,
+            'order': q.order,
+            'scenario_tag': q.scenario_tag,
+            'question_text': q.question_text,
+            'is_multiple': q.is_multiple,
+            'options': options_list
+        })
+    return jsonify({'questions': result})
+
+
+@app.route('/api/quiz/submit', methods=['POST'])
+def quiz_submit():
+    """提交測驗答案並取得結果（需登入）"""
+    # 檢查登入狀態
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({'error': '請先登入'}), 401
+
+    user = User.query.filter_by(email=user_email).first()
+    if not user:
+        return jsonify({'error': '使用者不存在'}), 404
+
+    try:
+        data = request.json
+        answer_ids = data.get('answers', [])
+        filter_ids = data.get('filters', [])
+
+        # 累加答案選項的分數
+        scores = {'work': 0, 'env': 0, 'social': 0, 'taste': 0, 'cp': 0}
+
+        if answer_ids:
+            answer_options = QuizOption.query.filter(QuizOption.id.in_(answer_ids)).all()
+            for opt in answer_options:
+                scores['work'] += opt.score_work
+                scores['env'] += opt.score_env
+                scores['social'] += opt.score_social
+                scores['taste'] += opt.score_taste
+                scores['cp'] += opt.score_cp
+
+        # 收集篩選標籤
+        filter_tags = []
+        if filter_ids:
+            filter_options = QuizOption.query.filter(QuizOption.id.in_(filter_ids)).all()
+            for opt in filter_options:
+                if opt.filter_tag:
+                    filter_tags.append(opt.filter_tag)
+
+        # 判定結果類型
+        result_type_key = determine_result_type(scores)
+
+        # 查詢完整結果描述
+        result_type = QuizResultType.query.filter_by(type_key=result_type_key).first()
+
+        # 存入使用者測驗紀錄
+        record = UserQuizResult(
+            user_id=user.id,
+            result_type_key=result_type_key,
+            score_work=scores['work'],
+            score_env=scores['env'],
+            score_social=scores['social'],
+            score_taste=scores['taste'],
+            score_cp=scores['cp'],
+            filter_tags=','.join(filter_tags) if filter_tags else ''
+        )
+        db.session.add(record)
+        db.session.commit()
+
+        # 組裝回傳結果
+        result_data = None
+        if result_type:
+            result_data = {
+                'type_key': result_type.type_key,
+                'title': result_type.title,
+                'inner_voice': result_type.inner_voice,
+                'profile': result_type.profile,
+                'cafe_match': result_type.cafe_match
+            }
+
+        return jsonify({
+            'result': result_data,
+            'scores': scores,
+            'filters': filter_tags,
+            'record_id': record.id
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f'測驗提交錯誤：{e}')
+        return jsonify({'error': f'提交失敗：{str(e)}'}), 500
+
+
+@app.route('/api/quiz/history', methods=['GET'])
+def quiz_history():
+    """取得當前使用者的所有測驗紀錄（需登入）"""
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({'error': '請先登入'}), 401
+
+    user = User.query.filter_by(email=user_email).first()
+    if not user:
+        return jsonify({'error': '使用者不存在'}), 404
+
+    records = UserQuizResult.query.filter_by(user_id=user.id)\
+        .order_by(UserQuizResult.created_at.desc()).all()
+
+    history = []
+    for r in records:
+        # 查詢結果類型取得稱號
+        rt = QuizResultType.query.filter_by(type_key=r.result_type_key).first()
+        history.append({
+            'id': r.id,
+            'type_key': r.result_type_key,
+            'title': rt.title if rt else '',
+            'scores': {
+                'work': r.score_work,
+                'env': r.score_env,
+                'social': r.score_social,
+                'taste': r.score_taste,
+                'cp': r.score_cp
+            },
+            'filters': r.filter_tags or '',
+            'created_at': r.created_at.strftime('%Y-%m-%d %H:%M:%S') if r.created_at else ''
+        })
+
+    return jsonify({'history': history})
+
+
+@app.route('/api/quiz/latest', methods=['GET'])
+def quiz_latest():
+    """取得當前使用者最新一筆測驗結果（需登入）"""
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({'error': '請先登入'}), 401
+
+    user = User.query.filter_by(email=user_email).first()
+    if not user:
+        return jsonify({'error': '使用者不存在'}), 404
+
+    record = UserQuizResult.query.filter_by(user_id=user.id)\
+        .order_by(UserQuizResult.created_at.desc()).first()
+
+    if not record:
+        return jsonify({'result': None})
+
+    # 查詢完整結果描述
+    result_type = QuizResultType.query.filter_by(type_key=record.result_type_key).first()
+
+    scores = {
+        'work': record.score_work,
+        'env': record.score_env,
+        'social': record.score_social,
+        'taste': record.score_taste,
+        'cp': record.score_cp
+    }
+
+    filter_tags = record.filter_tags.split(',') if record.filter_tags else []
+
+    result_data = None
+    if result_type:
+        result_data = {
+            'type_key': result_type.type_key,
+            'title': result_type.title,
+            'inner_voice': result_type.inner_voice,
+            'profile': result_type.profile,
+            'cafe_match': result_type.cafe_match
+        }
+
+    return jsonify({
+        'result': result_data,
+        'scores': scores,
+        'filters': filter_tags,
+        'record_id': record.id
+    })
 
 
 if __name__ == '__main__':
