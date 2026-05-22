@@ -7,7 +7,9 @@ export const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   // 共用的 API 基礎路徑
-  const API_BASE_URL = 'http://localhost:5000';
+  const API_BASE_URL = window.location.hostname.includes('devtunnels.ms')
+    ? `https://${window.location.host.replace('-5173', '-5000')}`
+    : 'http://localhost:5000';
 
   useEffect(() => {
     checkAuthStatus();

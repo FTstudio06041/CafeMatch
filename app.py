@@ -317,7 +317,7 @@ def index():
 
 @app.route('/login')
 def login():
-    redirect_uri = url_for('authorize', _external=True)
+    redirect_uri = os.getenv('GOOGLE_CALLBACK_URL', url_for('authorize', _external=True))
     # 加入 prompt='select_account' 強制顯示帳號選擇畫面
     return google.authorize_redirect(redirect_uri, prompt='select_account')
 
@@ -346,14 +346,15 @@ def authorize():
     
     # 記錄登入 Log
     log_action(google_email, '登入', '新用戶' if is_new_user else '既有用戶')
+    frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
     
     # 這裡多帶一個參數回到前端
     if is_new_user:
         # 移除 .html，直接導向 /chat
-        return redirect('http://localhost:5173/chat?welcome=true') 
+        return redirect(f'{frontend_url}chat?welcome=true') 
     else:
         # 移除 .html，直接導向 /chat
-        return redirect('http://localhost:5173/chat')
+        return redirect(f'{frontend_url}chat')
     
 @app.route('/logout')
 def logout():
@@ -361,7 +362,8 @@ def logout():
     if user_email:
         log_action(user_email, '登出')
     session.pop('user_email', None)
-    return redirect('http://localhost:5173')
+    frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+    return redirect(frontend_url)
 
 @app.route('/api/me')
 def get_current_user():

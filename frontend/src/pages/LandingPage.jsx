@@ -21,7 +21,7 @@ export default function LandingPage() {
             <line x1="10" y1="1" x2="10" y2="4"></line>
             <line x1="14" y1="1" x2="14" y2="4"></line>
           </svg>
-          啡你莫屬
+          啡你莫屬 DEV
         </div>
 
         <div className="header-actions">
