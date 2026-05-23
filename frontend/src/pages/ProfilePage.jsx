@@ -29,44 +29,96 @@ export default function ProfilePage() {
   const [fileName, setFileName] = useState('尚未選擇檔案');
   const cropperRef = useRef(null);
 
-  // 初始化資料抓取
+  // ==========================================
+  // 初始化與資料抓取
+  // ==========================================
   useEffect(() => {
-    // 讀取側欄紀錄
+    // 1. 讀取側欄對話紀錄
     const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
     setChats(savedChats);
 
+    // 2. 初始化使用者編輯資料
     if (user) {
-      setNewName(user.name);
+      setNewName(user.name || '');
       setCroppedImageBase64(user.picture || '');
       if (user.picture) setFileName('使用目前的頭像');
     }
 
-    // 抓取咖啡廳 (為了篩選收藏與去過)
-    fetch(`${API_BASE_URL}/api/cafes`, { credentials: 'include' })
-      .then(res => res.json())
-      .then(data => {
-        setFavShops(data.filter(s => s.is_fav));
-        setVisitedShops(data.filter(s => s.is_visited));
-      })
-      .catch(err => console.error(err));
+    // 3. 抓取 API 資料 (並行處理)
+    const fetchProfileData = async () => {
+      try {
+        const [cafesRes, quizRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/cafes`, { credentials: 'include' }).catch(() => null),
+          // 修正為正確的歷史紀錄端點
+          fetch(`${API_BASE_URL}/api/quiz/history`, { credentials: 'include' }).catch(() => null)
+        ]);
 
-    // 抓取測驗紀錄 (如果你的 Python 後台尚未實作這支 API，這裡會回傳空陣列防呆)
-    fetch(`${API_BASE_URL}/api/user/quiz`, { credentials: 'include' })
-      .then(res => {
-        if (!res.ok) throw new Error('API not found');
-        return res.json();
-      })
-      .then(data => setQuizHistory(data))
-      .catch(() => setQuizHistory([])); // 發生錯誤時預設為空
+        if (cafesRes && cafesRes.ok) {
+          const cafesData = await cafesRes.json();
+          setFavShops(cafesData.filter(s => s.is_fav));
+          setVisitedShops(cafesData.filter(s => s.is_visited));
+        }
+
+        if (quizRes && quizRes.ok) {
+          const quizData = await quizRes.json();
+          // 將後端資料映射為前端顯示格式
+          if (quizData?.history) {
+            const formattedHistory = quizData.history.map(hist => ({
+              id: hist.id,
+              date: new Date(hist.created_at).toLocaleDateString('zh-TW', { 
+                year: 'numeric', month: '2-digit', day: '2-digit' 
+              }),
+              resultName: hist.title,
+              resultDesc: `咖啡人格類型：${hist.type_key}`,
+              rawHist: hist // 保留原始資料以供諮詢 AI 使用
+            }));
+            setQuizHistory(formattedHistory);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch profile data:', err);
+      }
+    };
+
+    fetchProfileData();
   }, [user, API_BASE_URL]);
 
-  // --- 裁切圖片邏輯 ---
+  // ==========================================
+  // 行為處理
+  // ==========================================
+
+  // 以此結果諮詢 AI
+  const handleConsultAI = (histItem) => {
+    // 將歷史測驗結果轉為 JSON 字串存入 targetQuizContext，供 ChatPage 解析
+    const quizData = {
+      title: histItem.resultName,
+      scores: histItem.rawHist.scores || {}
+    };
+    localStorage.setItem('targetQuizContext', JSON.stringify(quizData));
+    navigate('/chat');
+  };
+
+  // 側欄新建對話
+  const handleNewChat = () => {
+    localStorage.setItem('targetChatId', 'new');
+    navigate('/chat');
+  };
+
+  // 側欄選擇對話
+  const handleSelectChat = (chatId) => {
+    localStorage.setItem('targetChatId', chatId);
+    navigate('/chat');
+  };
+
+  // ==========================================
+  // 裁切圖片邏輯
+  // ==========================================
   const handleFileSelect = (e) => {
     e.preventDefault();
     let files = e.target.files;
     if (files && files.length > 0) {
       if (files[0].size > 5 * 1024 * 1024) {
-        alert("圖片太大囉！");
+        alert("圖片太大囉！請上傳 5MB 以下的圖片。");
         return;
       }
       setFileName(files[0].name);
@@ -81,7 +133,9 @@ export default function ProfilePage() {
 
   const performCrop = () => {
     if (typeof cropperRef.current?.cropper !== "undefined") {
-      setCroppedImageBase64(cropperRef.current?.cropper.getCroppedCanvas({ width: 300, height: 300, fillColor: '#fff' }).toDataURL('image/jpeg', 0.9));
+      setCroppedImageBase64(
+        cropperRef.current?.cropper.getCroppedCanvas({ width: 300, height: 300, fillColor: '#fff' }).toDataURL('image/jpeg', 0.9)
+      );
       setImageToCrop(''); // 隱藏裁切器
     }
   };
@@ -97,12 +151,15 @@ export default function ProfilePage() {
     }
   };
 
-  // --- API 呼叫：儲存與刪除 ---
+  // ==========================================
+  // API 呼叫：儲存與刪除
+  // ==========================================
   const saveProfile = async () => {
     if (!newName.trim()) {
-      alert('請輸入名稱');
+      alert('請輸入顯示名稱');
       return;
     }
+    
     // 如果還在裁切狀態，自動幫他切下去
     if (imageToCrop) performCrop();
 
@@ -115,14 +172,14 @@ export default function ProfilePage() {
       });
       const result = await response.json();
       if (result.success) {
-        alert('更新成功！重新整理後生效。');
+        alert('更新成功！');
         window.location.reload(); // 強制刷新讓 Context 抓到新資料
       } else {
-        alert('更新失敗');
+        alert(result.error || '更新失敗');
       }
     } catch (err) {
       console.error(err);
-      alert('連線錯誤');
+      alert('連線錯誤，請稍後再試');
     }
   };
 
@@ -137,12 +194,18 @@ export default function ProfilePage() {
         localStorage.removeItem('allChats');
         alert("帳號已成功刪除，後會有期！");
         window.location.href = '/';
+      } else {
+        alert(data.error || '刪除失敗');
       }
     } catch (error) {
       console.error("Delete failed", error);
+      alert('連線錯誤，無法刪除帳號');
     }
   };
 
+  // ==========================================
+  // 渲染
+  // ==========================================
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', width: '100%' }}>
       {/* --- 左側欄 --- */}
@@ -156,7 +219,7 @@ export default function ProfilePage() {
           </div>
           <span className="user-name text-label">{user?.name}</span>
         </button>
-        <button className="new-chat-btn" onClick={() => { localStorage.setItem('targetChatId', 'new'); navigate('/chat'); }}>
+        <button className="new-chat-btn" onClick={handleNewChat}>
            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
            <span className="text-label">新增對話</span>
         </button>
@@ -164,7 +227,7 @@ export default function ProfilePage() {
         <div className="chat-list">
            {chats.length === 0 ? <div className="empty-sidebar-msg">尚無對話紀錄</div> : 
              chats.map(chat => (
-               <div key={chat.id} className="chat-item" onClick={() => {localStorage.setItem('targetChatId', chat.id); navigate('/chat');}}>
+               <div key={chat.id} className="chat-item" onClick={() => handleSelectChat(chat.id)}>
                  <div className="chat-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></div>
                  <span className="chat-title text-label">{chat.title}</span>
                </div>
@@ -179,6 +242,7 @@ export default function ProfilePage() {
         </nav>
 
         <div className="profile-content">
+          {/* 使用者資訊卡片 */}
           <div className="profile-header-card">
             <div className="header-avatar">
                {user?.picture ? <img src={user.picture} alt="Avatar" /> : <div style={{width:'100%', height:'100%', backgroundColor:'var(--accent-color)'}}></div>}
@@ -253,7 +317,7 @@ export default function ProfilePage() {
                    <div className="card-header"><span className="card-date">{item.date}</span></div>
                    <div className="card-coffee-name">{item.resultName}</div>
                    <div className="card-desc">{item.resultDesc}</div>
-                   <button className="use-context-btn" onClick={() => { localStorage.setItem('targetQuizContext', item.resultName); navigate('/chat'); }}>
+                   <button className="use-context-btn" onClick={() => handleConsultAI(item)}>
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
                       以此結果諮詢 AI
                    </button>

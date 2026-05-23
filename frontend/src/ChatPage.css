@@ -458,8 +458,7 @@ body {
 
 .message.ai {
     align-self: flex-start;
-    background-color: var(--msg-ai);
-    border-bottom-left-radius: 5px;
+    background-color: transparent;
 }
 
 .input-area {
@@ -520,23 +519,17 @@ body {
     display: flex;
     gap: 6px;
     padding: 15px 20px;
-    background-color: var(--msg-ai);
-    /* 與 AI 訊息同色 */
-    border-radius: 20px;
-    border-bottom-left-radius: 5px;
-    /* 對話框小尾巴方向 */
+    background-color: transparent;
     width: fit-content;
     align-self: flex-start;
     margin-bottom: 10px;
-    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.05);
     animation: fadeIn 0.3s ease;
 }
 
 .typing-dot {
     width: 8px;
     height: 8px;
-    background-color: #ffffff;
-    /* 淺咖啡色圓點 */
+    background-color: var(--accent-color);
     border-radius: 50%;
     animation: typingBounce 1.4s infinite ease-in-out both;
 }
@@ -821,8 +814,13 @@ button:focus {
     border-radius: 8px;
     font-family: 'Consolas', 'Courier New', monospace;
     font-size: 0.8rem;
-    overflow: hidden;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    
+    /* 新增：設定最大高度與彈性佈局，避免過長並允許內部滾動 */
+    max-height: 400px;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
 }
 
 .debug-header {
@@ -831,11 +829,24 @@ button:focus {
     font-weight: bold;
     color: #9cdcfe;
     border-bottom: 1px solid #444;
+    flex-shrink: 0;
 }
 
 .debug-content {
     padding: 10px;
     line-height: 1.5;
+    /* 新增：讓內容區塊可以獨立垂直滾動 */
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* 新增：美化 Debug Console 的滾動軸 */
+.debug-content::-webkit-scrollbar {
+    width: 6px;
+}
+.debug-content::-webkit-scrollbar-thumb {
+    background-color: #555;
+    border-radius: 3px;
 }
 
 .debug-content > div {

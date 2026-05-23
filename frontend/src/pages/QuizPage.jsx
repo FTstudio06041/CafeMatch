@@ -2,119 +2,12 @@ import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ClipboardList, BarChart3, MapPin, Play, Store } from 'lucide-react';
-import '../QuizPage.css';
+import RadarChart from '../components/RadarChart';
 import Navbar from '../components/Navbar';
+import '../QuizPage.css';
 
-// =============================================
-// 五維雷達圖元件（純 SVG，無外部套件）
-// =============================================
-function RadarChart({ scores }) {
-  // 五維度定義
-  const dimensions = [
-    { key: 'work', label: '工作讀書' },
-    { key: 'env', label: '空間氛圍' },
-    { key: 'social', label: '社交舒適' },
-    { key: 'taste', label: '餐飲口味' },
-    { key: 'cp', label: 'CP值' },
-  ];
-
-  const cx = 160; // 中心 X
-  const cy = 160; // 中心 Y
-  const maxRadius = 110; // 最大半徑
-  const labelRadius = maxRadius + 45; // 標籤距離
-  const levels = 4; // 背景網格層數
-
-  // 計算各軸最大值（取所有分數的最大值，至少為 1）
-  const maxScore = Math.max(...Object.values(scores), 1);
-
-  // 計算五角形頂點座標（從頂部 -90° 開始順時針）
-  const getPoint = (index, radius) => {
-    const angle = ((2 * Math.PI) / 5) * index - Math.PI / 2;
-    return {
-      x: cx + radius * Math.cos(angle),
-      y: cy + radius * Math.sin(angle),
-    };
-  };
-
-  // 生成多角形頂點字串
-  const getPolygonPoints = (radiusFn) =>
-    dimensions.map((_, i) => {
-      const p = getPoint(i, radiusFn(i));
-      return `${p.x},${p.y}`;
-    }).join(' ');
-
-  // 背景同心五角形
-  const gridPolygons = Array.from({ length: levels }, (_, level) => {
-    const r = (maxRadius / levels) * (level + 1);
-    return getPolygonPoints(() => r);
-  });
-
-  // 資料多角形
-  const dataPoints = getPolygonPoints((i) => {
-    const score = scores[dimensions[i].key] || 0;
-    return (score / maxScore) * maxRadius;
-  });
-
-  return (
-    <div className="radar-container">
-      <div className="radar-title">五維度側寫</div>
-      <svg className="radar-svg" viewBox="-40 -40 400 400">
-        {/* 背景網格 */}
-        {gridPolygons.map((points, i) => (
-          <polygon key={`grid-${i}`} points={points} className="radar-grid-polygon" />
-        ))}
-
-        {/* 軸線 */}
-        {dimensions.map((_, i) => {
-          const p = getPoint(i, maxRadius);
-          return (
-            <line
-              key={`axis-${i}`}
-              x1={cx}
-              y1={cy}
-              x2={p.x}
-              y2={p.y}
-              className="radar-axis-line"
-            />
-          );
-        })}
-
-        {/* 資料多角形 */}
-        <polygon points={dataPoints} className="radar-data-polygon" />
-
-        {/* 資料頂點圓點 */}
-        {dimensions.map((dim, i) => {
-          const score = scores[dim.key] || 0;
-          const r = (score / maxScore) * maxRadius;
-          const p = getPoint(i, r);
-          return <circle key={`dot-${i}`} cx={p.x} cy={p.y} className="radar-dot" />;
-        })}
-
-        {/* 軸標籤 */}
-        {dimensions.map((dim, i) => {
-          const p = getPoint(i, labelRadius);
-          return (
-            <text key={`label-${i}`} x={p.x} y={p.y} className="radar-label">
-              {dim.label}
-            </text>
-          );
-        })}
-
-        {/* 分數標籤 */}
-        {dimensions.map((dim, i) => {
-          const score = scores[dim.key] || 0;
-          const r = (score / maxScore) * maxRadius;
-          const p = getPoint(i, Math.max(r + 20, 25));
-          return (
-            <text key={`score-${i}`} x={p.x} y={p.y + 14} className="radar-score">
-              {score}
-            </text>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
+// sessionStorage key — 用來在頁面切換時保留測驗結果
+const QUIZ_RESULT_CACHE_KEY = 'quizResultCache';
 
 // =============================================
 // QuizPage 主元件
@@ -139,10 +32,23 @@ export default function QuizPage() {
   const [isFading, setIsFading] = useState(false);
   const [selectedAnim, setSelectedAnim] = useState(null);       // 正在播放選中動畫的 optionId
 
-  // 初始化：讀取聊天紀錄
+  // 初始化：讀取聊天紀錄 + 恢復測驗結果快取
   useEffect(() => {
+    // 側欄對話紀錄
     const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
     setChats(savedChats);
+
+    // 從 sessionStorage 恢復測驗結果（使用者切頁再回來時不會重置）
+    const cached = sessionStorage.getItem(QUIZ_RESULT_CACHE_KEY);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        setQuizResult(parsed);
+        setQuizState('result');
+      } catch {
+        sessionStorage.removeItem(QUIZ_RESULT_CACHE_KEY);
+      }
+    }
   }, []);
 
   // =============================================
@@ -162,7 +68,7 @@ export default function QuizPage() {
       if (!data.questions || data.questions.length === 0) {
         throw new Error('未取得任何題目');
       }
-      // 依照 order 排序
+      // 依照 order 排序（防禦性排序，即使後端已排序）
       const sorted = [...data.questions].sort((a, b) => a.order - b.order);
       setQuestions(sorted);
       setCurrentStep(0);
@@ -181,7 +87,7 @@ export default function QuizPage() {
     setQuizState('submitting');
     setErrorMsg('');
     try {
-      // 將 selectedAnswers 轉換為 API 格式
+      // 將 selectedAnswers 分為一般答案和篩選條件
       const answers = [];
       const filters = [];
 
@@ -189,14 +95,10 @@ export default function QuizPage() {
         const ans = selectedAnswers[q.id];
         if (q.is_multiple) {
           // Q9 多選：放入 filters
-          if (Array.isArray(ans)) {
-            filters.push(...ans);
-          }
+          if (Array.isArray(ans)) filters.push(...ans);
         } else {
           // 單選：放入 answers
-          if (ans !== undefined && ans !== null) {
-            answers.push(ans);
-          }
+          if (ans !== undefined && ans !== null) answers.push(ans);
         }
       });
 
@@ -211,6 +113,9 @@ export default function QuizPage() {
       const data = await res.json();
       setQuizResult(data);
       setQuizState('result');
+
+      // 持久化到 sessionStorage，頁面切換後仍能顯示結果
+      sessionStorage.setItem(QUIZ_RESULT_CACHE_KEY, JSON.stringify(data));
     } catch (err) {
       console.error('提交答案失敗：', err);
       setErrorMsg(err.message || '提交失敗，請稍後再試');
@@ -224,12 +129,13 @@ export default function QuizPage() {
 
   // 開始測驗（從介紹頁進入）
   const handleStart = () => {
+    // 清除舊的快取，準備全新測驗
+    sessionStorage.removeItem(QUIZ_RESULT_CACHE_KEY);
     fetchQuestions();
   };
 
-  // 單選：選擇後短暫動畫，然後切換下一題或提交
+  // 單選：選擇後短暫動畫，然後切換下一題
   const handleSingleSelect = (questionId, optionId) => {
-    // 先記錄答案
     setSelectedAnswers((prev) => ({ ...prev, [questionId]: optionId }));
     setSelectedAnim(optionId);
 
@@ -237,40 +143,30 @@ export default function QuizPage() {
     setTimeout(() => {
       setSelectedAnim(null);
       if (currentStep + 1 < questions.length) {
-        // 淡出
+        // 淡出後切換題目
         setIsFading(true);
         setTimeout(() => {
           setCurrentStep((prev) => prev + 1);
           setIsFading(false);
         }, 250);
       }
-      // 若是最後一題且為單選，不自動提交（除非後面沒有多選題）
+      // 若是最後一題且為單選，不自動提交（等待多選題完成）
     }, 400);
   };
 
-  // 多選：切換 checkbox
+  // 多選：切換 checkbox（最多 3 個）
   const handleMultiToggle = (questionId, optionId) => {
     setSelectedAnswers((prev) => {
       const current = prev[questionId] || [];
-      const isSelected = current.includes(optionId);
-      let updated;
-      if (isSelected) {
-        updated = current.filter((id) => id !== optionId);
-      } else {
-        // 最多選 3 個
-        if (current.length >= 3) return prev;
-        updated = [...current, optionId];
+      if (current.includes(optionId)) {
+        return { ...prev, [questionId]: current.filter((id) => id !== optionId) };
       }
-      return { ...prev, [questionId]: updated };
+      if (current.length >= 3) return prev;
+      return { ...prev, [questionId]: [...current, optionId] };
     });
   };
 
-  // 完成測驗
-  const handleFinish = () => {
-    submitAnswers();
-  };
-
-  // 再測一次
+  // 再測一次：重置所有狀態並清除快取
   const handleRetry = () => {
     setQuizState('intro');
     setQuestions([]);
@@ -278,6 +174,7 @@ export default function QuizPage() {
     setSelectedAnswers({});
     setQuizResult(null);
     setErrorMsg('');
+    sessionStorage.removeItem(QUIZ_RESULT_CACHE_KEY);
   };
 
   // 帶著結果去諮詢 AI
@@ -308,7 +205,7 @@ export default function QuizPage() {
   // =============================================
   return (
     <div className="quiz-page-container" style={{ display: 'flex', height: '100vh', overflow: 'hidden', width: '100%' }}>
-      {/* --- 左側欄（保持原樣） --- */}
+      {/* --- 左側欄 --- */}
       <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
         <button className="toggle-sidebar-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
@@ -461,7 +358,7 @@ export default function QuizPage() {
                             );
                           })}
                         </div>
-                        <button className="btn-primary" onClick={handleFinish}>
+                        <button className="btn-primary" onClick={submitAnswers}>
                           完成測驗
                         </button>
                       </>

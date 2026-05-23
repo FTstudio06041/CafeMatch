@@ -29,6 +29,13 @@ export default function Navbar() {
         opacity: 1,
         isAnimating: animate // 決定這次移動要不要帶動畫
       });
+    } else {
+      // 當前頁面不在選單中（如 Profile 頁面），則隱藏滑塊
+      setMarkerStyle(prev => ({
+        ...prev,
+        opacity: 0,
+        isAnimating: animate
+      }));
     }
   };
 

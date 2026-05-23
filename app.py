@@ -346,7 +346,7 @@ def authorize():
     
     # 記錄登入 Log
     log_action(google_email, '登入', '新用戶' if is_new_user else '既有用戶')
-    frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+    frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173/')
     
     # 這裡多帶一個參數回到前端
     if is_new_user:
@@ -362,7 +362,7 @@ def logout():
     if user_email:
         log_action(user_email, '登出')
     session.pop('user_email', None)
-    frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+    frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173/')
     return redirect(frontend_url)
 
 @app.route('/api/me')
