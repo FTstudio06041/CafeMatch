@@ -144,6 +144,79 @@ export default function ChatPage() {
   };
 
   // ==========================================
+  // 反饋與重試邏輯
+  // ==========================================
+  const handleFeedback = async (msgIdx, type) => {
+    const chat = chats.find(c => c.id === currentChatIdRef.current);
+    if (!chat || !chat.messages[msgIdx]) return;
+    
+    // 若已經評價過且重複點擊，忽略或切換（這邊先簡化為不允許取消，只能更換）
+    const msg = chat.messages[msgIdx];
+    const userMsg = chat.messages[msgIdx - 1]?.content || '';
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/chat/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          feedback_type: type,
+          user_message: userMsg,
+          ai_response: msg.content
+        })
+      });
+      if (response.ok) {
+        // 更新 UI 狀態
+        setChats(prev => {
+          const nc = [...prev];
+          const i = nc.findIndex(c => c.id === currentChatIdRef.current);
+          if (i !== -1) {
+            nc[i].messages[msgIdx].feedback = type;
+          }
+          return nc;
+        });
+        const saved = JSON.parse(localStorage.getItem('allChats')) || [];
+        const si = saved.findIndex(c => c.id === currentChatIdRef.current);
+        if (si !== -1) {
+          saved[si].messages[msgIdx].feedback = type;
+          localStorage.setItem('allChats', JSON.stringify(saved));
+        }
+      }
+    } catch (e) {
+      console.error("Feedback failed:", e);
+    }
+  };
+
+  const handleRetry = (msgIdx) => {
+    if (isTyping) return;
+    const chat = chats.find(c => c.id === currentChatIdRef.current);
+    if (!chat || msgIdx <= 0) return;
+    
+    // 取出重試之前的 user 訊息
+    const prevUserMsg = chat.messages[msgIdx - 1];
+    if (!prevUserMsg || prevUserMsg.role !== 'user') return;
+
+    // 將包含該 AI 訊息以及其後的所有訊息刪除
+    const newMessages = chat.messages.slice(0, msgIdx - 1);
+    
+    setChats(prev => {
+      const nc = [...prev];
+      const i = nc.findIndex(c => c.id === currentChatIdRef.current);
+      if (i !== -1) nc[i].messages = newMessages;
+      return nc;
+    });
+    const saved = JSON.parse(localStorage.getItem('allChats')) || [];
+    const si = saved.findIndex(c => c.id === currentChatIdRef.current);
+    if (si !== -1) {
+      saved[si].messages = newMessages;
+      localStorage.setItem('allChats', JSON.stringify(saved));
+    }
+    
+    // 重新發送
+    executeChatStream(prevUserMsg.content, { forceNewChat: false });
+  };
+
+  // ==========================================
   // 核心發送與串流邏輯 (統一重構)
   // ==========================================
   const executeChatStream = async (messageText, options = {}) => {
@@ -215,12 +288,26 @@ export default function ChatPage() {
       }
     };
 
+    // 準備歷史對話紀錄傳給後端 (只取最近 6 筆避免過長)
+    let historyToSend = [];
+    if (chatIdx !== -1) {
+      // 取出除了剛 push 進去的最後兩筆(user與空白ai)之外的所有訊息
+      const prevMsgs = currentSaved[chatIdx].messages.slice(0, -2);
+      historyToSend = prevMsgs.slice(-6).map(m => ({
+        role: m.role,
+        content: m.content
+      }));
+    }
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ message: messageText }),
+        body: JSON.stringify({ 
+          message: messageText, 
+          history: historyToSend 
+        }),
         signal: abortControllerRef.current.signal
       });
 
@@ -380,7 +467,34 @@ export default function ChatPage() {
                       <div className="typing-dot"></div><div className="typing-dot"></div><div className="typing-dot"></div>
                     </div>
                   ) : (
-                    msg.content
+                    <>
+                      <div className="message-text">{msg.content}</div>
+                      {msg.role === 'ai' && !isTyping && msg.content !== '' && (
+                        <div className="message-actions">
+                          <button 
+                            className="action-btn retry" 
+                            title="重新傳送"
+                            onClick={() => handleRetry(idx)}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+                          </button>
+                          <button 
+                            className={`action-btn like ${msg.feedback === 'like' ? 'active' : ''}`}
+                            title="讚"
+                            onClick={() => handleFeedback(idx, 'like')}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path></svg>
+                          </button>
+                          <button 
+                            className={`action-btn dislike ${msg.feedback === 'dislike' ? 'active' : ''}`}
+                            title="倒讚"
+                            onClick={() => handleFeedback(idx, 'dislike')}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"></path></svg>
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
                 {isDebugMode && msg.debug_info && (

@@ -458,7 +458,52 @@ body {
 
 .message.ai {
     align-self: flex-start;
-    background-color: transparent;
+    background-color: transparent; /* 去除背景顏色 */
+    border-radius: 0;              /* 去除圓角 */
+    padding: 10px 0;               /* 調整 padding：上下保留間距，左右設為 0 讓文字靠最左對齊 */
+    box-shadow: none;              /* 確保沒有任何陰影效果 */
+}
+
+/* --- 訊息下方的操作按鈕區 (Retry, Like, Dislike) --- */
+.message-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.message.ai:hover .message-actions {
+    opacity: 1; /* 滑鼠懸停在訊息上時才顯示按鈕，保持介面乾淨 */
+}
+
+.action-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-light);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: 0.2s;
+}
+
+.action-btn:hover {
+    background-color: rgba(0,0,0,0.05);
+    color: var(--text-main);
+}
+
+.action-btn.active.like {
+    color: #4CAF50;
+    background-color: rgba(76, 175, 80, 0.1);
+}
+
+.action-btn.active.dislike {
+    color: #F44336;
+    background-color: rgba(244, 67, 54, 0.1);
 }
 
 .input-area {

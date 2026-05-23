@@ -192,6 +192,16 @@ class UserQuizResult(db.Model):
     filter_tags = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+class ChatFeedback(db.Model):
+    """使用者聊天反饋紀錄"""
+    __tablename__ = 'chat_feedbacks'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    user_message = db.Column(db.Text, nullable=True)
+    ai_response = db.Column(db.Text, nullable=True)
+    feedback_type = db.Column(db.String(20), nullable=False) # 'like', 'dislike'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 # ==========================================
 # 新增：API 接口
 # ==========================================
@@ -498,6 +508,7 @@ def chat_with_ai():
         # 2. 接收前端傳來的訊息
         data = request.json
         user_message = data.get('message', '')
+        history = data.get('history', [])
 
         if not user_message:
             return jsonify({"error": "未提供訊息"}), 400
@@ -593,11 +604,25 @@ def chat_with_ai():
         model_name = app.config.get('OLLAMA_MODEL', 'llama3.2:3b')
 
         if is_cafe_related:
-            system_prompt = "你是「啡你莫屬」系統的專業台灣咖啡廳推薦助手。請用繁體中文自然地回答使用者的問題，像朋友一樣聊天。如果系統提供了咖啡廳資料，請優先根據這些真實資料來推薦，不要自己編造店名。"
+            system_prompt = """你是「啡你莫屬」的資深咖啡廳顧問，正與熟客輕鬆聊天。請嚴格遵守以下對話原則：
+1. 【語氣自然有溫度】：說話要像真人朋友一樣，絕對不要像機器人一樣列點，或說出「等待您的回應」。
+2. 【漸進式引導與強制推薦】：每次最多只問 1 個最關鍵的問題。如果使用者已經明確回答了你的問題，或者你覺得資訊已經夠了，請「立刻」從系統資料庫中挑選 1 到 2 家最適合的店介紹給他，**絕對不允許再無止盡地提問**。
+3. 【精華介紹】：介紹要像朋友分享一樣精華，不要貼出一大串資料。
+4. 【絕不編造】：只能推薦系統資料庫中出現的店家。
+5. 【極度簡短】：每一次的回覆請保持在 2 到 3 句話的長度，讓對話有來有往。"""
         else:
-            system_prompt = "你是「啡你莫屬」系統的友善助手。請用繁體中文自然地回答使用者的問題，像朋友一樣聊天即可。不要每次都自我介紹。"
+            system_prompt = """你是「啡你莫屬」系統的友善助手。
+請用繁體中文簡短、自然地回答使用者的問題。說話要像朋友一樣輕鬆，如果話題適合，你可以主動用「一個」簡單的問題反問來延續話題。切記回答要非常簡潔，且不要每次都自我介紹。"""
 
-        prompt_text = f"{system_prompt}{cafe_context}\n\n使用者：{user_message}\n助手："
+        # 將歷史對話組合成字串
+        history_text = ""
+        if history:
+            history_text = "\n\n【歷史對話紀錄】\n"
+            for msg in history:
+                role_name = "使用者" if msg.get("role") == "user" else "助手"
+                history_text += f"{role_name}：{msg.get('content', '')}\n"
+
+        prompt_text = f"{system_prompt}{cafe_context}{history_text}\n\n【最新訊息】\n使用者：{user_message}\n助手："
         
         payload = {
             "model": model_name,
@@ -1066,7 +1091,65 @@ def quiz_latest():
         'filters': filter_tags,
         'record_id': record.id
     })
+@app.route('/api/chat/feedback', methods=['POST'])
+def chat_feedback():
+    data = request.json
+    feedback_type = data.get('feedback_type')
+    user_message = data.get('user_message', '')
+    ai_response = data.get('ai_response', '')
+    user_email = session.get('user_email')
+    
+    user_id = None
+    if user_email:
+        user = User.query.filter_by(email=user_email).first()
+        if user:
+            user_id = user.id
 
+    if not feedback_type:
+        return jsonify({"success": False, "error": "Missing feedback type"}), 400
+
+    try:
+        feedback = ChatFeedback(
+            user_id=user_id,
+            user_message=user_message,
+            ai_response=ai_response,
+            feedback_type=feedback_type
+        )
+        db.session.add(feedback)
+        db.session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@app.route('/api/admin/feedbacks', methods=['GET'])
+def get_feedbacks():
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({"error": "請先登入"}), 401
+    user = User.query.filter_by(email=user_email).first()
+    if not user or not user.is_admin:
+        return jsonify({"error": "權限不足"}), 403
+
+    try:
+        feedbacks = ChatFeedback.query.order_by(ChatFeedback.created_at.desc()).all()
+        result = []
+        for f in feedbacks:
+            user_info = "訪客"
+            if f.user_id:
+                u = User.query.get(f.user_id)
+                user_info = u.username if u else "未知使用者"
+            result.append({
+                "id": f.id,
+                "user": user_info,
+                "user_message": f.user_message,
+                "ai_response": f.ai_response,
+                "feedback_type": f.feedback_type,
+                "created_at": f.created_at.strftime('%Y-%m-%d %H:%M')
+            })
+        return jsonify({"success": True, "feedbacks": result})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

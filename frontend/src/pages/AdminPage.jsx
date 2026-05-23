@@ -14,6 +14,7 @@ export default function AdminPage() {
   // --- 各模組資料 ---
   const [users, setUsers] = useState([]);
   const [cafes, setCafes] = useState([]);
+  const [feedbacks, setFeedbacks] = useState([]);
   const [logs, setLogs] = useState({ logs: [], total: 0, pages: 1, current_page: 1 });
   const [modelInfo, setModelInfo] = useState({ current_model: '', ollama_status: 'offline', installed_models: [] });
 
@@ -38,7 +39,20 @@ export default function AdminPage() {
     if (activeTab === 'cafes') fetchCafes();
     if (activeTab === 'logs') fetchLogs(1);
     if (activeTab === 'model') fetchModel();
+    if (activeTab === 'feedbacks') fetchFeedbacks();
   }, [activeTab]);
+
+  const fetchFeedbacks = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/feedbacks`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setFeedbacks(data.feedbacks || []);
+      }
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -233,6 +247,7 @@ export default function AdminPage() {
             {[
               { key: 'users', label: '用戶管理' },
               { key: 'cafes', label: '店家管理' },
+              { key: 'feedbacks', label: 'AI 反饋' },
               { key: 'logs', label: 'Log 檢視' },
               { key: 'model', label: '模型管理' },
             ].map(tab => (
@@ -357,6 +372,42 @@ export default function AdminPage() {
                               <button className="admin-btn danger" onClick={() => deleteCafe(c.id, c.name)}>刪除</button>
                             </div>
                           </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ===== AI 反饋 ===== */}
+          {activeTab === 'feedbacks' && (
+            <>
+              {loading ? <div className="admin-loading">載入中</div> : (
+                <div className="admin-table-wrapper">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>使用者</th>
+                        <th>評價</th>
+                        <th>使用者問題</th>
+                        <th>AI 回覆</th>
+                        <th>時間</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {feedbacks.length === 0 ? (
+                        <tr><td colSpan="6" style={{textAlign:'center',padding:'40px',color:'#999'}}>尚無反饋紀錄</td></tr>
+                      ) : feedbacks.map(f => (
+                        <tr key={f.id}>
+                          <td>{f.id}</td>
+                          <td>{f.user}</td>
+                          <td style={{fontSize:'1.2rem'}}>{f.feedback_type === 'like' ? '👍' : '👎'}</td>
+                          <td style={{maxWidth:'200px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={f.user_message}>{f.user_message}</td>
+                          <td style={{maxWidth:'300px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={f.ai_response}>{f.ai_response}</td>
+                          <td>{f.created_at}</td>
                         </tr>
                       ))}
                     </tbody>
