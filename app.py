@@ -68,6 +68,15 @@ class SystemAnnouncement(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class BugReport(db.Model):
+    """使用者 Bug 回報與意見建議"""
+    __tablename__ = 'bug_reports'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    report_type = db.Column(db.String(50), default='bug') # 'bug' 或 'suggest'
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 # 管理員權限檢查裝飾器
 def admin_required(f):
     @wraps(f)
@@ -1860,6 +1869,90 @@ def admin_delete_announcement(ann_id):
     except Exception as e:
         db.session.rollback()
         print(f'刪除公告錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+# ==========================================
+# Bug 回報與意見建議 API
+# ==========================================
+
+@app.route('/api/bug_reports', methods=['POST'])
+def create_bug_report():
+    """使用者提交 Bug 回報或意見建議（免登入，若登入則自動綁定使用者）"""
+    data = request.get_json() or {}
+    content = data.get('content', '').strip()
+    report_type = data.get('report_type', 'bug').strip()
+
+    if not content:
+        return jsonify({'success': False, 'message': '回報內容不能為空'}), 400
+    if report_type not in ['bug', 'suggest']:
+        return jsonify({'success': False, 'message': '無效的回報類型'}), 400
+
+    try:
+        user_email = session.get('user_email')
+        user_id = None
+        if user_email:
+            user = User.query.filter_by(email=user_email).first()
+            if user:
+                user_id = user.id
+
+        new_report = BugReport(
+            user_id=user_id,
+            report_type=report_type,
+            content=content
+        )
+        db.session.add(new_report)
+        db.session.commit()
+
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        print(f'提交 Bug 回報錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/bug_reports', methods=['GET'])
+@admin_required
+def admin_get_bug_reports():
+    """管理員取得所有 Bug 回報列表"""
+    try:
+        reports = BugReport.query.order_by(BugReport.id.desc()).all()
+        result = []
+        for r in reports:
+            author = User.query.get(r.user_id) if r.user_id else None
+            result.append({
+                'id': r.id,
+                'report_type': r.report_type,
+                'content': r.content,
+                'created_at': r.created_at.strftime('%Y-%m-%d %H:%M') if r.created_at else '',
+                'user_name': author.name if author else '訪客/未登入',
+                'user_email': author.email if author else ''
+            })
+        return jsonify({'success': True, 'reports': result})
+    except Exception as e:
+        print(f'管理員載入 Bug 回報錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/bug_reports/<int:report_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_bug_report(report_id):
+    """管理員刪除 Bug 回報"""
+    try:
+        report = BugReport.query.get(report_id)
+        if not report:
+            return jsonify({'success': False, 'message': '回報不存在'}), 404
+
+        db.session.delete(report)
+        db.session.commit()
+
+        # 記錄管理員 Log
+        user_email = session.get('user_email')
+        log_action(user_email, '刪除 Bug 回報', f'刪除了回報 ID：{report_id}')
+
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        print(f'刪除 Bug 回報錯誤：{e}')
         return jsonify({'success': False, 'message': str(e)}), 500
 
 if __name__ == '__main__':
