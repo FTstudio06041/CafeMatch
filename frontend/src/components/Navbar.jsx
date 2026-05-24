@@ -11,7 +11,7 @@ export default function Navbar() {
   const navRefs = useRef([]);
 
   const navItems = [
-    { path: '/chat', label: '對話' },
+    { path: '/chat', label: 'AI' },
     { path: '/community', label: '社群' },
     { path: '/explore', label: '探索' },
     { path: '/quiz', label: '測驗' }
