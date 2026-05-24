@@ -4,14 +4,11 @@ import { AuthContext } from '../context/AuthContext';
 import Cropper from 'react-cropper';
 import '../ProfilePage.css';
 import Navbar from '../components/Navbar';
+import Sidebar from '../components/Sidebar';
 
 export default function ProfilePage() {
   const { user, API_BASE_URL, logout } = useContext(AuthContext);
   const navigate = useNavigate();
-
-  // --- 側欄與導覽狀態 ---
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [chats, setChats] = useState([]);
 
   // --- 資料網格狀態 ---
   const [favShops, setFavShops] = useState([]);
@@ -33,11 +30,7 @@ export default function ProfilePage() {
   // 初始化與資料抓取
   // ==========================================
   useEffect(() => {
-    // 1. 讀取側欄對話紀錄
-    const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
-    setChats(savedChats);
-
-    // 2. 初始化使用者編輯資料
+    // 1. 初始化使用者編輯資料
     if (user) {
       setNewName(user.name || '');
       setCroppedImageBase64(user.picture || '');
@@ -95,19 +88,7 @@ export default function ProfilePage() {
       scores: histItem.rawHist.scores || {}
     };
     localStorage.setItem('targetQuizContext', JSON.stringify(quizData));
-    navigate('/chat');
-  };
-
-  // 側欄新建對話
-  const handleNewChat = () => {
-    localStorage.setItem('targetChatId', 'new');
-    navigate('/chat');
-  };
-
-  // 側欄選擇對話
-  const handleSelectChat = (chatId) => {
-    localStorage.setItem('targetChatId', chatId);
-    navigate('/chat');
+    navigate('/chat?id=new');
   };
 
   // ==========================================
@@ -191,7 +172,6 @@ export default function ProfilePage() {
       });
       const data = await response.json();
       if (data.success) {
-        localStorage.removeItem('allChats');
         alert("帳號已成功刪除，後會有期！");
         window.location.href = '/';
       } else {
@@ -209,31 +189,7 @@ export default function ProfilePage() {
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', width: '100%' }}>
       {/* --- 左側欄 --- */}
-      <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
-        <button className="toggle-sidebar-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
-        </button>
-        <button className="user-profile-btn" style={{ borderColor: 'var(--accent-color)', borderWidth: '2px', borderStyle: 'solid' }}>
-          <div className="user-avatar" style={{ backgroundColor: user?.picture ? 'transparent' : 'var(--accent-color)' }}>
-            {user?.picture ? <img src={user.picture} alt="avatar" style={{width: '100%', borderRadius: '50%'}} /> : 'U'}
-          </div>
-          <span className="user-name text-label">{user?.name}</span>
-        </button>
-        <button className="new-chat-btn" onClick={handleNewChat}>
-           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-           <span className="text-label">新增對話</span>
-        </button>
-        <div className="history-label text-label">對話紀錄</div>
-        <div className="chat-list">
-           {chats.length === 0 ? <div className="empty-sidebar-msg">尚無對話紀錄</div> : 
-             chats.map(chat => (
-               <div key={chat.id} className="chat-item" onClick={() => handleSelectChat(chat.id)}>
-                 <div className="chat-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></div>
-                 <span className="chat-title text-label">{chat.title}</span>
-               </div>
-           ))}
-        </div>
-      </aside>
+      <Sidebar />
 
       {/* --- 主內容區 --- */}
       <main className="main-container">

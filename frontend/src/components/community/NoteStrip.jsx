@@ -26,7 +26,7 @@ export default function NoteStrip({ notes, currentUser, onNoteClick, onEditClick
             )}
           </div>
           <div className={`note-bubble-text ${currentUserNote ? 'color-' + currentUserNote.color_index : 'empty'}`}>
-            {currentUserNote ? (currentUserNote.content.length > 10 ? currentUserNote.content.slice(0, 10) + '...' : currentUserNote.content) : '+'}
+            {currentUserNote ? (currentUserNote.content.length > 20 ? currentUserNote.content.slice(0, 20) + '...' : currentUserNote.content) : '+'}
           </div>
         </div>
       )}

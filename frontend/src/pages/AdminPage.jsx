@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
+import Sidebar from '../components/Sidebar';
 import '../AdminPage.css';
 
 export default function AdminPage() {
@@ -18,20 +19,15 @@ export default function AdminPage() {
   const [logs, setLogs] = useState({ logs: [], total: 0, pages: 1, current_page: 1 });
   const [modelInfo, setModelInfo] = useState({ current_model: '', ollama_status: 'offline', installed_models: [] });
 
+  // --- 公告管理狀態 ---
+  const [announcements, setAnnouncements] = useState([]);
+  const [announcementText, setAnnouncementText] = useState('');
+
   // --- UI 狀態 ---
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingCafe, setEditingCafe] = useState(null);
   const [editForm, setEditForm] = useState({});
-
-  // --- 側欄 ---
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [chats, setChats] = useState([]);
-
-  useEffect(() => {
-    const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
-    setChats(savedChats);
-  }, []);
 
   // --- 資料載入 ---
   useEffect(() => {
@@ -40,7 +36,61 @@ export default function AdminPage() {
     if (activeTab === 'logs') fetchLogs(1);
     if (activeTab === 'model') fetchModel();
     if (activeTab === 'feedbacks') fetchFeedbacks();
+    if (activeTab === 'announcement') fetchAnnouncements();
   }, [activeTab]);
+
+  const fetchAnnouncements = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/announcements`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setAnnouncements(data.announcements || []);
+      }
+    } catch (e) {
+      console.error('載入公告失敗:', e);
+    }
+    setLoading(false);
+  };
+
+  const publishAnnouncement = async () => {
+    if (!announcementText.trim()) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/announcements`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ content: announcementText.trim() }),
+      });
+      if (res.ok) {
+        setAnnouncementText('');
+        fetchAnnouncements();
+        alert('公告發布成功！');
+      } else {
+        const data = await res.json();
+        alert(data.message || '發布失敗');
+      }
+    } catch (e) {
+      console.error('發布公告失敗:', e);
+    }
+  };
+
+  const deleteAnnouncement = async (annId) => {
+    if (!confirm('確定要刪除此公告嗎？')) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/announcements/${annId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        fetchAnnouncements();
+      } else {
+        alert('刪除失敗');
+      }
+    } catch (e) {
+      console.error('刪除公告失敗:', e);
+    }
+  };
 
   const fetchFeedbacks = async () => {
     setLoading(true);
@@ -204,31 +254,7 @@ export default function AdminPage() {
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', width: '100%' }}>
       {/* --- 左側欄 --- */}
-      <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
-        <button className="toggle-sidebar-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
-        </button>
-        <button className="user-profile-btn" onClick={() => navigate('/profile')} style={{ borderColor: 'var(--accent-color)', borderWidth: '2px', borderStyle: 'solid' }}>
-          <div className="user-avatar" style={{ backgroundColor: user?.picture ? 'transparent' : 'var(--accent-color)' }}>
-            {user?.picture ? <img src={user.picture} alt="avatar" style={{width: '100%', borderRadius: '50%'}} /> : 'U'}
-          </div>
-          <span className="user-name text-label">{user?.name}</span>
-        </button>
-        <button className="new-chat-btn" onClick={() => { localStorage.setItem('targetChatId', 'new'); navigate('/chat'); }}>
-           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-           <span className="text-label">新增對話</span>
-        </button>
-        <div className="history-label text-label">對話紀錄</div>
-        <div className="chat-list">
-           {chats.length === 0 ? <div className="empty-sidebar-msg">尚無對話紀錄</div> : 
-             chats.map(chat => (
-               <div key={chat.id} className="chat-item" onClick={() => {localStorage.setItem('targetChatId', chat.id); navigate('/chat');}}>
-                 <div className="chat-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg></div>
-                 <span className="chat-title text-label">{chat.title}</span>
-               </div>
-           ))}
-        </div>
-      </aside>
+      <Sidebar />
 
       {/* --- 主內容區 --- */}
       <main className="main-container">
@@ -250,6 +276,7 @@ export default function AdminPage() {
               { key: 'feedbacks', label: 'AI 反饋' },
               { key: 'logs', label: 'Log 檢視' },
               { key: 'model', label: '模型管理' },
+              { key: 'announcement', label: '系統公告' },
             ].map(tab => (
               <button
                 key={tab.key}
@@ -499,11 +526,67 @@ export default function AdminPage() {
                       ))}
                     </div>
                   )}
-                </>
-              )}
-            </>
-          )}
-        </div>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* ===== 系統公告 ===== */}
+            {activeTab === 'announcement' && (
+              <>
+                <div className="announcement-manage-card">
+                  <div style={{fontWeight:700,color:'var(--admin-accent)',marginBottom:'12px',fontSize:'1.05rem'}}>發布全新消息公告</div>
+                  <textarea
+                    className="announcement-textarea"
+                    placeholder="輸入您想向所有使用者公布的最新消息..."
+                    value={announcementText}
+                    onChange={e => setAnnouncementText(e.target.value)}
+                    maxLength={1000}
+                    rows={5}
+                  />
+                  <div style={{textAlign:'right',marginTop:'10px'}}>
+                    <button
+                      className="admin-btn primary"
+                      onClick={publishAnnouncement}
+                      disabled={!announcementText.trim()}
+                    >
+                      立即發布公告
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{fontWeight:700,color:'var(--admin-accent)',marginTop:'28px',marginBottom:'12px',fontSize:'1.05rem'}}>歷史發布公告</div>
+                {loading ? <div className="admin-loading">載入中</div> : (
+                  <div className="admin-table-wrapper">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th style={{width:'80px'}}>ID</th>
+                          <th>公告內容</th>
+                          <th style={{width:'180px'}}>發布時間</th>
+                          <th style={{width:'100px'}}>操作</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {announcements.length === 0 ? (
+                          <tr><td colSpan="4" style={{textAlign:'center',padding:'40px',color:'#999'}}>尚無發布公告紀錄</td></tr>
+                        ) : announcements.map(a => (
+                          <tr key={a.id}>
+                            <td>{a.id}</td>
+                            <td style={{whiteSpace:'pre-wrap',lineHeight:1.5,fontSize:'0.92rem'}}>{a.content}</td>
+                            <td>{a.created_at}</td>
+                            <td>
+                              <button className="admin-btn danger" onClick={() => deleteAnnouncement(a.id)}>刪除</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
 
         {/* --- 編輯店家 Modal --- */}
         <div className={`admin-modal-overlay ${editingCafe ? 'active' : ''}`} onClick={() => setEditingCafe(null)}>

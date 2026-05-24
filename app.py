@@ -7,6 +7,7 @@ from functools import wraps
 from datetime import datetime
 from dotenv import load_dotenv
 import requests
+import uuid
 
 load_dotenv()
 
@@ -45,6 +46,7 @@ class User(db.Model):
     # 使用 Text 類型來存長長的 Base64 圖片字串
     picture = db.Column(db.Text)
     is_admin = db.Column(db.Boolean, default=False)
+    last_read_announcement_id = db.Column(db.Integer, default=0)
 
     def __repr__(self):
         return f'<User {self.email}>'
@@ -57,6 +59,14 @@ class AdminLog(db.Model):
     action = db.Column(db.String(255), nullable=False)  # 操作類型
     detail = db.Column(db.Text)  # 操作細節
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class SystemAnnouncement(db.Model):
+    """系統最新消息/公告"""
+    __tablename__ = 'system_announcements'
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 # 管理員權限檢查裝飾器
 def admin_required(f):
@@ -202,6 +212,14 @@ class ChatFeedback(db.Model):
     feedback_type = db.Column(db.String(20), nullable=False) # 'like', 'dislike'
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+class ChatSession(db.Model):
+    __tablename__ = 'chat_sessions'
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    title = db.Column(db.String(100), nullable=False)
+    messages = db.Column(db.JSON, nullable=False, default=list) # 儲存 {text, sender, isTyping} 陣列
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 # ==========================================
 # 社群功能：資料表模型
 # ==========================================
@@ -342,6 +360,12 @@ with app.app_context():
         db.session.execute(db.text("ALTER TABLE user ADD COLUMN is_admin TINYINT(1) DEFAULT 0"))
         db.session.commit()
         print('[INIT] 已為 user 表新增 is_admin 欄位')
+    except Exception:
+        db.session.rollback()
+    try:
+        db.session.execute(db.text("ALTER TABLE user ADD COLUMN last_read_announcement_id INT DEFAULT 0"))
+        db.session.commit()
+        print('[INIT] 已為 user 表新增 last_read_announcement_id 欄位')
     except Exception:
         db.session.rollback()
     # 手動為既有的 cafes 表加上 image 欄位
@@ -536,6 +560,114 @@ def delete_user_account():
         db.session.rollback()
         print("Delete Account Error:", e)
         return jsonify({"success": False, "message": str(e)}), 500
+
+# ==========================================
+# 聊天對話持久化 API
+# ==========================================
+
+@app.route('/api/chat/sessions', methods=['GET'])
+def get_chat_sessions():
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({"error": "請先登入"}), 401
+    
+    user = User.query.filter_by(email=user_email).first()
+    if not user:
+        return jsonify({"error": "使用者不存在"}), 404
+
+    sessions = ChatSession.query.filter_by(user_id=user.id).order_by(ChatSession.updated_at.desc()).all()
+    
+    result = []
+    for s in sessions:
+        result.append({
+            "id": s.id,
+            "title": s.title,
+            "updated_at": s.updated_at.strftime('%Y-%m-%d %H:%M:%S') if s.updated_at else None
+        })
+    return jsonify(result)
+
+@app.route('/api/chat/sessions/<session_id>', methods=['GET'])
+def get_chat_session_detail(session_id):
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({"error": "請先登入"}), 401
+    
+    user = User.query.filter_by(email=user_email).first()
+    if not user:
+        return jsonify({"error": "使用者不存在"}), 404
+
+    chat_session = ChatSession.query.filter_by(id=session_id, user_id=user.id).first()
+    if not chat_session:
+        return jsonify({"error": "找不到該對話"}), 404
+
+    return jsonify({
+        "id": chat_session.id,
+        "title": chat_session.title,
+        "messages": chat_session.messages,
+        "updated_at": chat_session.updated_at.strftime('%Y-%m-%d %H:%M:%S') if chat_session.updated_at else None
+    })
+
+@app.route('/api/chat/sessions', methods=['POST'])
+def save_chat_session():
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({"error": "請先登入"}), 401
+    
+    user = User.query.filter_by(email=user_email).first()
+    if not user:
+        return jsonify({"error": "使用者不存在"}), 404
+
+    data = request.json
+    session_id = data.get('id')
+    title = data.get('title', '新對話')
+    messages = data.get('messages', [])
+
+    try:
+        chat_session = None
+        if session_id:
+            chat_session = ChatSession.query.filter_by(id=session_id, user_id=user.id).first()
+        
+        if chat_session:
+            chat_session.title = title
+            chat_session.messages = messages
+            chat_session.updated_at = datetime.utcnow()
+        else:
+            new_id = session_id if session_id else str(uuid.uuid4())
+            chat_session = ChatSession(
+                id=new_id,
+                user_id=user.id,
+                title=title,
+                messages=messages
+            )
+            db.session.add(chat_session)
+        
+        db.session.commit()
+        return jsonify({"success": True, "id": chat_session.id})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/chat/sessions/<session_id>', methods=['DELETE'])
+def delete_chat_session(session_id):
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({"error": "請先登入"}), 401
+    
+    user = User.query.filter_by(email=user_email).first()
+    if not user:
+        return jsonify({"error": "使用者不存在"}), 404
+
+    try:
+        chat_session = ChatSession.query.filter_by(id=session_id, user_id=user.id).first()
+        if not chat_session:
+            return jsonify({"error": "找不到該對話"}), 404
+        
+        db.session.delete(chat_session)
+        db.session.commit()
+        return jsonify({"success": True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/chat', methods=['POST'])
 def chat_with_ai():
@@ -1172,7 +1304,9 @@ def chat_feedback():
 def community_get_notes():
     """取得所有便利貼（不需登入即可查看）"""
     try:
-        notes = CommunityNote.query.order_by(CommunityNote.created_at.desc()).all()
+        from datetime import timedelta
+        twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=24)
+        notes = CommunityNote.query.filter(CommunityNote.created_at >= twenty_four_hours_ago).order_by(CommunityNote.created_at.desc()).all()
 
         # 檢查當前使用者是否已登入（用於判斷 is_liked）
         current_user = None
@@ -1595,6 +1729,138 @@ def get_feedbacks():
         return jsonify({"success": True, "feedbacks": result})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+# ==========================================
+# 系統公告 / 最新消息 API
+# ==========================================
+
+@app.route('/api/announcements/latest', methods=['GET'])
+def get_latest_announcement():
+    """取得最新的公告，並根據使用者登入狀態與閱讀記錄判斷是否需要跳出彈窗"""
+    try:
+        # 取得最新的一則公告
+        latest_ann = SystemAnnouncement.query.order_by(SystemAnnouncement.id.desc()).first()
+        if not latest_ann:
+            return jsonify({'success': True, 'show_popup': False, 'announcement': None})
+
+        # 檢查登入狀態
+        user_email = session.get('user_email')
+        if not user_email:
+            # 未登入不跳出彈窗
+            return jsonify({'success': True, 'show_popup': False, 'announcement': None})
+
+        user = User.query.filter_by(email=user_email).first()
+        if not user:
+            return jsonify({'success': True, 'show_popup': False, 'announcement': None})
+
+        # 比對最新公告 id 與使用者的最後閱讀紀錄
+        show_popup = latest_ann.id > user.last_read_announcement_id
+
+        return jsonify({
+            'success': True,
+            'show_popup': show_popup,
+            'announcement': {
+                'id': latest_ann.id,
+                'content': latest_ann.content,
+                'created_at': latest_ann.created_at.strftime('%Y-%m-%d %H:%M') if latest_ann.created_at else ''
+            }
+        })
+    except Exception as e:
+        print(f'取得最新公告錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/announcements/read', methods=['POST'])
+def mark_announcement_as_read():
+    """標記最新公告為已讀"""
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({'success': False, 'message': '未登入'}), 401
+
+    user = User.query.filter_by(email=user_email).first()
+    if not user:
+        return jsonify({'success': False, 'message': '使用者不存在'}), 404
+
+    try:
+        # 取得最新公告 ID
+        latest_ann = SystemAnnouncement.query.order_by(SystemAnnouncement.id.desc()).first()
+        if latest_ann:
+            user.last_read_announcement_id = latest_ann.id
+            db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        print(f'更新公告已讀記錄錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# --- 管理員公告 CRUD ---
+
+@app.route('/api/admin/announcements', methods=['GET'])
+@admin_required
+def admin_get_announcements():
+    """管理員取得所有公告列表"""
+    try:
+        anns = SystemAnnouncement.query.order_by(SystemAnnouncement.id.desc()).all()
+        result = []
+        for a in anns:
+            result.append({
+                'id': a.id,
+                'content': a.content,
+                'created_at': a.created_at.strftime('%Y-%m-%d %H:%M') if a.created_at else ''
+            })
+        return jsonify({'success': True, 'announcements': result})
+    except Exception as e:
+        print(f'管理員載入公告錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/announcements', methods=['POST'])
+@admin_required
+def admin_create_announcement():
+    """管理員發布新公告"""
+    data = request.get_json() or {}
+    content = data.get('content', '').strip()
+    if not content:
+        return jsonify({'success': False, 'message': '公告內容不能為空'}), 400
+
+    try:
+        new_ann = SystemAnnouncement(content=content)
+        db.session.add(new_ann)
+        db.session.commit()
+
+        # 記錄管理員 Log
+        user_email = session.get('user_email')
+        log_action(user_email, '發布系統公告', f'發布了新公告：{content[:30]}...')
+
+        return jsonify({'success': True, 'id': new_ann.id})
+    except Exception as e:
+        db.session.rollback()
+        print(f'發布公告錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/admin/announcements/<int:ann_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_announcement(ann_id):
+    """管理員刪除公告"""
+    try:
+        ann = SystemAnnouncement.query.get(ann_id)
+        if not ann:
+            return jsonify({'success': False, 'message': '公告不存在'}), 404
+
+        db.session.delete(ann)
+        db.session.commit()
+
+        # 記錄管理員 Log
+        user_email = session.get('user_email')
+        log_action(user_email, '刪除系統公告', f'刪除了公告 ID：{ann_id}')
+
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        print(f'刪除公告錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

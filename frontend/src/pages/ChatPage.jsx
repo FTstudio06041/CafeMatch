@@ -1,71 +1,54 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import '../ChatPage.css';
 import Navbar from '../components/Navbar';
+import Sidebar from '../components/Sidebar';
 
 export default function ChatPage() {
   const { user, API_BASE_URL } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
 
   // 狀態管理
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [chats, setChats] = useState([]);
-  const [currentChatId, setCurrentChatId] = useState(null);
+  const [currentChat, setCurrentChat] = useState({ id: null, title: '新對話', messages: [] });
   const [inputMsg, setInputMsg] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [loadingChatId, setLoadingChatId] = useState(null);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   
   const chatWindowRef = useRef(null);
   const abortControllerRef = useRef(null);
-  const currentChatIdRef = useRef(currentChatId);
-  const isInitialized = useRef(false);
+  const currentChatRef = useRef(currentChat);
 
-  // 同步 ref 供非同步函式使用
+  // 同步 ref
   useEffect(() => {
-    currentChatIdRef.current = currentChatId;
-  }, [currentChatId]);
-
-  // 記住最後一個開啟的對話
-  useEffect(() => {
-    if (currentChatId) {
-      localStorage.setItem('lastChatId', currentChatId);
-    }
-  }, [currentChatId]);
+    currentChatRef.current = currentChat;
+  }, [currentChat]);
 
   // 自動捲動到底部
   useEffect(() => {
     if (chatWindowRef.current) {
       chatWindowRef.current.scrollTop = chatWindowRef.current.scrollHeight;
     }
-  }, [chats, currentChatId, isTyping]);
+  }, [currentChat.messages, isTyping]);
 
-  // ==========================================
-  // 初始化邏輯 (消除原有的 race condition)
-  // ==========================================
+  // 初始化與載入特定對話
   useEffect(() => {
-    if (isInitialized.current) return;
-    isInitialized.current = true;
-
-    const savedChats = JSON.parse(localStorage.getItem('allChats')) || [];
-    let initialChatId = null;
-
-    // 1. 檢查歡迎彈窗
     const params = new URLSearchParams(location.search);
     if (params.get('welcome') === 'true') {
       setShowWelcomeModal(true);
-      navigate(location.pathname, { replace: true });
+      // 清除 welcome param
+      navigate('/chat', { replace: true });
+      return;
     }
 
-    // 2. 處理導航意圖 (測驗結果 > 指定對話 > 上次對話)
-    const rawQuizContext = localStorage.getItem('targetQuizContext');
-    const targetChatId = localStorage.getItem('targetChatId');
-    const lastChatId = localStorage.getItem('lastChatId');
+    const urlId = searchParams.get('id');
 
+    // 處理測驗結果跳轉
+    const rawQuizContext = localStorage.getItem('targetQuizContext');
     if (rawQuizContext) {
       localStorage.removeItem('targetQuizContext');
       let promptText = '';
@@ -89,57 +72,60 @@ export default function ChatPage() {
         promptText = `我剛做完測驗，結果適合「${rawQuizContext}」，請根據這個結果推薦我類似的咖啡廳或豆子。`;
       }
       
-      setChats(savedChats);
-      // 等待 React state 更新後，自動建立新對話並發送
+      setCurrentChat({ id: null, title: '新對話', messages: [] });
       setTimeout(() => {
-        executeChatStream(promptText, { forceNewChat: true, customTitle: '我做完測驗，結果...' });
+        executeChatStream(promptText, { customTitle: '我做完測驗，結果...' });
       }, 0);
-      return; // 提前返回，讓 executeChatStream 接手
-    } 
-    
-    let updatedChats = [...savedChats];
-    
-    if (targetChatId) {
-      if (targetChatId === 'new') {
-        initialChatId = Date.now();
-        updatedChats = [{ id: initialChatId, title: `新對話 ${savedChats.length + 1}`, messages: [] }, ...savedChats];
-      } else {
-        initialChatId = Number(targetChatId);
-      }
-      localStorage.removeItem('targetChatId');
-    } else if (lastChatId) {
-      initialChatId = Number(lastChatId);
-      if (!updatedChats.find(c => c.id === initialChatId) && updatedChats.length > 0) {
-        initialChatId = updatedChats[0].id;
-      }
-    } else if (updatedChats.length > 0) {
-      initialChatId = updatedChats[0].id;
+      return;
     }
 
-    setChats(updatedChats);
-    if (initialChatId) setCurrentChatId(initialChatId);
-    
-  }, [location.pathname, location.search, navigate]);
+    // 正常載入對話
+    if (!urlId || urlId === 'new') {
+      setCurrentChat({ id: null, title: '新對話', messages: [] });
+    } else {
+      // 載入資料庫對話
+      fetch(`${API_BASE_URL}/api/chat/sessions/${urlId}`, { credentials: 'include' })
+        .then(res => res.json())
+        .then(data => {
+          if (data.id) {
+            setCurrentChat(data);
+          } else {
+            // 找不到對話，回到新對話
+            navigate('/chat?id=new', { replace: true });
+          }
+        })
+        .catch(err => console.error('Failed to load session:', err));
+    }
+  }, [location.search, searchParams, API_BASE_URL]);
 
-  // ==========================================
-  // 對話管理
-  // ==========================================
-  const handleNewChat = () => {
-    const newId = Date.now();
-    const newChat = { id: newId, title: `新對話 ${chats.length + 1}`, messages: [] };
-    const tempChats = [newChat, ...chats];
-    setChats(tempChats);
-    localStorage.setItem('allChats', JSON.stringify(tempChats));
-    setCurrentChatId(newId);
-  };
-
-  const handleDeleteChat = (e, id) => {
-    e.stopPropagation();
-    if (window.confirm('確定要刪除此對話嗎？')) {
-      const tempChats = chats.filter(c => c.id !== id);
-      setChats(tempChats);
-      localStorage.setItem('allChats', JSON.stringify(tempChats));
-      if (currentChatIdRef.current === id) setCurrentChatId(null);
+  // 保存對話到後端
+  const saveSessionToBackend = async (chatState) => {
+    try {
+      const payload = {
+        title: chatState.title,
+        messages: chatState.messages
+      };
+      if (chatState.id) {
+        payload.id = chatState.id;
+      }
+      const response = await fetch(`${API_BASE_URL}/api/chat/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      if (data.success && data.id) {
+        const newId = data.id;
+        // 如果是新建立的對話，更新 URL 和本地 state 的 id
+        if (!chatState.id) {
+          setCurrentChat(prev => ({ ...prev, id: newId }));
+          navigate(`/chat?id=${newId}`, { replace: true });
+        }
+        window.dispatchEvent(new Event('chat-updated')); // 觸發 Sidebar 更新
+      }
+    } catch (e) {
+      console.error("Failed to save session:", e);
     }
   };
 
@@ -147,12 +133,9 @@ export default function ChatPage() {
   // 反饋與重試邏輯
   // ==========================================
   const handleFeedback = async (msgIdx, type) => {
-    const chat = chats.find(c => c.id === currentChatIdRef.current);
-    if (!chat || !chat.messages[msgIdx]) return;
-    
-    // 若已經評價過且重複點擊，忽略或切換（這邊先簡化為不允許取消，只能更換）
-    const msg = chat.messages[msgIdx];
-    const userMsg = chat.messages[msgIdx - 1]?.content || '';
+    const msg = currentChat.messages[msgIdx];
+    const userMsg = currentChat.messages[msgIdx - 1]?.content || '';
+    if (!msg) return;
     
     try {
       const response = await fetch(`${API_BASE_URL}/api/chat/feedback`, {
@@ -167,19 +150,19 @@ export default function ChatPage() {
       });
       if (response.ok) {
         // 更新 UI 狀態
-        setChats(prev => {
-          const nc = [...prev];
-          const i = nc.findIndex(c => c.id === currentChatIdRef.current);
-          if (i !== -1) {
-            nc[i].messages[msgIdx].feedback = type;
-          }
+        let updatedChat = null;
+        setCurrentChat(prev => {
+          const nc = { ...prev };
+          const newMsgs = [...nc.messages];
+          newMsgs[msgIdx] = { ...newMsgs[msgIdx], feedback: type };
+          nc.messages = newMsgs;
+          updatedChat = nc;
           return nc;
         });
-        const saved = JSON.parse(localStorage.getItem('allChats')) || [];
-        const si = saved.findIndex(c => c.id === currentChatIdRef.current);
-        if (si !== -1) {
-          saved[si].messages[msgIdx].feedback = type;
-          localStorage.setItem('allChats', JSON.stringify(saved));
+        
+        // 保存到後端
+        if (updatedChat) {
+           saveSessionToBackend(updatedChat);
         }
       }
     } catch (e) {
@@ -188,111 +171,79 @@ export default function ChatPage() {
   };
 
   const handleRetry = (msgIdx) => {
-    if (isTyping) return;
-    const chat = chats.find(c => c.id === currentChatIdRef.current);
-    if (!chat || msgIdx <= 0) return;
+    if (isTyping || msgIdx <= 0) return;
     
     // 取出重試之前的 user 訊息
-    const prevUserMsg = chat.messages[msgIdx - 1];
+    const prevUserMsg = currentChat.messages[msgIdx - 1];
     if (!prevUserMsg || prevUserMsg.role !== 'user') return;
 
     // 將包含該 AI 訊息以及其後的所有訊息刪除
-    const newMessages = chat.messages.slice(0, msgIdx - 1);
+    const newMessages = currentChat.messages.slice(0, msgIdx - 1);
     
-    setChats(prev => {
-      const nc = [...prev];
-      const i = nc.findIndex(c => c.id === currentChatIdRef.current);
-      if (i !== -1) nc[i].messages = newMessages;
-      return nc;
-    });
-    const saved = JSON.parse(localStorage.getItem('allChats')) || [];
-    const si = saved.findIndex(c => c.id === currentChatIdRef.current);
-    if (si !== -1) {
-      saved[si].messages = newMessages;
-      localStorage.setItem('allChats', JSON.stringify(saved));
-    }
+    setCurrentChat(prev => ({ ...prev, messages: newMessages }));
     
     // 重新發送
-    executeChatStream(prevUserMsg.content, { forceNewChat: false });
+    executeChatStream(prevUserMsg.content);
   };
 
   // ==========================================
-  // 核心發送與串流邏輯 (統一重構)
+  // 核心發送與串流邏輯
   // ==========================================
   const executeChatStream = async (messageText, options = {}) => {
-    const { forceNewChat = false, customTitle = null } = options;
+    const { customTitle = null } = options;
     if (!messageText.trim() || isTyping) return;
     
     setIsTyping(true);
-    let targetChatId = currentChatIdRef.current;
-    let currentSaved = JSON.parse(localStorage.getItem('allChats')) || [];
-
-    // 若強制開新對話，或當前無對話，則建立
-    if (forceNewChat || !targetChatId) {
-      targetChatId = Date.now();
-      const title = customTitle || messageText.substring(0, 10) + '...';
-      currentSaved = [{ id: targetChatId, title, messages: [] }, ...currentSaved];
-      setCurrentChatId(targetChatId);
-    }
-
-    // 處理「新對話」自動更名
-    const chatIdx = currentSaved.findIndex(c => c.id === targetChatId);
-    if (chatIdx !== -1 && currentSaved[chatIdx].title.startsWith('新對話')) {
-      currentSaved[chatIdx].title = messageText.substring(0, 10) + '...';
-    }
-
-    // 插入使用者訊息與 AI 空白佔位符
-    if (chatIdx !== -1) {
-      currentSaved[chatIdx].messages.push({ role: 'user', content: messageText });
-      currentSaved[chatIdx].messages.push({ role: 'ai', content: '', debug_info: null });
-    }
-
-    // 更新狀態並清空輸入
-    setChats(currentSaved);
-    localStorage.setItem('allChats', JSON.stringify(currentSaved));
-    if (!forceNewChat) setInputMsg('');
-    setLoadingChatId(targetChatId);
+    setInputMsg('');
     
+    let chatTitle = currentChatRef.current.title;
+    if (chatTitle === '新對話') {
+      chatTitle = customTitle || messageText.substring(0, 10) + '...';
+    }
+
+    const updatedMessages = [
+      ...currentChatRef.current.messages,
+      { role: 'user', content: messageText },
+      { role: 'ai', content: '', debug_info: null }
+    ];
+
+    // 更新 state (新增 user 和空白的 ai 訊息)
+    setCurrentChat(prev => ({
+      ...prev,
+      title: chatTitle,
+      messages: updatedMessages
+    }));
+
     abortControllerRef.current = new AbortController();
     let currentAiContent = "";
     let currentDebugInfo = null;
 
-    // 內部輔助函式：同步 localStorage 與狀態
-    const syncStreamState = (content, debugInfo, appendText = '') => {
+    // 內部輔助函式：同步狀態，最後一次寫入後端
+    const syncStreamState = async (content, debugInfo, appendText = '', isFinal = false) => {
       const finalContent = content + appendText;
       
-      setChats(prev => {
-        const nc = [...prev];
-        const i = nc.findIndex(c => c.id === targetChatId);
-        if (i !== -1) {
-          const msgs = nc[i].messages;
-          const last = msgs[msgs.length - 1];
-          if (last && last.role === 'ai') {
-            last.content = finalContent;
-            if (debugInfo) last.debug_info = { ...debugInfo };
-          }
+      let finalChat = null;
+      setCurrentChat(prev => {
+        const nc = { ...prev };
+        const msgs = [...nc.messages];
+        const last = msgs[msgs.length - 1];
+        if (last && last.role === 'ai') {
+          msgs[msgs.length - 1] = { ...last, content: finalContent, debug_info: debugInfo ? { ...debugInfo } : last.debug_info };
         }
+        nc.messages = msgs;
+        finalChat = nc;
         return nc;
       });
 
-      const saved = JSON.parse(localStorage.getItem('allChats')) || [];
-      const si = saved.findIndex(c => c.id === targetChatId);
-      if (si !== -1) {
-        const msgs = saved[si].messages;
-        const last = msgs[msgs.length - 1];
-        if (last && last.role === 'ai') {
-          last.content = finalContent;
-          last.debug_info = debugInfo;
-          localStorage.setItem('allChats', JSON.stringify(saved));
-        }
+      if (isFinal && finalChat) {
+         await saveSessionToBackend(finalChat);
       }
     };
 
-    // 準備歷史對話紀錄傳給後端 (只取最近 6 筆避免過長)
+    // 準備歷史對話紀錄傳給後端 (只取最近 6 筆，排除剛才 push 的 user+ai)
     let historyToSend = [];
-    if (chatIdx !== -1) {
-      // 取出除了剛 push 進去的最後兩筆(user與空白ai)之外的所有訊息
-      const prevMsgs = currentSaved[chatIdx].messages.slice(0, -2);
+    if (updatedMessages.length >= 2) {
+      const prevMsgs = updatedMessages.slice(0, -2);
       historyToSend = prevMsgs.slice(-6).map(m => ({
         role: m.role,
         content: m.content
@@ -322,7 +273,7 @@ export default function ChatPage() {
       while (true) {
         const { done, value } = await reader.read();
         if (done) {
-          syncStreamState(currentAiContent, currentDebugInfo); // 最終確保寫入 localStorage
+          await syncStreamState(currentAiContent, currentDebugInfo, '', true); // 結束並寫入後端
           break;
         }
 
@@ -357,31 +308,18 @@ export default function ChatPage() {
           } catch (_) { /* 忽略不完整的 chunk */ }
         }
         
-        // 串流途中只更新 React state（優化效能，最終 done 時再寫入 localStorage）
-        setChats(prev => {
-          const nc = [...prev];
-          const i = nc.findIndex(c => c.id === targetChatId);
-          if (i !== -1) {
-            const msgs = nc[i].messages;
-            const last = msgs[msgs.length - 1];
-            if (last && last.role === 'ai') {
-              last.content = currentAiContent;
-              if (currentDebugInfo) last.debug_info = { ...currentDebugInfo };
-            }
-          }
-          return nc;
-        });
+        // 串流途中只更新 React state
+        syncStreamState(currentAiContent, currentDebugInfo, '', false);
       }
     } catch (error) {
       if (error.name === 'AbortError') {
-        syncStreamState(currentAiContent, currentDebugInfo, ' [已停止生成]');
+        await syncStreamState(currentAiContent, currentDebugInfo, ' [已停止生成]', true);
       } else {
         console.error('AI Error:', error);
-        syncStreamState(currentAiContent, currentDebugInfo, '\n抱歉，連線發生錯誤：' + error.message);
+        await syncStreamState(currentAiContent, currentDebugInfo, '\n抱歉，連線發生錯誤：' + error.message, true);
       }
     } finally {
       setIsTyping(false);
-      setLoadingChatId(null);
       abortControllerRef.current = null;
     }
   };
@@ -391,10 +329,7 @@ export default function ChatPage() {
   const handleStop = () => {
     if (abortControllerRef.current) abortControllerRef.current.abort();
     setIsTyping(false);
-    setLoadingChatId(null);
   };
-
-  const currentChat = chats.find(c => c.id === currentChatId);
 
   // ==========================================
   // 渲染
@@ -402,45 +337,7 @@ export default function ChatPage() {
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', width: '100%' }}>
       {/* --- 左側欄 --- */}
-      <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
-        <button className="toggle-sidebar-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-            <line x1="9" y1="3" x2="9" y2="21"></line>
-          </svg>
-        </button>
-
-        <button className="user-profile-btn" onClick={() => navigate('/profile')}>
-          <div className="user-avatar" style={{ backgroundColor: user?.picture ? 'transparent' : 'var(--accent-color)' }}>
-            {user?.picture ? <img src={user.picture} alt="avatar" style={{width: '100%', borderRadius: '50%'}} /> : 'U'}
-          </div>
-          <span className="user-name text-label">{user?.name || '使用者名稱'}</span>
-        </button>
-
-        <button className="new-chat-btn" onClick={handleNewChat}>
-           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-           <span className="text-label">新增對話</span>
-        </button>
-
-        <div className="history-label text-label">對話紀錄</div>
-        <div className="chat-list">
-          {chats.length === 0 ? (
-            <div className="empty-sidebar-msg">尚無對話紀錄</div>
-          ) : (
-            chats.map(chat => (
-              <div key={chat.id} className={`chat-item ${chat.id === currentChatId ? 'active' : ''}`} onClick={() => setCurrentChatId(chat.id)}>
-                <div className="chat-icon">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                </div>
-                <span className="chat-title text-label">{chat.title}</span>
-                <button className="delete-btn" onClick={(e) => handleDeleteChat(e, chat.id)}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </aside>
+      <Sidebar />
 
       {/* --- 主內容區 --- */}
       <main className="main-container">
@@ -449,7 +346,7 @@ export default function ChatPage() {
         </nav>
 
         <div className="chat-window" ref={chatWindowRef}>
-          {!currentChat || currentChat.messages.length === 0 ? (
+          {!currentChat.messages || currentChat.messages.length === 0 ? (
             <div className="placeholder-zone">
               <h3>歡迎來到啡你莫屬</h3>
               <p>

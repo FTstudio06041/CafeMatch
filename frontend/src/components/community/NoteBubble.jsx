@@ -5,9 +5,9 @@ import React from 'react';
  * 顯示使用者頭像 + 截斷至 10 字的文字泡泡
  */
 export default function NoteBubble({ note, onClick }) {
-  // 截斷至 10 字
-  const truncated = note.content.length > 10
-    ? note.content.slice(0, 10) + '...'
+  // 截斷至 20 字
+  const truncated = note.content.length > 20
+    ? note.content.slice(0, 20) + '...'
     : note.content;
 
   return (

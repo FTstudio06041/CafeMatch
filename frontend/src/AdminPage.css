@@ -539,3 +539,34 @@
 @keyframes admin-spin {
     to { transform: rotate(360deg); }
 }
+
+/* --- 系統公告管理 --- */
+.announcement-manage-card {
+    background: var(--admin-card);
+    border-radius: 14px;
+    border: 1px solid var(--admin-border);
+    padding: 24px;
+    margin-bottom: 20px;
+}
+
+.announcement-textarea {
+    width: 100%;
+    padding: 14px;
+    border: 1.5px solid var(--admin-border);
+    border-radius: 12px;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: var(--admin-text);
+    background: #fdfbf8;
+    outline: none;
+    transition: all 0.25s ease;
+    box-sizing: border-box;
+    font-family: inherit;
+    resize: vertical;
+}
+
+.announcement-textarea:focus {
+    border-color: var(--admin-accent);
+    background: #ffffff;
+    box-shadow: 0 0 8px rgba(67, 42, 0, 0.05);
+}

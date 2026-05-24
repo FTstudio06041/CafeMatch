@@ -166,16 +166,16 @@ export default function PostComposer({ onSubmit }) {
               </svg>
               店家
             </button>
-          </div>
 
-          {/* 發布按鈕 */}
-          <button
-            className="post-composer-submit"
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-          >
-            {isSubmitting ? '發布中...' : '發布'}
-          </button>
+            {/* 發布按鈕 */}
+            <button
+              className="post-composer-submit"
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+            >
+              {isSubmitting ? '發布中...' : '發布'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

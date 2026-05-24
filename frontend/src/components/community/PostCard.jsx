@@ -12,7 +12,10 @@ export default function PostCard({ post, currentUserEmail, onDelete }) {
   // 格式化時間
   const formatTime = (timeStr) => {
     if (!timeStr) return '';
-    const d = new Date(timeStr);
+    let utcStr = timeStr.replace(' ', 'T');
+    if (utcStr.length === 16) utcStr += ':00';
+    if (!utcStr.endsWith('Z')) utcStr += 'Z';
+    const d = new Date(utcStr);
     const now = new Date();
     const diff = Math.floor((now - d) / 1000);
     if (diff < 60) return '剛剛';
