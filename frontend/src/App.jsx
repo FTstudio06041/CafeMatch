@@ -60,6 +60,22 @@ function AppContent() {
     }
   };
 
+  // 將後端傳回的 UTC 時間轉換為瀏覽器的本地時區時間
+  const formatLocalTime = (timeStr) => {
+    if (!timeStr) return '';
+    let utcStr = timeStr.replace(' ', 'T');
+    if (utcStr.length === 16) utcStr += ':00';
+    if (!utcStr.endsWith('Z')) utcStr += 'Z';
+    const d = new Date(utcStr);
+    
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+  };
+
   if (isLoading) return <div style={{ padding: '2rem' }}>載入中...</div>;
 
   return (
@@ -197,7 +213,7 @@ function AppContent() {
               {announcement.content}
             </div>
             <div className="announcement-global-footer">
-              <span className="announcement-global-time">發布於 {announcement.created_at}</span>
+              <span className="announcement-global-time">發布於 {formatLocalTime(announcement.created_at)}</span>
               <button className="announcement-global-btn" onClick={handleCloseAnnouncement}>
                 我知道了
               </button>
