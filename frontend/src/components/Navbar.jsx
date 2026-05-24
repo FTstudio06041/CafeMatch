@@ -12,6 +12,7 @@ export default function Navbar() {
 
   const navItems = [
     { path: '/chat', label: '對話' },
+    { path: '/community', label: '社群' },
     { path: '/explore', label: '探索' },
     { path: '/quiz', label: '測驗' }
   ];

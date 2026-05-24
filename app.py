@@ -203,6 +203,46 @@ class ChatFeedback(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 # ==========================================
+# 社群功能：資料表模型
+# ==========================================
+
+class CommunityPost(db.Model):
+    """社群正常貼文"""
+    __tablename__ = 'community_posts'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    cafe_id = db.Column(db.Integer, nullable=True)
+    content = db.Column(db.Text, nullable=False)
+    image = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class CommunityNote(db.Model):
+    """社群便利貼"""
+    __tablename__ = 'community_notes'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    content = db.Column(db.String(100), nullable=False)
+    color_index = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class CommunityLike(db.Model):
+    """社群愛心（便利貼用）"""
+    __tablename__ = 'community_likes'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    note_id = db.Column(db.Integer, db.ForeignKey('community_notes.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class CommunityComment(db.Model):
+    """社群留言（便利貼用）"""
+    __tablename__ = 'community_comments'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    note_id = db.Column(db.Integer, db.ForeignKey('community_notes.id'), nullable=False)
+    content = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+# ==========================================
 # 新增：API 接口
 # ==========================================
 
@@ -1121,6 +1161,411 @@ def chat_feedback():
     except Exception as e:
         db.session.rollback()
         return jsonify({"success": False, "error": str(e)}), 500
+
+# ==========================================
+# 社群功能：API 路由
+# ==========================================
+
+# --- 便利貼 API ---
+
+@app.route('/api/community/notes', methods=['GET'])
+def community_get_notes():
+    """取得所有便利貼（不需登入即可查看）"""
+    try:
+        notes = CommunityNote.query.order_by(CommunityNote.created_at.desc()).all()
+
+        # 檢查當前使用者是否已登入（用於判斷 is_liked）
+        current_user = None
+        user_email = session.get('user_email')
+        if user_email:
+            current_user = User.query.filter_by(email=user_email).first()
+
+        result = []
+        for note in notes:
+            # 查詢作者資訊
+            author = User.query.get(note.user_id)
+            # 計算愛心數與留言數
+            like_count = CommunityLike.query.filter_by(note_id=note.id).count()
+            comment_count = CommunityComment.query.filter_by(note_id=note.id).count()
+
+            note_data = {
+                'id': note.id,
+                'content': note.content,
+                'color_index': note.color_index,
+                'created_at': note.created_at.strftime('%Y-%m-%d %H:%M') if note.created_at else '',
+                'user_name': author.name if author else '匿名',
+                'user_picture': author.picture if author else '',
+                'user_email': author.email if author else '',
+                'like_count': like_count,
+                'comment_count': comment_count
+            }
+
+            # 已登入使用者額外回傳 is_liked
+            if current_user:
+                existing_like = CommunityLike.query.filter_by(
+                    user_id=current_user.id, note_id=note.id
+                ).first()
+                note_data['is_liked'] = existing_like is not None
+            else:
+                note_data['is_liked'] = False
+
+            result.append(note_data)
+
+        return jsonify({'success': True, 'notes': result})
+
+    except Exception as e:
+        print(f'取得便利貼錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/community/notes', methods=['POST'])
+def community_create_note():
+    """新增便利貼（需登入）"""
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({'success': False, 'message': '未登入'}), 401
+
+    user = User.query.filter_by(email=user_email).first()
+    if not user:
+        return jsonify({'success': False, 'message': '使用者不存在'}), 404
+
+    try:
+        data = request.json
+        content = data.get('content', '').strip()
+        color_index = data.get('color_index', 0)
+
+        if not content:
+            return jsonify({'success': False, 'message': '內容不可為空'}), 400
+        if len(content) > 100:
+            return jsonify({'success': False, 'message': '內容不可超過 100 字'}), 400
+
+        # 檢查該使用者是否已有便利貼
+        existing_note = CommunityNote.query.filter_by(user_id=user.id).first()
+        if existing_note:
+            existing_note.content = content
+            existing_note.color_index = color_index
+            existing_note.created_at = datetime.utcnow()
+            note = existing_note
+        else:
+            note = CommunityNote(
+                user_id=user.id,
+                content=content,
+                color_index=color_index
+            )
+            db.session.add(note)
+        
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'note': {
+                'id': note.id,
+                'content': note.content,
+                'color_index': note.color_index,
+                'created_at': note.created_at.strftime('%Y-%m-%d %H:%M') if note.created_at else '',
+                'user_name': user.name,
+                'user_picture': user.picture or '',
+                'like_count': 0,
+                'comment_count': 0,
+                'is_liked': False
+            }
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f'新增便利貼錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/community/notes/<int:note_id>', methods=['DELETE'])
+def community_delete_note(note_id):
+    """刪除便利貼（需登入，僅限本人）"""
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({'success': False, 'message': '未登入'}), 401
+
+    user = User.query.filter_by(email=user_email).first()
+    if not user:
+        return jsonify({'success': False, 'message': '使用者不存在'}), 404
+
+    try:
+        note = CommunityNote.query.get(note_id)
+        if not note:
+            return jsonify({'success': False, 'message': '便利貼不存在'}), 404
+        if note.user_id != user.id:
+            return jsonify({'success': False, 'message': '只能刪除自己的便利貼'}), 403
+
+        # 同時刪除相關的愛心與留言
+        CommunityLike.query.filter_by(note_id=note_id).delete()
+        CommunityComment.query.filter_by(note_id=note_id).delete()
+        db.session.delete(note)
+        db.session.commit()
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.session.rollback()
+        print(f'刪除便利貼錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# --- 愛心 API ---
+
+@app.route('/api/community/notes/<int:note_id>/like', methods=['POST'])
+def community_toggle_like(note_id):
+    """按愛心 / 取消愛心（需登入，Toggle 機制）"""
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({'success': False, 'message': '未登入'}), 401
+
+    user = User.query.filter_by(email=user_email).first()
+    if not user:
+        return jsonify({'success': False, 'message': '使用者不存在'}), 404
+
+    try:
+        note = CommunityNote.query.get(note_id)
+        if not note:
+            return jsonify({'success': False, 'message': '便利貼不存在'}), 404
+
+        existing_like = CommunityLike.query.filter_by(
+            user_id=user.id, note_id=note_id
+        ).first()
+
+        if existing_like:
+            # 已按過 → 取消愛心
+            db.session.delete(existing_like)
+            is_liked = False
+        else:
+            # 未按過 → 新增愛心
+            new_like = CommunityLike(user_id=user.id, note_id=note_id)
+            db.session.add(new_like)
+            is_liked = True
+
+        db.session.commit()
+        like_count = CommunityLike.query.filter_by(note_id=note_id).count()
+
+        return jsonify({
+            'success': True,
+            'is_liked': is_liked,
+            'like_count': like_count
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f'愛心操作錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# --- 留言 API ---
+
+@app.route('/api/community/notes/<int:note_id>/comments', methods=['GET'])
+def community_get_comments(note_id):
+    """取得便利貼的留言（不需登入即可查看）"""
+    try:
+        note = CommunityNote.query.get(note_id)
+        if not note:
+            return jsonify({'success': False, 'message': '便利貼不存在'}), 404
+
+        comments = CommunityComment.query.filter_by(note_id=note_id)\
+            .order_by(CommunityComment.created_at.asc()).all()
+
+        result = []
+        for c in comments:
+            author = User.query.get(c.user_id)
+            result.append({
+                'id': c.id,
+                'content': c.content,
+                'user_name': author.name if author else '匿名',
+                'user_picture': author.picture if author else '',
+                'created_at': c.created_at.strftime('%Y-%m-%d %H:%M') if c.created_at else ''
+            })
+
+        return jsonify({'success': True, 'comments': result})
+
+    except Exception as e:
+        print(f'取得留言錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/community/notes/<int:note_id>/comments', methods=['POST'])
+def community_create_comment(note_id):
+    """新增便利貼留言（需登入）"""
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({'success': False, 'message': '未登入'}), 401
+
+    user = User.query.filter_by(email=user_email).first()
+    if not user:
+        return jsonify({'success': False, 'message': '使用者不存在'}), 404
+
+    try:
+        note = CommunityNote.query.get(note_id)
+        if not note:
+            return jsonify({'success': False, 'message': '便利貼不存在'}), 404
+
+        data = request.json
+        content = data.get('content', '').strip()
+
+        if not content:
+            return jsonify({'success': False, 'message': '留言內容不可為空'}), 400
+        if len(content) > 200:
+            return jsonify({'success': False, 'message': '留言不可超過 200 字'}), 400
+
+        comment = CommunityComment(
+            user_id=user.id,
+            note_id=note_id,
+            content=content
+        )
+        db.session.add(comment)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'comment': {
+                'id': comment.id,
+                'content': comment.content,
+                'user_name': user.name,
+                'user_picture': user.picture or '',
+                'created_at': comment.created_at.strftime('%Y-%m-%d %H:%M') if comment.created_at else ''
+            }
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f'新增留言錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+# --- 貼文 API ---
+
+@app.route('/api/community/posts', methods=['GET'])
+def community_get_posts():
+    """取得貼文列表（不需登入即可查看，支援分頁）"""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+
+        pagination = CommunityPost.query.order_by(CommunityPost.created_at.desc())\
+            .paginate(page=page, per_page=per_page, error_out=False)
+
+        result = []
+        for post in pagination.items:
+            author = User.query.get(post.user_id)
+
+            # 若有關聯店家，從 Cafes 表查名稱
+            cafe_name = None
+            if post.cafe_id:
+                cafe = Cafes.query.get(post.cafe_id)
+                cafe_name = cafe.name if cafe else None
+
+            result.append({
+                'id': post.id,
+                'content': post.content,
+                'image': post.image or '',
+                'cafe_id': post.cafe_id,
+                'cafe_name': cafe_name or '',
+                'user_name': author.name if author else '匿名',
+                'user_picture': author.picture if author else '',
+                'user_email': author.email if author else '',
+                'created_at': post.created_at.strftime('%Y-%m-%d %H:%M') if post.created_at else ''
+            })
+
+        return jsonify({
+            'success': True,
+            'posts': result,
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': pagination.page
+        })
+
+    except Exception as e:
+        print(f'取得貼文錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/community/posts', methods=['POST'])
+def community_create_post():
+    """新增貼文（需登入）"""
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({'success': False, 'message': '未登入'}), 401
+
+    user = User.query.filter_by(email=user_email).first()
+    if not user:
+        return jsonify({'success': False, 'message': '使用者不存在'}), 404
+
+    try:
+        data = request.json
+        content = data.get('content', '').strip()
+        image = data.get('image')  # Base64 圖片，選填
+        cafe_id = data.get('cafe_id')  # 關聯店家，選填
+
+        if not content:
+            return jsonify({'success': False, 'message': '貼文內容不可為空'}), 400
+
+        post = CommunityPost(
+            user_id=user.id,
+            content=content,
+            image=image,
+            cafe_id=cafe_id
+        )
+        db.session.add(post)
+        db.session.commit()
+
+        # 查詢關聯店家名稱
+        cafe_name = ''
+        if cafe_id:
+            cafe = Cafes.query.get(cafe_id)
+            cafe_name = cafe.name if cafe else ''
+
+        return jsonify({
+            'success': True,
+            'post': {
+                'id': post.id,
+                'content': post.content,
+                'image': post.image or '',
+                'cafe_id': post.cafe_id,
+                'cafe_name': cafe_name,
+                'user_name': user.name,
+                'user_picture': user.picture or '',
+                'created_at': post.created_at.strftime('%Y-%m-%d %H:%M') if post.created_at else ''
+            }
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        print(f'新增貼文錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@app.route('/api/community/posts/<int:post_id>', methods=['DELETE'])
+def community_delete_post(post_id):
+    """刪除貼文（需登入，僅限本人）"""
+    user_email = session.get('user_email')
+    if not user_email:
+        return jsonify({'success': False, 'message': '未登入'}), 401
+
+    user = User.query.filter_by(email=user_email).first()
+    if not user:
+        return jsonify({'success': False, 'message': '使用者不存在'}), 404
+
+    try:
+        post = CommunityPost.query.get(post_id)
+        if not post:
+            return jsonify({'success': False, 'message': '貼文不存在'}), 404
+        if post.user_id != user.id:
+            return jsonify({'success': False, 'message': '只能刪除自己的貼文'}), 403
+
+        db.session.delete(post)
+        db.session.commit()
+
+        return jsonify({'success': True})
+
+    except Exception as e:
+        db.session.rollback()
+        print(f'刪除貼文錯誤：{e}')
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 
 @app.route('/api/admin/feedbacks', methods=['GET'])
 def get_feedbacks():

@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthContext, AuthProvider } from './context/AuthContext';
 import LandingPage from './pages/LandingPage';
 import ChatPage from './pages/ChatPage';
+import CommunityPage from './pages/CommunityPage'; // 引入社群頁
 import ExplorePage from './pages/ExplorePage';
 import ProfilePage from './pages/ProfilePage';
 import QuizPage from './pages/QuizPage'; // 引入測驗頁
@@ -18,6 +19,7 @@ function AppContent() {
       <Routes>
         <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/chat" />} />
         <Route path="/chat" element={user ? <ChatPage /> : <Navigate to="/" />} />
+        <Route path="/community" element={user ? <CommunityPage /> : <Navigate to="/" />} />
         <Route path="/explore" element={user ? <ExplorePage /> : <Navigate to="/" />} />
         <Route path="/profile" element={user ? <ProfilePage /> : <Navigate to="/" />} />
         <Route path="/quiz" element={user ? <QuizPage /> : <Navigate to="/" />} />
