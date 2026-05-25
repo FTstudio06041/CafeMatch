@@ -5,7 +5,7 @@ import PostCard from './PostCard';
  * 貼文動態牆
  * 瀑布流排版渲染 PostCard 列表
  */
-export default function PostFeed({ posts, currentUserEmail, onDelete }) {
+export default function PostFeed({ posts, currentUserEmail, onDelete, onLike, onComment, onRepost, fetchComments }) {
   if (!posts || posts.length === 0) {
     return (
       <div className="post-feed">
@@ -26,6 +26,10 @@ export default function PostFeed({ posts, currentUserEmail, onDelete }) {
             post={post}
             currentUserEmail={currentUserEmail}
             onDelete={onDelete}
+            onLike={() => onLike && onLike(post.id)}
+            onComment={(content) => onComment && onComment(post.id, content)}
+            onRepost={(content) => onRepost && onRepost(post.id, content)}
+            fetchComments={fetchComments}
           />
         ))}
       </div>

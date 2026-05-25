@@ -34,6 +34,10 @@ export default function CommunityPage() {
     posts,
     handleCreatePost,
     handleDeletePost,
+    handleLikePost,
+    handleCommentPost,
+    handleRepostPost,
+    fetchPostComments
   } = useCommunityPosts();
 
   // =========================================
@@ -70,6 +74,10 @@ export default function CommunityPage() {
             posts={posts}
             currentUserEmail={user?.email}
             onDelete={handleDeletePost}
+            onLike={handleLikePost}
+            onComment={handleCommentPost}
+            onRepost={handleRepostPost}
+            fetchComments={fetchPostComments}
           />
         </div>
       </main>

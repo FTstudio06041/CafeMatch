@@ -8,6 +8,7 @@ import ExplorePage from './pages/ExplorePage';
 import ProfilePage from './pages/ProfilePage';
 import QuizPage from './pages/QuizPage'; // 引入測驗頁
 import AdminPage from './pages/AdminPage'; // 引入管理員頁
+import PostViewPage from './pages/PostViewPage'; // 獨立貼文頁面
 
 function AppContent() {
   const { user, isLoading, API_BASE_URL } = useContext(AuthContext);
@@ -82,6 +83,7 @@ function AppContent() {
     <Router>
       <Routes>
         <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/chat" />} />
+        <Route path="/post/:id" element={<PostViewPage />} />
         <Route path="/chat" element={user ? <ChatPage /> : <Navigate to="/" />} />
         <Route path="/community" element={user ? <CommunityPage /> : <Navigate to="/" />} />
         <Route path="/explore" element={user ? <ExplorePage /> : <Navigate to="/" />} />

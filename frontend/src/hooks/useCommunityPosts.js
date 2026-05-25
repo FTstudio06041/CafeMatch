@@ -60,10 +60,96 @@ export default function useCommunityPosts() {
     }
   };
 
+  const handleLikePost = async (postId) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/community/posts/${postId}/like`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (res.ok) {
+        // 可以考慮直接更新 state，但簡單做法是重新 fetch
+        await fetchPosts();
+      }
+    } catch (err) {
+      console.error('按讚失敗:', err);
+    }
+  };
+
+  const handleCommentPost = async (postId, content) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/community/posts/${postId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ content }),
+      });
+      if (res.ok) {
+        await fetchPosts();
+        return true;
+      }
+    } catch (err) {
+      console.error('留言失敗:', err);
+    }
+    return false;
+  };
+
+  const handleRepostPost = async (postId, content) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/community/posts/${postId}/repost`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ content }),
+      });
+      if (res.ok) {
+        await fetchPosts();
+        return true;
+      }
+    } catch (err) {
+      console.error('轉發失敗:', err);
+    }
+    return false;
+  };
+
+  const fetchPostComments = async (postId) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/community/posts/${postId}/comments`, {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.comments || [];
+      }
+    } catch (err) {
+      console.error('取得留言失敗:', err);
+    }
+    return [];
+  };
+
+  const fetchSinglePost = async (postId) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/community/posts/${postId}`, {
+        credentials: 'include',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.post;
+      }
+    } catch (err) {
+      console.error('取得單一貼文失敗:', err);
+    }
+    return null;
+  };
+
   return {
     posts,
     fetchPosts,
     handleCreatePost,
     handleDeletePost,
+    handleLikePost,
+    handleCommentPost,
+    handleRepostPost,
+    fetchPostComments,
+    fetchSinglePost
   };
 }
