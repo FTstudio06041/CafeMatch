@@ -14,7 +14,7 @@ export default function NoteStrip({ notes, currentUser, onNoteClick, onEditClick
   return (
     <div className="note-strip">
       {/* 當前使用者的泡泡 */}
-      {currentUser && (
+      {currentUser && !currentUser.isGuest && (
         <div className="note-bubble current-user-bubble" onClick={() => onEditClick(currentUserNote)}>
           <div className="note-bubble-avatar">
             {currentUser.picture ? (

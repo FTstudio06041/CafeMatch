@@ -13,7 +13,7 @@ const QUIZ_RESULT_CACHE_KEY = 'quizResultCache';
 // QuizPage 主元件
 // =============================================
 export default function QuizPage() {
-  const { user, API_BASE_URL } = useContext(AuthContext);
+  const { user, API_BASE_URL, login } = useContext(AuthContext);
   const navigate = useNavigate();
 
   // --- 測驗核心狀態 ---
@@ -171,6 +171,11 @@ export default function QuizPage() {
 
   // 帶著結果去諮詢 AI
   const handleConsultAI = () => {
+    if (user?.isGuest) {
+      alert("請先登入才能將測驗結果帶去詢問 AI 喔！");
+      login();
+      return;
+    }
     if (quizResult) {
       // 將完整測驗結果存入 localStorage，供 ChatPage 讀取
       const quizData = {

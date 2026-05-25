@@ -57,7 +57,7 @@ export default function CommunityPage() {
         />
 
         {/* 發文區 */}
-        <PostComposer onSubmit={handleCreatePost} />
+        {!user?.isGuest && <PostComposer onSubmit={handleCreatePost} />}
 
         {/* 貼文動態牆 */}
         <PostFeed

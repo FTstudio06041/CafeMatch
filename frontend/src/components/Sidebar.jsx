@@ -22,7 +22,7 @@ export default function Sidebar() {
 
   // 取得對話紀錄清單
   const fetchSessions = async () => {
-    if (!user) return;
+    if (!user || user.isGuest) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/chat/sessions`, {
         credentials: 'include'

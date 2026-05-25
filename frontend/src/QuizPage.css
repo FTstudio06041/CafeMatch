@@ -842,6 +842,8 @@
     width: 100%;
     max-width: 280px;
     height: auto;
+    aspect-ratio: 1 / 1;
+    flex-shrink: 0;
 }
 
 /* 雷達圖數據多角形動畫 */

@@ -4,7 +4,7 @@ import Navbar from '../components/Navbar';
 
 export default function MainLayout({ children }) {
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', width: '100%' }}>
+    <div style={{ display: 'flex', height: '100dvh', overflow: 'hidden', width: '100%' }}>
       <Sidebar />
       <main className="main-container">
         <nav className="navbar">

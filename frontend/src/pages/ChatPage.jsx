@@ -83,6 +83,10 @@ export default function ChatPage() {
     if (!urlId || urlId === 'new') {
       setCurrentChat({ id: null, title: '新對話', messages: [] });
     } else {
+      if (user?.isGuest) {
+        navigate('/chat?id=new', { replace: true });
+        return;
+      }
       // 載入資料庫對話
       fetch(`${API_BASE_URL}/api/chat/sessions/${urlId}`, { credentials: 'include' })
         .then(res => res.json())
@@ -100,6 +104,7 @@ export default function ChatPage() {
 
   // 保存對話到後端
   const saveSessionToBackend = async (chatState) => {
+    if (user?.isGuest) return;
     try {
       const payload = {
         title: chatState.title,
@@ -133,6 +138,10 @@ export default function ChatPage() {
   // 反饋與重試邏輯
   // ==========================================
   const handleFeedback = async (msgIdx, type) => {
+    if (user?.isGuest) {
+      alert("訪客模式無法提供回饋，登入後就能完整體驗喔！");
+      return;
+    }
     const msg = currentChat.messages[msgIdx];
     const userMsg = currentChat.messages[msgIdx - 1]?.content || '';
     if (!msg) return;

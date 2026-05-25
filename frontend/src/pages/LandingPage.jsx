@@ -6,7 +6,7 @@ import CoffeeAskBar from '../components/AskBar';
 import LiquidSurface from '../components/LiquidSurface';
 
 export default function LandingPage() {
-  const { login } = useContext(AuthContext);
+  const { login, loginAsGuest } = useContext(AuthContext);
 
   return (
     <div className="landing-body">
@@ -25,6 +25,7 @@ export default function LandingPage() {
         </div>
 
         <div className="header-actions">
+          <button className="btn-text" onClick={loginAsGuest}>以訪客繼續</button>
           <button className="btn-text" onClick={login}>註冊</button>
           <button className="btn-text" onClick={login}>登入</button>
           <button className="btn-primary-sm" onClick={login}>開始使用</button>
@@ -33,7 +34,7 @@ export default function LandingPage() {
 
       <div className="landing-container">
         <div className="intro-section">
-          <h1 className="main-title">找到你的 夢中情店</h1>
+          <h1 className="main-title">找到你的<br />夢中情店</h1>
           <CoffeeAskBar />
           <div className="glow-wrapper">
             <button className="btn-google-login" onClick={login}>
@@ -44,6 +45,14 @@ export default function LandingPage() {
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
               </svg>
               使用 Google 帳號登入
+            </button>
+          </div>
+          <div style={{ marginTop: '20px', textAlign: 'center' }}>
+            <button 
+              onClick={loginAsGuest} 
+              style={{ background: 'none', border: 'none', color: '#888', textDecoration: 'none', fontWeight: 600, cursor: 'pointer', fontSize: '0.9rem', padding: 0 }}
+            >
+              以訪客身分繼續
             </button>
           </div>
         </div>

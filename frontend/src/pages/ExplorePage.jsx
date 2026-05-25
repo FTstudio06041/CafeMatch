@@ -63,6 +63,10 @@ export default function ExplorePage() {
   // 3. 點擊收藏/去過的 API 呼叫
   const toggleAction = async (type) => {
     if (!selectedShop) return;
+    if (user?.isGuest) {
+      alert("請先登入才能使用此功能！");
+      return;
+    }
 
     // 提前鎖定當前操作的店家 ID，避免狀態在非同步過程中錯亂
     const targetId = selectedShop.id;

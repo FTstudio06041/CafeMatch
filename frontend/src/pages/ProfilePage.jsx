@@ -198,11 +198,13 @@ export default function ProfilePage() {
             </div>
             <div className="header-info">
               <div className="header-name">{user?.name}</div>
-              <div className="header-email">{user?.email || '未綁定 Email'}</div>
+              <div className="header-email">{user?.isGuest ? '訪客帳號' : (user?.email || '未綁定 Email')}</div>
               <div className="profile-actions">
-                <button className="btn-edit-profile" onClick={() => setShowEditModal(true)}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> 編輯個人資料
-                </button>
+                {!user?.isGuest && (
+                  <button className="btn-edit-profile" onClick={() => setShowEditModal(true)}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> 編輯個人資料
+                  </button>
+                )}
                 <button className="btn-logout" onClick={logout}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg> 登出
                 </button>
@@ -213,7 +215,9 @@ export default function ProfilePage() {
                 )}
               </div>
               <div style={{ marginTop: '10px' }}>
-                <a href="#" onClick={(e) => { e.preventDefault(); setShowDeleteModal(true); }} style={{ color: '#bbb', fontSize: '0.8rem', textDecoration: 'none' }}>註銷帳號 (刪除所有資料)</a>
+                {!user?.isGuest && (
+                  <a href="#" onClick={(e) => { e.preventDefault(); setShowDeleteModal(true); }} style={{ color: '#bbb', fontSize: '0.8rem', textDecoration: 'none' }}>註銷帳號 (刪除所有資料)</a>
+                )}
               </div>
             </div>
           </div>

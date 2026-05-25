@@ -47,7 +47,12 @@ function getPolygonPoints(radiusFn) {
  * @param {Object} props.scores - 五維分數物件 { work, env, social, taste, cp }
  */
 export default function RadarChart({ scores }) {
-  const maxScore = Math.max(...Object.values(scores), 1);
+  // 確保沒有負分導致雷達圖破版
+  const safeScores = {};
+  for (const key in scores) {
+    safeScores[key] = Math.max(0, scores[key] || 0);
+  }
+  const maxScore = Math.max(...Object.values(safeScores), 1);
 
   // 背景同心五角形
   const gridPolygons = Array.from({ length: GRID_LEVELS }, (_, level) => {
@@ -57,7 +62,7 @@ export default function RadarChart({ scores }) {
 
   // 資料多角形
   const dataPoints = getPolygonPoints((i) => {
-    const score = scores[DIMENSIONS[i].key] || 0;
+    const score = safeScores[DIMENSIONS[i].key] || 0;
     return (score / maxScore) * MAX_RADIUS;
   });
 
@@ -87,7 +92,7 @@ export default function RadarChart({ scores }) {
 
         {/* 資料頂點圓點 */}
         {DIMENSIONS.map((dim, i) => {
-          const score = scores[dim.key] || 0;
+          const score = safeScores[dim.key] || 0;
           const r = (score / maxScore) * MAX_RADIUS;
           const p = getPoint(i, r);
           return <circle key={`dot-${i}`} cx={p.x} cy={p.y} className="radar-dot" />;
@@ -105,7 +110,7 @@ export default function RadarChart({ scores }) {
 
         {/* 分數標籤 */}
         {DIMENSIONS.map((dim, i) => {
-          const score = scores[dim.key] || 0;
+          const score = safeScores[dim.key] || 0;
           const r = (score / maxScore) * MAX_RADIUS;
           const p = getPoint(i, Math.max(r + 20, 25));
           return (

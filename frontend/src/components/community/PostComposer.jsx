@@ -52,6 +52,10 @@ export default function PostComposer({ onSubmit }) {
 
   // 發布貼文
   const handleSubmit = async () => {
+    if (user?.isGuest) {
+      alert("請先登入才能發布貼文喔！");
+      return;
+    }
     if (!content.trim() || isSubmitting) return;
     setIsSubmitting(true);
     try {

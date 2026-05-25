@@ -1136,15 +1136,9 @@ def quiz_get_questions():
 
 @app.route('/api/quiz/submit', methods=['POST'])
 def quiz_submit():
-    """提交測驗答案並取得結果（需登入）"""
-    # 檢查登入狀態
+    """提交測驗答案並取得結果（支援訪客，未登入不存入資料庫）"""
     user_email = session.get('user_email')
-    if not user_email:
-        return jsonify({'error': '請先登入'}), 401
-
-    user = User.query.filter_by(email=user_email).first()
-    if not user:
-        return jsonify({'error': '使用者不存在'}), 404
+    user = User.query.filter_by(email=user_email).first() if user_email else None
 
     try:
         data = request.json
@@ -1177,19 +1171,22 @@ def quiz_submit():
         # 查詢完整結果描述
         result_type = QuizResultType.query.filter_by(type_key=result_type_key).first()
 
-        # 存入使用者測驗紀錄
-        record = UserQuizResult(
-            user_id=user.id,
-            result_type_key=result_type_key,
-            score_work=scores['work'],
-            score_env=scores['env'],
-            score_social=scores['social'],
-            score_taste=scores['taste'],
-            score_cp=scores['cp'],
-            filter_tags=','.join(filter_tags) if filter_tags else ''
-        )
-        db.session.add(record)
-        db.session.commit()
+        # 存入使用者測驗紀錄（僅限登入使用者）
+        record_id = None
+        if user:
+            record = UserQuizResult(
+                user_id=user.id,
+                result_type_key=result_type_key,
+                score_work=scores['work'],
+                score_env=scores['env'],
+                score_social=scores['social'],
+                score_taste=scores['taste'],
+                score_cp=scores['cp'],
+                filter_tags=','.join(filter_tags) if filter_tags else ''
+            )
+            db.session.add(record)
+            db.session.commit()
+            record_id = record.id
 
         # 組裝回傳結果
         result_data = None
@@ -1206,7 +1203,7 @@ def quiz_submit():
             'result': result_data,
             'scores': scores,
             'filters': filter_tags,
-            'record_id': record.id
+            'record_id': record_id
         })
 
     except Exception as e:

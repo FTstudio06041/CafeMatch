@@ -8,8 +8,8 @@ export default function CafeCard({ cafe }) {
   const [isVisited, setIsVisited] = useState(cafe.is_visited);
 
   const toggleState = async (type) => {
-    if (!user) {
-      alert("請先登入！");
+    if (!user || user.isGuest) {
+      alert("請先登入才能使用此功能！");
       return;
     }
 

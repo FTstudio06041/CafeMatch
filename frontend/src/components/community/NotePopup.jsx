@@ -34,7 +34,10 @@ export default function NotePopup({ note, onClose, onDelete, onLikeUpdate }) {
 
   // 按愛心 / 取消愛心
   const handleLike = async () => {
-    if (!user) return;
+    if (!user || user.isGuest) {
+      alert("請先登入才能按讚喔！");
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE_URL}/api/community/notes/${note.id}/like`, {
         method: 'POST',
@@ -138,7 +141,6 @@ export default function NotePopup({ note, onClose, onDelete, onLikeUpdate }) {
           <button
             className={`note-popup-like-btn ${isLiked ? 'liked' : ''}`}
             onClick={handleLike}
-            disabled={!user}
           >
             <svg className="like-icon" width="18" height="18" viewBox="0 0 24 24"
               fill={isLiked ? '#e74c6f' : 'none'}
@@ -192,7 +194,7 @@ export default function NotePopup({ note, onClose, onDelete, onLikeUpdate }) {
         </div>
 
         {/* 留言輸入框 */}
-        {user && (
+        {user && !user.isGuest && (
           <div className="note-popup-comment-input">
             <input
               type="text"
