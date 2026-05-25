@@ -2,9 +2,8 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import Cropper from 'react-cropper';
+import MainLayout from '../layouts/MainLayout';
 import '../ProfilePage.css';
-import Navbar from '../components/Navbar';
-import Sidebar from '../components/Sidebar';
 
 export default function ProfilePage() {
   const { user, API_BASE_URL, logout } = useContext(AuthContext);
@@ -14,6 +13,9 @@ export default function ProfilePage() {
   const [favShops, setFavShops] = useState([]);
   const [visitedShops, setVisitedShops] = useState([]);
   const [quizHistory, setQuizHistory] = useState([]);
+
+  // --- Tab 狀態 ---
+  const [activeTab, setActiveTab] = useState('favorites'); // 'favorites' | 'visited' | 'quiz'
 
   // --- Modal 狀態 ---
   const [showEditModal, setShowEditModal] = useState(false);
@@ -187,16 +189,7 @@ export default function ProfilePage() {
   // 渲染
   // ==========================================
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', width: '100%' }}>
-      {/* --- 左側欄 --- */}
-      <Sidebar />
-
-      {/* --- 主內容區 --- */}
-      <main className="main-container">
-        <nav className="navbar">
-          <Navbar />
-        </nav>
-
+    <MainLayout>
         <div className="profile-content">
           {/* 使用者資訊卡片 */}
           <div className="profile-header-card">
@@ -225,61 +218,70 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* 收藏網格 */}
-          <div className="section-header">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
-            <div className="section-title">我的收藏</div>
-          </div>
-          <div className="cards-grid">
-            {favShops.length === 0 ? <div className="empty-state">尚無紀錄</div> : 
-              favShops.map(shop => (
-                <div key={shop.id} className="mini-shop-card" onClick={() => navigate(`/explore?open_shop_id=${shop.id}`)}>
-                  <div className="mini-img" style={{ backgroundColor: shop.color }}></div>
-                  <div className="mini-info">
-                    <div className="mini-name">{shop.name}</div><div className="mini-tag">{shop.tags}</div>
-                  </div>
-                  <span className="mini-badge badge-fav">已收藏</span>
-                </div>
-              ))}
+          {/* --- Tabs --- */}
+          <div className="profile-tabs">
+            <button className={`profile-tab ${activeTab === 'favorites' ? 'active' : ''}`} onClick={() => setActiveTab('favorites')}>
+              收藏店家
+            </button>
+            <button className={`profile-tab ${activeTab === 'visited' ? 'active' : ''}`} onClick={() => setActiveTab('visited')}>
+              已去過的店
+            </button>
+            <button className={`profile-tab ${activeTab === 'quiz' ? 'active' : ''}`} onClick={() => setActiveTab('quiz')}>
+              測驗紀錄
+            </button>
           </div>
 
-          {/* 已去過網格 */}
-          <div className="section-header">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-            <div className="section-title">已去過的店</div>
-          </div>
-          <div className="cards-grid">
-            {visitedShops.length === 0 ? <div className="empty-state">尚無紀錄</div> : 
-              visitedShops.map(shop => (
-                <div key={shop.id} className="mini-shop-card" onClick={() => navigate(`/explore?open_shop_id=${shop.id}`)}>
-                  <div className="mini-img" style={{ backgroundColor: shop.color }}></div>
-                  <div className="mini-info">
-                    <div className="mini-name">{shop.name}</div><div className="mini-tag">{shop.tags}</div>
-                  </div>
-                  <span className="mini-badge badge-visited">已去過</span>
-                </div>
-              ))}
-          </div>
+          <div className="profile-tab-content">
+            {/* 收藏網格 */}
+            {activeTab === 'favorites' && (
+              <div className="cards-grid">
+                {favShops.length === 0 ? <div className="empty-state">尚無紀錄</div> : 
+                  favShops.map(shop => (
+                    <div key={shop.id} className="mini-shop-card" onClick={() => navigate(`/explore?open_shop_id=${shop.id}`)}>
+                      <div className="mini-img" style={{ backgroundColor: shop.color }}></div>
+                      <div className="mini-info">
+                        <div className="mini-name">{shop.name}</div><div className="mini-tag">{shop.tags}</div>
+                      </div>
+                      <span className="mini-badge badge-fav">已收藏</span>
+                    </div>
+                  ))}
+              </div>
+            )}
 
-          {/* 測驗紀錄 */}
-          <div className="section-header">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-            <div className="section-title">測驗紀錄</div>
-          </div>
-          <div className="cards-grid">
-             {quizHistory.length === 0 ? <div className="empty-state">尚無測驗紀錄</div> : 
-               quizHistory.map((item, i) => (
-                 <div key={i} className="result-card">
-                   <div className="card-header"><span className="card-date">{item.date}</span></div>
-                   <div className="card-coffee-name">{item.resultName}</div>
-                   <div className="card-desc">{item.resultDesc}</div>
-                   <button className="use-context-btn" onClick={() => handleConsultAI(item)}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                      以此結果諮詢 AI
-                   </button>
-                 </div>
-               ))
-             }
+            {/* 已去過網格 */}
+            {activeTab === 'visited' && (
+              <div className="cards-grid">
+                {visitedShops.length === 0 ? <div className="empty-state">尚無紀錄</div> : 
+                  visitedShops.map(shop => (
+                    <div key={shop.id} className="mini-shop-card" onClick={() => navigate(`/explore?open_shop_id=${shop.id}`)}>
+                      <div className="mini-img" style={{ backgroundColor: shop.color }}></div>
+                      <div className="mini-info">
+                        <div className="mini-name">{shop.name}</div><div className="mini-tag">{shop.tags}</div>
+                      </div>
+                      <span className="mini-badge badge-visited">已去過</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {/* 測驗紀錄 */}
+            {activeTab === 'quiz' && (
+              <div className="cards-grid">
+                 {quizHistory.length === 0 ? <div className="empty-state">尚無測驗紀錄</div> : 
+                   quizHistory.map((item, i) => (
+                     <div key={i} className="result-card">
+                       <div className="card-header"><span className="card-date">{item.date}</span></div>
+                       <div className="card-coffee-name">{item.resultName}</div>
+                       <div className="card-desc">{item.resultDesc}</div>
+                       <button className="use-context-btn" onClick={() => handleConsultAI(item)}>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                          以此結果諮詢 AI
+                       </button>
+                     </div>
+                   ))
+                 }
+              </div>
+            )}
           </div>
         </div>
 
@@ -352,8 +354,6 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
-
-      </main>
-    </div>
+    </MainLayout>
   );
 }

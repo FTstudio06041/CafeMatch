@@ -7,7 +7,7 @@ export default function Sidebar() {
   const { user, API_BASE_URL } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(window.innerWidth <= 768);
   const [sessions, setSessions] = useState([]);
 
   // Bug 回報狀態
@@ -39,10 +39,22 @@ export default function Sidebar() {
   useEffect(() => {
     fetchSessions();
 
-    // 監聽全局自訂事件，當 ChatPage 更新或新增對話時重新抓取清單
     const handleChatUpdated = () => fetchSessions();
     window.addEventListener('chat-updated', handleChatUpdated);
-    return () => window.removeEventListener('chat-updated', handleChatUpdated);
+    
+    const handleResize = () => {
+      if (window.innerWidth <= 768) {
+        setIsSidebarCollapsed(true);
+      } else {
+        setIsSidebarCollapsed(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('chat-updated', handleChatUpdated);
+      window.removeEventListener('resize', handleResize);
+    };
   }, [user]);
 
   const handleDelete = async (e, id) => {
@@ -97,6 +109,17 @@ export default function Sidebar() {
 
   return (
     <>
+      {/* 行動版專屬的頂部標題列 */}
+      <div className="mobile-topbar">
+        <button className="mobile-toggle-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+          </svg>
+        </button>
+        <span className="mobile-topbar-title">CafeMatch</span>
+      </div>
+
       <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
       <button className="toggle-sidebar-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -126,7 +149,10 @@ export default function Sidebar() {
             <div 
               key={chat.id} 
               className={`chat-item ${chat.id === currentChatId ? 'active' : ''}`} 
-              onClick={() => navigate(`/chat?id=${chat.id}`)}
+              onClick={() => {
+                navigate(`/chat?id=${chat.id}`);
+                if (window.innerWidth <= 768) setIsSidebarCollapsed(true);
+              }}
             >
               <div className="chat-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>

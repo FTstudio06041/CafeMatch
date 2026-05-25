@@ -1,8 +1,7 @@
 import React, { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
+import MainLayout from '../layouts/MainLayout';
 import '../CommunityPage.css';
-import Navbar from '../components/Navbar';
-import Sidebar from '../components/Sidebar';
 import NoteStrip from '../components/community/NoteStrip';
 import NotePopup from '../components/community/NotePopup';
 import NoteComposer from '../components/community/NoteComposer';
@@ -44,43 +43,33 @@ export default function CommunityPage() {
   // 渲染
   // =========================================
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', width: '100%' }}>
-      {/* --- 左側欄 --- */}
-      <Sidebar />
+    <MainLayout>
+      <div className="community-content">
+        {/* 便利貼橫向列 */}
+        <NoteStrip
+          notes={notes}
+          currentUser={user}
+          onNoteClick={(note) => setSelectedNote(note)}
+          onEditClick={(note) => {
+            setEditingNote(note);
+            setShowNoteComposer(true);
+          }}
+        />
 
-      {/* --- 主內容區 --- */}
-      <main className="main-container">
-        <nav className="navbar">
-          <Navbar />
-        </nav>
+        {/* 發文區 */}
+        <PostComposer onSubmit={handleCreatePost} />
 
-        <div className="community-content">
-          {/* 便利貼橫向列 */}
-          <NoteStrip
-            notes={notes}
-            currentUser={user}
-            onNoteClick={(note) => setSelectedNote(note)}
-            onEditClick={(note) => {
-              setEditingNote(note);
-              setShowNoteComposer(true);
-            }}
-          />
-
-          {/* 發文區 */}
-          <PostComposer onSubmit={handleCreatePost} />
-
-          {/* 貼文動態牆 */}
-          <PostFeed
-            posts={posts}
-            currentUserEmail={user?.email}
-            onDelete={handleDeletePost}
-            onLike={handleLikePost}
-            onComment={handleCommentPost}
-            onRepost={handleRepostPost}
-            fetchComments={fetchPostComments}
-          />
-        </div>
-      </main>
+        {/* 貼文動態牆 */}
+        <PostFeed
+          posts={posts}
+          currentUserEmail={user?.email}
+          onDelete={handleDeletePost}
+          onLike={handleLikePost}
+          onComment={handleCommentPost}
+          onRepost={handleRepostPost}
+          fetchComments={fetchPostComments}
+        />
+      </div>
 
       {/* --- 彈窗層 --- */}
       {/* 便利貼小視窗 */}
@@ -105,6 +94,6 @@ export default function CommunityPage() {
           }}
         />
       )}
-    </div>
+    </MainLayout>
   );
 }

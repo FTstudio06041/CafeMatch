@@ -144,7 +144,7 @@ export default function PostComposer({ onSubmit }) {
                 <circle cx="8.5" cy="8.5" r="1.5"></circle>
                 <polyline points="21 15 16 10 5 21"></polyline>
               </svg>
-              圖片
+              <span>圖片</span>
             </button>
             <input
               type="file"
@@ -164,7 +164,7 @@ export default function PostComposer({ onSubmit }) {
                 <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
                 <circle cx="12" cy="10" r="3"></circle>
               </svg>
-              店家
+              <span>店家</span>
             </button>
 
             {/* 發布按鈕 */}

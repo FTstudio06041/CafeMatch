@@ -42,339 +42,6 @@
     }
 }
 
-/* 全域卷軸樣式 */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-    background-color: #d6c2a5;
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background-color: #b5a191;
-}
-
-/* =============================================
-   側欄（完全保留原樣）
-   ============================================= */
-.sidebar {
-    width: var(--sidebar-width);
-    background-color: var(--bg-sidebar);
-    display: flex;
-    flex-direction: column;
-    padding: 20px;
-    flex-shrink: 0;
-    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-                padding 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
-}
-
-.sidebar.collapsed {
-    width: var(--sidebar-width-collapsed);
-    padding: 20px 10px;
-}
-
-.toggle-sidebar-btn {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    background: transparent;
-    border: none;
-    color: var(--text-main);
-    cursor: pointer;
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10;
-}
-
-.sidebar.collapsed .toggle-sidebar-btn {
-    transform: rotate(180deg);
-    right: 50%;
-    margin-right: -15px;
-}
-
-.toggle-sidebar-btn {
-    transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.user-profile-btn {
-    display: flex;
-    align-items: center;
-    padding: 15px;
-    background: #FFFFFF;
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    margin-bottom: 30px;
-    margin-top: 40px;
-    height: 70px;
-    overflow: hidden;
-}
-
-.user-avatar {
-    width: 40px;
-    height: 40px;
-    background-color: var(--accent-color);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: bold;
-    margin-right: 12px;
-    flex-shrink: 0;
-}
-
-.user-name {
-    font-weight: bold;
-    color: var(--text-main);
-    white-space: nowrap;
-    transition: opacity 0.2s;
-}
-
-.sidebar.collapsed .user-name {
-    opacity: 0;
-    width: 0;
-    margin: 0;
-    overflow: hidden;
-}
-
-.sidebar.collapsed .user-profile-btn {
-    justify-content: center;
-    padding: 15px 0;
-}
-
-.sidebar.collapsed .user-avatar {
-    margin-right: 0;
-}
-
-/* 新增對話按鈕樣式 */
-.new-chat-btn {
-    width: 100%;
-    padding: 12px;
-    background-color: transparent;
-    border: 2px dashed var(--text-light);
-    border-radius: 16px;
-    color: var(--text-main);
-    font-weight: bold;
-    cursor: pointer;
-    transition: 0.2s;
-    margin-bottom: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    height: 50px;
-    overflow: hidden;
-    flex-shrink: 0;
-}
-
-.new-chat-btn:hover {
-    background-color: rgba(255, 255, 255, 0.5);
-    border-color: var(--text-main);
-}
-
-.sidebar.collapsed .new-chat-btn {
-    justify-content: center;
-    padding: 0;
-}
-
-.text-label {
-    opacity: 1;
-    white-space: nowrap;
-    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-                width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-                margin 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.sidebar.collapsed .text-label {
-    opacity: 0;
-    width: 0;
-    margin: 0;
-    overflow: hidden;
-    pointer-events: none;
-}
-
-.history-label {
-    font-size: 0.9rem;
-    color: var(--text-light);
-    margin-bottom: 10px;
-    padding-left: 10px;
-    white-space: nowrap;
-}
-
-.sidebar.collapsed .history-label {
-    opacity: 0;
-    width: 0;
-    margin: 0;
-    overflow: hidden;
-}
-
-/* 側欄列表 */
-.chat-list {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.chat-list::-webkit-scrollbar {
-    width: 5px;
-}
-
-.chat-list::-webkit-scrollbar-thumb {
-    background-color: #E0C0A0;
-    border-radius: 10px;
-}
-
-.chat-item {
-    padding: 12px 15px;
-    border-radius: 16px;
-    cursor: pointer;
-    font-size: 0.95rem;
-    color: var(--text-main);
-    transition: 0.2s;
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    position: relative;
-    height: 50px;
-    flex-shrink: 0;
-}
-
-.chat-item:hover {
-    background-color: rgba(255, 255, 255, 0.6);
-}
-
-.sidebar.collapsed .chat-item {
-    justify-content: center;
-    padding: 0;
-}
-
-.chat-icon {
-    margin-right: 10px;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-}
-
-.sidebar.collapsed .chat-icon {
-    margin-right: 0;
-}
-
-.chat-title {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 160px;
-    flex-grow: 1;
-}
-
-.empty-sidebar-msg {
-    text-align: center;
-    color: var(--text-light);
-    opacity: 0.6;
-    font-size: 0.9rem;
-    margin-top: 20px;
-}
-
-.sidebar.collapsed .empty-sidebar-msg {
-    display: none;
-}
-
-/* =============================================
-   主內容區（保留原始框架）
-   ============================================= */
-.main-container {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    background-color: var(--bg-main);
-    overflow: hidden;
-}
-
-/* 導覽列 */
-.navbar {
-    display: flex;
-    justify-content: flex-end;
-    padding: 20px 30px;
-    gap: 15px;
-    position: relative;
-    z-index: 1;
-    flex-shrink: 0;
-}
-
-/* 滑塊設定：預設無 transition，由 JS 加入 class 控制 */
-.nav-marker {
-    position: absolute;
-    background-color: var(--text-main);
-    height: 44px;
-    border-radius: 20px;
-    z-index: 0;
-    width: 0;
-    left: 0;
-    top: 20px;
-    opacity: 0;
-}
-
-.nav-marker.animate {
-    transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-
-.nav-btn {
-    padding: 10px 24px;
-    border: none;
-    background: transparent;
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text-light);
-    cursor: pointer;
-    border-radius: 20px;
-    transition: color 0.2s;
-    position: relative;
-    z-index: 1;
-}
-
-.nav-btn:hover {
-    color: var(--text-main);
-}
-
-.nav-btn.active {
-    color: white;
-}
-
-/* ===== Quiz 頁面專屬導覽列（深棕色背景） ===== */
-.quiz-page .navbar {
-    background: #4a3728;
-}
-.quiz-page .nav-btn {
-    color: #ddccb9;
-}
-.quiz-page .nav-btn:hover {
-    color: #fff;
-}
-.quiz-page .nav-btn.active {
-    color: #4E342E;
-}
-.quiz-page .nav-marker {
-    background-color: #ddccb9;
-}
-
 /* =============================================
    測驗系統 — 主內容區域（全頁佈局）
    ============================================= */
@@ -1272,6 +939,7 @@
 
     .intro-upper {
         padding: 40px 24px 0;
+        padding-bottom: 80px;
     }
 
     .intro-lower {
@@ -1282,8 +950,10 @@
         font-size: 1.8rem;
     }
 
-    .intro-desc {
-        font-size: 0.95rem;
+    .intro-subtitle {
+        font-size: 1.1rem;
+        margin-bottom: 16px;
+        font-weight: 700;
     }
 
     .result-title {
@@ -1293,6 +963,23 @@
     .step-cards {
         flex-direction: column;
         gap: 16px;
+        margin-top: -50px;
+    }
+
+    .step-card {
+        padding: 30px 20px 24px;
+        min-height: auto;
+    }
+
+    .step-card-bg {
+        top: 10px;
+        right: 10px;
+        opacity: 0.2;
+    }
+
+    .step-card-bg svg {
+        width: 80px;
+        height: 80px;
     }
 
     /* 小螢幕回退為上下排列 */
@@ -1317,5 +1004,18 @@
 
     .radar-svg {
         max-width: 260px;
+    }
+
+    .option-card {
+        padding: 16px 20px;
+    }
+
+    .checkbox-card {
+        padding: 16px 20px;
+    }
+
+    .question-text {
+        font-size: 1.15rem;
+        margin-bottom: 24px;
     }
 }

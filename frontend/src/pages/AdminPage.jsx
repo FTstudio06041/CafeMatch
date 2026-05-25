@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import Navbar from '../components/Navbar';
-import Sidebar from '../components/Sidebar';
+import MainLayout from '../layouts/MainLayout';
 import '../AdminPage.css';
 
 import AdminUsersTab from '../components/admin/AdminUsersTab';
@@ -15,16 +14,7 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('users');
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', width: '100%' }}>
-      {/* --- 左側欄 --- */}
-      <Sidebar />
-
-      {/* --- 主內容區 --- */}
-      <main className="main-container">
-        <nav className="navbar">
-          <Navbar />
-        </nav>
-
+    <MainLayout>
         <div className="admin-content">
           <div className="admin-page-title">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
@@ -60,7 +50,6 @@ export default function AdminPage() {
           {activeTab === 'announcement' && <AdminAnnouncementsTab />}
           {activeTab === 'bug_report' && <AdminBugReportsTab />}
         </div>
-      </main>
-    </div>
+    </MainLayout>
   );
 }

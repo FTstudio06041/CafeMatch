@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ClipboardList, BarChart3, MapPin, Play, Store } from 'lucide-react';
 import RadarChart from '../components/RadarChart';
-import Navbar from '../components/Navbar';
-import Sidebar from '../components/Sidebar';
+import MainLayout from '../layouts/MainLayout';
 import '../QuizPage.css';
 
 // sessionStorage key — 用來在頁面切換時保留測驗結果
@@ -197,16 +196,7 @@ export default function QuizPage() {
   // 渲染
   // =============================================
   return (
-    <div className="quiz-page-container" style={{ display: 'flex', height: '100vh', overflow: 'hidden', width: '100%' }}>
-      {/* --- 左側欄 --- */}
-      <Sidebar />
-
-      {/* --- 主內容區 --- */}
-      <main className="main-container">
-        <nav className="navbar">
-          <Navbar />
-        </nav>
-
+    <MainLayout>
         <div className={`quiz-content ${quizState === 'intro' ? 'intro-active' : ''}`}>
 
           {/* ===== 介紹頁：直接渲染在 quiz-content 內（全版佈滿） ===== */}
@@ -437,7 +427,6 @@ export default function QuizPage() {
             </div>
           )}
         </div>
-      </main>
-    </div>
+    </MainLayout>
   );
 }

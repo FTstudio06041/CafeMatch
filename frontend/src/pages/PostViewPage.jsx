@@ -4,6 +4,7 @@ import { AuthContext } from '../context/AuthContext';
 import PostCard from '../components/community/PostCard';
 import useCommunityPosts from '../hooks/useCommunityPosts';
 import { decodeId } from '../utils/hashId';
+import '../CommunityPage.css';
 
 export default function PostViewPage() {
   const { id } = useParams();
@@ -67,12 +68,12 @@ export default function PostViewPage() {
   }
 
   return (
-    <div style={{ 
+    <div className="post-view-container" style={{ 
       maxWidth: '600px', 
       margin: '0 auto', 
       padding: '20px',
       minHeight: '100vh',
-      backgroundColor: 'transparent' // 與全局咖啡色背景融合
+      backgroundColor: 'transparent'
     }}>
       <div 
         style={{ 

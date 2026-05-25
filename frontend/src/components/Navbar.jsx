@@ -87,9 +87,7 @@ export default function Navbar() {
           <button
             key={item.path}
             ref={el => navRefs.current[index] = el}
-            className={`nav-btn ${isActive ? 'active' : ''}`}
-            // 用 inline-style 強制覆蓋 CSS：被選中的變白色，其他的退回淺咖啡色
-            style={{ color: isHighlighted ? '#fff' : 'var(--text-light)' }} 
+            className={`nav-btn ${isActive ? 'active' : ''} ${isHighlighted ? 'highlighted' : ''}`}
             onClick={() => navigate(item.path)}
             onMouseEnter={() => handleMouseEnter(index)}
           >

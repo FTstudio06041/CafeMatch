@@ -6,6 +6,7 @@ export default function AdminUsersTab() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedUser, setSelectedUser] = useState(null);
 
   useEffect(() => {
     fetchUsers();
@@ -15,7 +16,16 @@ export default function AdminUsersTab() {
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/users`, { credentials: 'include' });
-      if (res.ok) setUsers(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data);
+        // 如果當前有選中的用戶，也同步更新他的狀態
+        if (selectedUser) {
+          const updatedUser = data.find(u => u.id === selectedUser.id);
+          if (updatedUser) setSelectedUser(updatedUser);
+          else setSelectedUser(null);
+        }
+      }
     } catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -31,12 +41,15 @@ export default function AdminUsersTab() {
   };
 
   const deleteUser = async (userId, email) => {
-    if (!confirm(`確定要刪除用戶 ${email}？此操作無法復原。`)) return;
+    if (!window.confirm(`確定要刪除用戶 ${email}？此操作無法復原。`)) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}`, {
         method: 'DELETE', credentials: 'include'
       });
-      if (res.ok) fetchUsers();
+      if (res.ok) {
+        fetchUsers();
+        setSelectedUser(null);
+      }
       else { const d = await res.json(); alert(d.error); }
     } catch (e) { console.error(e); }
   };
@@ -68,40 +81,67 @@ export default function AdminUsersTab() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>ID</th>
                 <th>名稱</th>
                 <th>Email</th>
-                <th>角色</th>
-                <th>操作</th>
               </tr>
             </thead>
             <tbody>
               {filteredUsers.length === 0 ? (
-                <tr><td colSpan="5" style={{textAlign:'center',padding:'40px',color:'#999'}}>無匹配結果</td></tr>
+                <tr><td colSpan="2" style={{textAlign:'center',padding:'40px',color:'#999'}}>無匹配結果</td></tr>
               ) : filteredUsers.map(u => (
-                <tr key={u.id}>
-                  <td>{u.id}</td>
+                <tr key={u.id} onClick={() => setSelectedUser(u)} style={{cursor: 'pointer'}}>
                   <td style={{fontWeight:600}}>{u.name}</td>
                   <td>{u.email}</td>
-                  <td>
-                    <span className={`role-badge ${u.is_admin ? 'admin' : 'user'}`}>
-                      {u.is_admin ? '管理員' : '一般用戶'}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="admin-actions">
-                      <button className={`admin-btn ${u.is_admin ? 'secondary' : 'success'}`} onClick={() => toggleAdmin(u.id)}>
-                        {u.is_admin ? '取消管理員' : '設為管理員'}
-                      </button>
-                      <button className="admin-btn danger" onClick={() => deleteUser(u.id, u.email)}>刪除</button>
-                    </div>
-                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* 用戶詳情 Modal */}
+      <div className={`admin-modal-overlay ${selectedUser ? 'active' : ''}`} onClick={() => setSelectedUser(null)}>
+        <div className="admin-modal" onClick={e => e.stopPropagation()}>
+          {selectedUser && (
+            <>
+              <div className="admin-modal-title">用戶詳情</div>
+              
+              <div className="admin-form-group">
+                <span className="admin-form-label">ID</span>
+                <div style={{color: 'var(--admin-text)'}}>{selectedUser.id}</div>
+              </div>
+              <div className="admin-form-group">
+                <span className="admin-form-label">名稱</span>
+                <div style={{color: 'var(--admin-text)'}}>{selectedUser.name}</div>
+              </div>
+              <div className="admin-form-group">
+                <span className="admin-form-label">Email</span>
+                <div style={{color: 'var(--admin-text)'}}>{selectedUser.email}</div>
+              </div>
+              <div className="admin-form-group">
+                <span className="admin-form-label">角色</span>
+                <div>
+                  <span className={`role-badge ${selectedUser.is_admin ? 'admin' : 'user'}`}>
+                    {selectedUser.is_admin ? '管理員' : '一般用戶'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="admin-modal-actions">
+                <button className={`admin-btn ${selectedUser.is_admin ? 'secondary' : 'success'}`} onClick={() => toggleAdmin(selectedUser.id)}>
+                  {selectedUser.is_admin ? '取消管理員' : '設為管理員'}
+                </button>
+                <button className="admin-btn danger" onClick={() => deleteUser(selectedUser.id, selectedUser.email)}>
+                  刪除
+                </button>
+                <button className="admin-btn secondary" onClick={() => setSelectedUser(null)}>
+                  關閉
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </>
   );
 }

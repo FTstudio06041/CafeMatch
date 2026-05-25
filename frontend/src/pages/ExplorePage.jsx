@@ -2,8 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import '../ExplorePage.css';
-import Navbar from '../components/Navbar';
-import Sidebar from '../components/Sidebar';
+import MainLayout from '../layouts/MainLayout';
 
 export default function ExplorePage() {
   const { user, API_BASE_URL } = useContext(AuthContext);
@@ -112,16 +111,7 @@ export default function ExplorePage() {
   };
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', width: '100%' }}>
-      {/* --- 左側欄 (與 ChatPage 共用邏輯) --- */}
-      <Sidebar />
-
-      {/* --- 主內容區 --- */}
-      <main className="main-container">
-        <nav className="navbar">
-          <Navbar />
-        </nav>
-
+    <MainLayout>
         <div className={`explore-content ${selectedShop ? 'detail-mode' : ''}`}>
           {selectedShop ? (
             <section className="shop-detail-page">
@@ -232,7 +222,6 @@ export default function ExplorePage() {
             </>
           )}
         </div>
-      </main>
-    </div>
+    </MainLayout>
   );
 }

@@ -349,3 +349,49 @@ body {
         transform: translate(calc(-1 * var(--tile-w, 25vw)), calc(-1 * var(--tile-h, 25vh)));
     }
 }
+
+/* =========================================
+   Mobile Responsive (max-width: 768px)
+   ========================================= */
+@media (max-width: 768px) {
+    .landing-header {
+        padding: 12px 20px;
+    }
+
+    .brand-logo {
+        font-size: 1.2rem;
+    }
+    
+    .brand-logo svg {
+        width: 24px;
+        height: 24px;
+    }
+
+    /* Header 選單收合 */
+    .header-actions .btn-text {
+        display: none;
+    }
+
+    .btn-primary-sm {
+        padding: 8px 16px;
+        font-size: 0.9rem;
+    }
+
+    /* 標題縮放 */
+    .main-title {
+        font-size: 3rem;
+    }
+
+    .sub-title {
+        font-size: 1.2rem;
+    }
+
+    .intro-section {
+        gap: 16px;
+    }
+
+    .btn-google-login {
+        padding: 12px 20px;
+        font-size: 1rem;
+    }
+}
