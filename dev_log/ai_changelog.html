@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 開發修改日誌 (Dev Log)</title>
+    <!-- 引入 Mermaid 繪製架構圖 -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <!-- 引入 Chart.js 繪製數據圖表 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --container-bg: #ffffff;
+            --text-main: #2d3748;
+            --text-muted: #718096;
+            --border-color: #e2e8f0;
+            --accent: #8b5cf6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --ai-color: #3b82f6;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #0f172a;
+                --container-bg: #1e293b;
+                --text-main: #f8fafc;
+                --text-muted: #94a3b8;
+                --border-color: #334155;
+            }
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); line-height: 1.6; padding: 2rem; }
+        .container { width: 100%; padding: 0 2rem; margin: 0 auto; }
+        header { margin-bottom: 2.5rem; text-align: center; }
+        h1 { font-size: 2.2rem; font-weight: 800; margin-bottom: 0.5rem; background: linear-gradient(135deg, var(--ai-color), var(--accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        p.subtitle { color: var(--text-muted); font-size: 1.1rem; }
+
+        .log-container { display: flex; flex-direction: column; gap: 2rem; }
+        .log-entry {
+            background: var(--container-bg); border: 1px solid var(--border-color); border-radius: 12px;
+            padding: 2rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color); }
+        .log-title { font-size: 1.4rem; font-weight: 700; display: flex; align-items: center; gap: 0.8rem; }
+        .log-date { font-size: 0.95rem; color: var(--text-muted); font-weight: 500; }
+        
+        .tag { font-size: 0.8rem; padding: 0.3rem 0.8rem; border-radius: 9999px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        .tag.frontend { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+        .tag.backend { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+        .tag.refactor { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
+
+        .interactive-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 24px;
+            margin: 1.5rem 0;
+            align-items: start;
+        }
+
+        .visual-card {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .visual-card h4 {
+            width: 100%;
+            margin-bottom: 1.5rem;
+            color: var(--text-muted);
+            font-size: 1rem;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        /* 讓 Mermaid SVG 自適應且不會過小 */
+        .mermaid {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            overflow-x: auto;
+        }
+        
+        .mermaid svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* 限制 Chart.js 的高度並維持比例 */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            display: flex;
+            justify-content: center;
+        }
+
+        /* 程式碼折疊區塊 */
+        details {
+            background: var(--bg-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-top: 1rem;
+            overflow: hidden;
+        }
+
+        summary {
+            padding: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            background: rgba(0,0,0,0.02);
+            transition: background 0.2s;
+        }
+
+        summary:hover { background: rgba(0,0,0,0.05); }
+        details[open] summary { border-bottom: 1px solid var(--border-color); }
+
+        .diff-viewer {
+            padding: 1rem;
+            font-family: "Fira Code", monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            overflow-x: auto;
+        }
+        .diff-del { color: var(--danger); background: rgba(239, 68, 68, 0.1); display: block; padding: 2px 8px; }
+        .diff-add { color: var(--success); background: rgba(16, 185, 129, 0.1); display: block; padding: 2px 8px; }
+        .diff-ctx { color: var(--text-muted); display: block; padding: 2px 8px; }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>AI 互動式開發日誌</h1>
+            <p class="subtitle">視覺化追蹤專案架構變更與效能優化</p>
+        </header>
+
+        <div class="log-container">
+            
+            <!-- 日誌：AI 模組化重構 -->
+            <div class="log-entry">
+                <div class="log-header">
+                    <div class="log-title">
+                        <span class="tag backend">後端</span>
+                        <span class="tag refactor">重構</span>
+                        AI 模組解耦與架構優化
+                    </div>
+                    <div class="log-date">2026-06-01</div>
+                </div>
+                
+                <p>為提升未來的擴展性與維護性，我們將 <code>app.py</code> 中過於龐大的 AI 處理邏輯（包含意圖識別、RAG 檢索、Prompt 組裝與串流處理）全數抽離至獨立的 <code>services/ai_service.py</code> 中。</p>
+
+                <div class="interactive-grid">
+                    <!-- Mermaid 架構圖 -->
+                    <div class="visual-card">
+                        <h4>架構變更圖 (Mermaid)</h4>
+                        <div class="mermaid">
+                            graph TD;
+                                A[Client] -->|/api/chat| B(app.py)
+                                subgraph Refactored [獨立的 AI 服務模組]
+                                    B -->|呼叫| C{ai_service.py}
+                                    C --> D[classify_intent]
+                                    C --> E[retrieve_context]
+                                    C --> F[stream_generate]
+                                    F -->|寫入| G[(AiQueryLog DB)]
+                                end
+                        </div>
+                    </div>
+
+                    <!-- Chart.js 圖表 -->
+                    <div class="visual-card">
+                        <h4>程式碼複雜度下降 (Lines of Code)</h4>
+                        <div class="chart-container">
+                            <canvas id="refactorChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <details>
+                    <summary>👉 點擊查看核心的程式碼 Diff (app.py)</summary>
+                    <div class="diff-viewer">
+<span class="diff-ctx">  @app.route('/api/chat', methods=['POST'])</span>
+<span class="diff-ctx">  def chat_api():</span>
+<span class="diff-del">-     # (舊版) 170+ 行的義大利麵條程式碼</span>
+<span class="diff-del">-     message = request.json.get('message')</span>
+<span class="diff-del">-     intent = classify(message) ...</span>
+<span class="diff-del">-     context = db.session.query(...) ...</span>
+<span class="diff-del">-     # 手動處理 Ollama Request ...</span>
+<span class="diff-add">+     # (新版) 職責轉移至 ai_service</span>
+<span class="diff-add">+     from services import ai_service</span>
+<span class="diff-add">+     data = request.json</span>
+<span class="diff-add">+     return Response(</span>
+<span class="diff-add">+         stream_with_context(ai_service.stream_generate(data, db)),</span>
+<span class="diff-add">+         mimetype='text/event-stream'</span>
+<span class="diff-add">+     )</span>
+                    </div>
+                </details>
+            </div>
+
+            <!-- 日誌：管理員總覽頁面 -->
+            <div class="log-entry">
+                <div class="log-header">
+                    <div class="log-title">
+                        <span class="tag frontend">前端</span>
+                        <span class="tag backend">後端</span>
+                        管理員數據可視化儀表板
+                    </div>
+                    <div class="log-date">2026-06-01</div>
+                </div>
+                
+                <p>新增了 <code>/api/admin/overview</code> 端點，並在前端實作了以 Recharts 渲染的趨勢圖與統計面板。期間解決了 React 19 與 Recharts 之間的相容性問題（清除 Vite 快取並降級 Recharts）。</p>
+
+                <div class="interactive-grid" style="grid-template-columns: 1fr;">
+                    <div class="visual-card">
+                        <h4>Token 消耗即時追蹤概念圖</h4>
+                        <div class="mermaid">
+                            gantt
+                                title API 請求與 Token 結算流程
+                                dateFormat  s
+                                axisFormat %S
+                                section 使用者請求
+                                發送 Prompt        :a1, 0, 1s
+                                等待回應        :after a1, 2s
+                                section Ollama 處理
+                                串流生成        :a2, 1, 3s
+                                回傳 done=true (包含 eval_count) :a3, after a2, 1s
+                                section 數據庫
+                                寫入 AiQueryLog 表格 :a4, after a3, 1s
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- 初始化指令碼 -->
+    <script>
+        // 初始化 Mermaid
+        mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+
+        // 初始化 Chart.js
+        const ctx = document.getElementById('refactorChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['app.py (Controller)', 'ai_service.py (Service)'],
+                datasets: [
+                    {
+                        label: '重構前行數',
+                        data: [250, 0],
+                        backgroundColor: 'rgba(239, 68, 68, 0.6)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: '重構後行數',
+                        data: [50, 200],
+                        backgroundColor: 'rgba(16, 185, 129, 0.6)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top' }
+                },
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: '程式碼行數' } }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

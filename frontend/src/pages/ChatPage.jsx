@@ -1,18 +1,42 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import MainLayout from '../layouts/MainLayout';
 import '../ChatPage.css';
 import MessageBubble from '../components/MessageBubble';
 
+const EMPTY_CHAT = { id: null, title: '新對話', messages: [] };
+
+const normalizeMessage = (msg) => {
+  if (!msg || typeof msg !== 'object') {
+    return { role: 'ai', content: String(msg ?? '') };
+  }
+
+  const roleSource = msg.role || msg.sender;
+  const role = roleSource === 'user' ? 'user' : 'ai';
+  const rawContent = msg.content ?? msg.text ?? '';
+
+  return {
+    ...msg,
+    role,
+    content: typeof rawContent === 'string' ? rawContent : String(rawContent ?? '')
+  };
+};
+
+const normalizeChatSession = (chat) => ({
+  ...EMPTY_CHAT,
+  ...chat,
+  title: chat?.title || EMPTY_CHAT.title,
+  messages: Array.isArray(chat?.messages) ? chat.messages.map(normalizeMessage) : []
+});
+
 export default function ChatPage() {
   const { user, API_BASE_URL } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams] = useSearchParams();
 
   // 狀態管理
-  const [currentChat, setCurrentChat] = useState({ id: null, title: '新對話', messages: [] });
+  const [currentChat, setCurrentChat] = useState(EMPTY_CHAT);
   const [inputMsg, setInputMsg] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
@@ -22,6 +46,22 @@ export default function ChatPage() {
   const chatWindowRef = useRef(null);
   const abortControllerRef = useRef(null);
   const currentChatRef = useRef(currentChat);
+
+  const setNormalizedCurrentChat = (updater) => {
+    if (typeof updater !== 'function') {
+      const normalized = normalizeChatSession(updater);
+      currentChatRef.current = normalized;
+      setCurrentChat(normalized);
+      return normalized;
+    }
+
+    setCurrentChat(prev => {
+      const nextValue = updater(prev);
+      const normalized = normalizeChatSession(nextValue);
+      currentChatRef.current = normalized;
+      return normalized;
+    });
+  };
 
   // 同步 ref
   useEffect(() => {
@@ -45,7 +85,7 @@ export default function ChatPage() {
       return;
     }
 
-    const urlId = searchParams.get('id');
+    const urlId = params.get('id');
 
     // 處理測驗結果跳轉
     const rawQuizContext = localStorage.getItem('targetQuizContext');
@@ -72,7 +112,7 @@ export default function ChatPage() {
         promptText = `我剛做完測驗，結果適合「${rawQuizContext}」，請根據這個結果推薦我類似的咖啡廳或豆子。`;
       }
       
-      setCurrentChat({ id: null, title: '新對話', messages: [] });
+      setNormalizedCurrentChat(EMPTY_CHAT);
       setTimeout(() => {
         executeChatStream(promptText, { customTitle: '我做完測驗，結果...' });
       }, 0);
@@ -81,7 +121,7 @@ export default function ChatPage() {
 
     // 正常載入對話
     if (!urlId || urlId === 'new') {
-      setCurrentChat({ id: null, title: '新對話', messages: [] });
+      setNormalizedCurrentChat(EMPTY_CHAT);
     } else {
       if (user?.isGuest) {
         navigate('/chat?id=new', { replace: true });
@@ -92,7 +132,7 @@ export default function ChatPage() {
         .then(res => res.json())
         .then(data => {
           if (data.id) {
-            setCurrentChat(data);
+            setNormalizedCurrentChat(data);
           } else {
             // 找不到對話，回到新對話
             navigate('/chat?id=new', { replace: true });
@@ -100,18 +140,19 @@ export default function ChatPage() {
         })
         .catch(err => console.error('Failed to load session:', err));
     }
-  }, [location.search, searchParams, API_BASE_URL]);
+  }, [location.search, API_BASE_URL, user?.isGuest]);
 
   // 保存對話到後端
   const saveSessionToBackend = async (chatState) => {
     if (user?.isGuest) return;
     try {
+      const normalizedChat = normalizeChatSession(chatState);
       const payload = {
-        title: chatState.title,
-        messages: chatState.messages
+        title: normalizedChat.title,
+        messages: normalizedChat.messages
       };
-      if (chatState.id) {
-        payload.id = chatState.id;
+      if (normalizedChat.id) {
+        payload.id = normalizedChat.id;
       }
       const response = await fetch(`${API_BASE_URL}/api/chat/sessions`, {
         method: 'POST',
@@ -123,8 +164,8 @@ export default function ChatPage() {
       if (data.success && data.id) {
         const newId = data.id;
         // 如果是新建立的對話，更新 URL 和本地 state 的 id
-        if (!chatState.id) {
-          setCurrentChat(prev => ({ ...prev, id: newId }));
+        if (!normalizedChat.id) {
+          setNormalizedCurrentChat(prev => ({ ...prev, id: newId }));
           navigate(`/chat?id=${newId}`, { replace: true });
         }
         window.dispatchEvent(new Event('chat-updated')); // 觸發 Sidebar 更新
@@ -159,20 +200,12 @@ export default function ChatPage() {
       });
       if (response.ok) {
         // 更新 UI 狀態
-        let updatedChat = null;
-        setCurrentChat(prev => {
-          const nc = { ...prev };
-          const newMsgs = [...nc.messages];
-          newMsgs[msgIdx] = { ...newMsgs[msgIdx], feedback: type };
-          nc.messages = newMsgs;
-          updatedChat = nc;
-          return nc;
-        });
-        
-        // 保存到後端
-        if (updatedChat) {
-           saveSessionToBackend(updatedChat);
-        }
+        const newMsgs = [...currentChatRef.current.messages];
+        newMsgs[msgIdx] = { ...newMsgs[msgIdx], feedback: type };
+        const updatedChat = { ...currentChatRef.current, messages: newMsgs };
+
+        setNormalizedCurrentChat(updatedChat);
+        saveSessionToBackend(updatedChat);
       }
     } catch (e) {
       console.error("Feedback failed:", e);
@@ -189,7 +222,9 @@ export default function ChatPage() {
     // 將包含該 AI 訊息以及其後的所有訊息刪除
     const newMessages = currentChat.messages.slice(0, msgIdx - 1);
     
-    setCurrentChat(prev => ({ ...prev, messages: newMessages }));
+    const retriedChat = normalizeChatSession({ ...currentChatRef.current, messages: newMessages });
+    currentChatRef.current = retriedChat;
+    setCurrentChat(retriedChat);
     
     // 重新發送
     executeChatStream(prevUserMsg.content);
@@ -217,11 +252,13 @@ export default function ChatPage() {
     ];
 
     // 更新 state (新增 user 和空白的 ai 訊息)
-    setCurrentChat(prev => ({
-      ...prev,
+    const chatWithPendingAi = normalizeChatSession({
+      ...currentChatRef.current,
       title: chatTitle,
       messages: updatedMessages
-    }));
+    });
+    currentChatRef.current = chatWithPendingAi;
+    setCurrentChat(chatWithPendingAi);
 
     abortControllerRef.current = new AbortController();
     let currentAiContent = "";
@@ -230,19 +267,21 @@ export default function ChatPage() {
     // 內部輔助函式：同步狀態，最後一次寫入後端
     const syncStreamState = async (content, debugInfo, appendText = '', isFinal = false) => {
       const finalContent = content + appendText;
-      
-      let finalChat = null;
-      setCurrentChat(prev => {
-        const nc = { ...prev };
-        const msgs = [...nc.messages];
-        const last = msgs[msgs.length - 1];
-        if (last && last.role === 'ai') {
-          msgs[msgs.length - 1] = { ...last, content: finalContent, debug_info: debugInfo ? { ...debugInfo } : last.debug_info };
-        }
-        nc.messages = msgs;
-        finalChat = nc;
-        return nc;
-      });
+      const baseChat = currentChatRef.current;
+      const msgs = [...baseChat.messages];
+      const last = msgs[msgs.length - 1];
+
+      if (last && last.role === 'ai') {
+        msgs[msgs.length - 1] = {
+          ...last,
+          content: finalContent,
+          debug_info: debugInfo ? { ...debugInfo } : last.debug_info
+        };
+      }
+
+      const finalChat = normalizeChatSession({ ...baseChat, messages: msgs });
+      currentChatRef.current = finalChat;
+      setCurrentChat(finalChat);
 
       if (isFinal && finalChat) {
          await saveSessionToBackend(finalChat);

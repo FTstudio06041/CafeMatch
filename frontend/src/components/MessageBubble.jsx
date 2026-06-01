@@ -1,10 +1,14 @@
 import React from 'react';
 
 export default function MessageBubble({ msg, idx, isTyping, handleRetry, handleFeedback, isDebugMode }) {
+  const role = msg?.role === 'user' ? 'user' : 'ai';
+  const content = msg?.content ?? msg?.text ?? '';
+  const safeContent = typeof content === 'string' ? content : String(content ?? '');
+
   return (
     <React.Fragment>
-      <div className={`message ${msg.role}`}>
-        {msg.role === 'ai' && msg.content === '' ? (
+      <div className={`message ${role}`}>
+        {role === 'ai' && safeContent === '' ? (
           <div className="typing-indicator" style={{ margin: 0, padding: 0, background: 'transparent' }}>
             <div className="typing-dot"></div>
             <div className="typing-dot"></div>
@@ -12,8 +16,8 @@ export default function MessageBubble({ msg, idx, isTyping, handleRetry, handleF
           </div>
         ) : (
           <>
-            <div className="message-text">{msg.content}</div>
-            {msg.role === 'ai' && !isTyping && msg.content !== '' && (
+            <div className="message-text">{safeContent}</div>
+            {role === 'ai' && !isTyping && safeContent !== '' && (
               <div className="message-actions">
                 <button 
                   className="action-btn retry" 
@@ -28,7 +32,7 @@ export default function MessageBubble({ msg, idx, isTyping, handleRetry, handleF
                   </svg>
                 </button>
                 <button 
-                  className={`action-btn like ${msg.feedback === 'like' ? 'active' : ''}`}
+                  className={`action-btn like ${msg?.feedback === 'like' ? 'active' : ''}`}
                   title="讚"
                   onClick={() => handleFeedback(idx, 'like')}
                 >
@@ -37,7 +41,7 @@ export default function MessageBubble({ msg, idx, isTyping, handleRetry, handleF
                   </svg>
                 </button>
                 <button 
-                  className={`action-btn dislike ${msg.feedback === 'dislike' ? 'active' : ''}`}
+                  className={`action-btn dislike ${msg?.feedback === 'dislike' ? 'active' : ''}`}
                   title="倒讚"
                   onClick={() => handleFeedback(idx, 'dislike')}
                 >
@@ -50,7 +54,7 @@ export default function MessageBubble({ msg, idx, isTyping, handleRetry, handleF
           </>
         )}
       </div>
-      {isDebugMode && msg.debug_info && (
+      {isDebugMode && msg?.debug_info && (
         <div className="debug-console">
           <div className="debug-header">Debug Console</div>
           <div className="debug-content">

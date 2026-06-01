@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import MainLayout from '../layouts/MainLayout';
 import '../AdminPage.css';
 
+import AdminOverviewTab from '../components/admin/AdminOverviewTab';
 import AdminUsersTab from '../components/admin/AdminUsersTab';
 import AdminCafesTab from '../components/admin/AdminCafesTab';
 import AdminFeedbacksTab from '../components/admin/AdminFeedbacksTab';
@@ -11,7 +12,7 @@ import AdminAnnouncementsTab from '../components/admin/AdminAnnouncementsTab';
 import AdminBugReportsTab from '../components/admin/AdminBugReportsTab';
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState('users');
+  const [activeTab, setActiveTab] = useState('overview');
 
   return (
     <MainLayout>
@@ -24,6 +25,7 @@ export default function AdminPage() {
           {/* Tab 切換 */}
           <div className="admin-tabs">
             {[
+              { key: 'overview', label: '總覽' },
               { key: 'users', label: '用戶管理' },
               { key: 'cafes', label: '店家管理' },
               { key: 'feedbacks', label: 'AI 反饋' },
@@ -42,6 +44,7 @@ export default function AdminPage() {
             ))}
           </div>
 
+          {activeTab === 'overview' && <AdminOverviewTab />}
           {activeTab === 'users' && <AdminUsersTab />}
           {activeTab === 'cafes' && <AdminCafesTab />}
           {activeTab === 'feedbacks' && <AdminFeedbacksTab />}

@@ -20,6 +20,12 @@ export default function Sidebar() {
   const query = new URLSearchParams(location.search);
   const currentChatId = query.get('id');
 
+  const normalizeSession = (session) => ({
+    ...session,
+    id: String(session?.id ?? ''),
+    title: session?.title || '未命名對話'
+  });
+
   // 取得對話紀錄清單
   const fetchSessions = async () => {
     if (!user || user.isGuest) return;
@@ -29,7 +35,9 @@ export default function Sidebar() {
       });
       if (res.ok) {
         const data = await res.json();
-        setSessions(data.sessions || []);
+        // 兼容 API 回傳陣列或 { sessions: [...] } 的情況
+        const rawSessions = Array.isArray(data) ? data : (data.sessions || []);
+        setSessions(rawSessions.map(normalizeSession).filter(session => session.id));
       }
     } catch (e) {
       console.error('載入對話紀錄失敗:', e);
@@ -55,7 +63,7 @@ export default function Sidebar() {
       window.removeEventListener('chat-updated', handleChatUpdated);
       window.removeEventListener('resize', handleResize);
     };
-  }, [user]);
+  }, [user, API_BASE_URL]);
 
   const handleDelete = async (e, id) => {
     e.stopPropagation();
@@ -67,7 +75,7 @@ export default function Sidebar() {
       });
       if (res.ok) {
         setSessions(prev => prev.filter(s => s.id !== id));
-        if (currentChatId === id) {
+        if (currentChatId === String(id)) {
           navigate('/chat');
         }
         window.dispatchEvent(new Event('chat-updated'));
@@ -157,7 +165,7 @@ export default function Sidebar() {
               <div className="chat-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
               </div>
-              <span className="chat-title text-label">{chat.title}</span>
+              <span className="chat-title text-label" title={chat.title}>{chat.title}</span>
               <button className="delete-btn" onClick={(e) => handleDelete(e, chat.id)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
               </button>

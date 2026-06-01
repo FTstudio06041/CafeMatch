@@ -621,3 +621,257 @@
         font-size: 0.75rem;
     }
 }
+
+/* =========================================
+   Overview Dashboard (總覽頁面)
+   ========================================= */
+
+/* --- KPI 卡片 --- */
+.overview-container {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.overview-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+}
+
+.overview-kpi-card {
+    position: relative;
+    background: var(--admin-card);
+    border-radius: 16px;
+    padding: 22px 20px;
+    border: 1px solid var(--admin-border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    overflow: hidden;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.overview-kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(67, 42, 0, 0.1);
+}
+
+.overview-kpi-icon {
+    font-size: 2rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.overview-kpi-info {
+    flex: 1;
+    z-index: 1;
+}
+
+.overview-kpi-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--admin-text-light);
+    margin-bottom: 4px;
+}
+
+.overview-kpi-value {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--admin-accent);
+    line-height: 1.2;
+}
+
+.overview-kpi-suffix {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--admin-text-light);
+    margin-left: 3px;
+}
+
+.overview-kpi-glow {
+    position: absolute;
+    top: -30px;
+    right: -30px;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    opacity: 0.08;
+    filter: blur(20px);
+    pointer-events: none;
+}
+
+/* --- 圖表區 --- */
+.overview-charts-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.overview-chart-card {
+    background: var(--admin-card);
+    border-radius: 16px;
+    border: 1px solid var(--admin-border);
+    padding: 24px;
+    transition: box-shadow 0.25s ease;
+}
+
+.overview-chart-card:hover {
+    box-shadow: 0 4px 16px rgba(67, 42, 0, 0.06);
+}
+
+.overview-chart-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--admin-accent);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.overview-chart-icon {
+    font-size: 1.15rem;
+}
+
+.overview-subtitle {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--admin-text-light);
+}
+
+/* --- Tooltip --- */
+.overview-tooltip {
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--admin-border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 0.82rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.overview-tooltip-label {
+    font-weight: 700;
+    color: var(--admin-accent);
+    margin-bottom: 6px;
+}
+
+/* --- 排行榜區 --- */
+.overview-rankings-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.overview-ranking-card {
+    background: var(--admin-card);
+    border-radius: 16px;
+    border: 1px solid var(--admin-border);
+    padding: 24px;
+}
+
+.overview-ranking-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.overview-ranking-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 0;
+}
+
+.overview-rank {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: #f5f0eb;
+    color: var(--admin-text-light);
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.overview-rank.top {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #fff;
+}
+
+.overview-keyword-tag {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--admin-text);
+    white-space: nowrap;
+    min-width: 70px;
+}
+
+.overview-bar-wrapper {
+    flex: 1;
+    height: 8px;
+    background: #f0ebe5;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.overview-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #f59e0b, #ef4444);
+    border-radius: 4px;
+    transition: width 0.6s ease;
+}
+
+.overview-count {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--admin-text-light);
+    white-space: nowrap;
+    min-width: 48px;
+    text-align: right;
+}
+
+/* --- 使用者排行 --- */
+.overview-user-name {
+    font-weight: 600;
+    color: var(--admin-text);
+    font-size: 0.88rem;
+}
+
+.overview-user-email {
+    font-size: 0.75rem;
+    color: var(--admin-text-light);
+    margin-top: 2px;
+}
+
+/* =========================================
+   Overview Mobile Responsive
+   ========================================= */
+@media (max-width: 768px) {
+    .overview-kpi-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .overview-charts-row,
+    .overview-rankings-row {
+        grid-template-columns: 1fr;
+    }
+
+    .overview-kpi-value {
+        font-size: 1.4rem;
+    }
+
+    .overview-chart-card {
+        padding: 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .overview-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+}

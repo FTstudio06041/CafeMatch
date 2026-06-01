@@ -1,4 +1,4 @@
-from flask import Flask, redirect, url_for, session, jsonify, request
+from flask import Flask, redirect, url_for, session, jsonify, request, stream_with_context
 from authlib.integrations.flask_client import OAuth
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
@@ -8,6 +8,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 import requests
 import uuid
+from services import ai_service
 
 load_dotenv()
 
@@ -285,6 +286,17 @@ class CommunityComment(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     note_id = db.Column(db.Integer, db.ForeignKey('community_notes.id'), nullable=False)
     content = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class AiQueryLog(db.Model):
+    """AI 查詢紀錄：精準追蹤每次 LLM 呼叫的 Token 消耗與延遲"""
+    __tablename__ = 'ai_query_logs'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    model_name = db.Column(db.String(100), nullable=False)
+    prompt_tokens = db.Column(db.Integer, default=0)
+    completion_tokens = db.Column(db.Integer, default=0)
+    total_time_ms = db.Column(db.Integer, default=0)  # 毫秒
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 # ==========================================
@@ -705,13 +717,8 @@ def delete_chat_session(session_id):
 
 @app.route('/api/chat', methods=['POST'])
 def chat_with_ai():
-    # 1. 確保使用者有登入 (若不想強制登入可拿掉這段)
-    # user_email = session.get('user_email')
-    # if not user_email:
-    #     return jsonify({"error": "請先登入"}), 401
-
     try:
-        # 2. 接收前端傳來的訊息
+        # 1. 接收前端傳來的訊息
         data = request.json
         user_message = data.get('message', '')
         history = data.get('history', [])
@@ -719,156 +726,40 @@ def chat_with_ai():
         if not user_message:
             return jsonify({"error": "未提供訊息"}), 400
 
-        # ★ 防呆機制：先快速檢查 Ollama 是否在線
-        try:
-            health_check = requests.get("http://localhost:11434/", timeout=3)
-        except Exception:
+        # 2. 健康檢查
+        if not ai_service.check_health():
             return jsonify({"error": "Ollama 連線失敗，請確認是否已啟動 Ollama。"}), 503
 
-        # 3. ★ 意圖分類 + 選擇性 RAG ★
-        #    判斷使用者是否在問咖啡/推薦相關問題
-        CAFE_KEYWORDS = [
-            '咖啡', '推薦', '咖啡廳', '咖啡店', 'café', 'cafe', '喝', '甜點',
-            '花蓮', '安靜', '讀書', '工作', '約會', '聚會', '早午餐', '下午茶',
-            '便宜', '平價', '好喝', '好吃', '哪裡', '哪家', '附近', '營業',
-            '幾點', '開門', '關門', '休息', '地址', '電話', '價格', '消費',
-            '文青', '氛圍', '氣氛', '環境', '貓', '寵物', '座位', 'wifi',
-            '拿鐵', '手沖', '濾掛', '豆子', '烘焙', '評價', '評論', '打卡',
-            '測驗', '結果', '適合', '口感', '風味', '酸', '苦', '甜',
-            '司康', '蛋糕', '鬆餅', '可頌', '冰', '熱'
-        ]
-
-        is_cafe_related = any(kw in user_message.lower() for kw in CAFE_KEYWORDS)
+        # 3. 意圖分類 + RAG 檢索
+        is_cafe_related, matched_keywords = ai_service.classify_intent(user_message)
         cafe_context = ""
-
         if is_cafe_related:
-            try:
-                from sqlalchemy import or_
-                # 從使用者訊息中提取命中的關鍵字
-                matched_keywords = [kw for kw in CAFE_KEYWORDS if kw in user_message.lower()]
-                
-                # 用關鍵字搜尋相關的咖啡廳（透過名稱、地址、標籤）
-                query = Cafes.query
-                
-                # 嘗試用標籤和名稱匹配
-                tag_filters = []
-                name_filters = []
-                for kw in matched_keywords:
-                    tag_filters.append(Tags.tag_name.contains(kw))
-                    name_filters.append(Cafes.name.contains(kw))
-                    name_filters.append(Cafes.address.contains(kw))
+            cafe_context = ai_service.retrieve_cafe_context(matched_keywords, Cafes, Tags)
 
-                # 先找標籤匹配的咖啡廳
-                tagged_cafes = Cafes.query.join(Cafes.tags).filter(
-                    or_(*tag_filters)
-                ).distinct().limit(5).all() if tag_filters else []
-
-                # 再找名稱/地址匹配的
-                name_cafes = Cafes.query.filter(
-                    or_(*name_filters)
-                ).limit(3).all() if name_filters else []
-
-                # 合併去重（最多取 5 家）
-                seen_ids = set()
-                relevant_cafes = []
-                for cafe in tagged_cafes + name_cafes:
-                    if cafe.id not in seen_ids and len(relevant_cafes) < 5:
-                        seen_ids.add(cafe.id)
-                        relevant_cafes.append(cafe)
-                
-                # 如果關鍵字匹配不到，就拿最熱門的 5 家
-                if not relevant_cafes:
-                    relevant_cafes = Cafes.query.order_by(Cafes.num.desc()).limit(5).all()
-
-                # 組裝上下文
-                cafe_lines = []
-                DAY_NAMES = ['', '一', '二', '三', '四', '五', '六', '日']
-                for cafe in relevant_cafes:
-                    tags_str = ', '.join([t.tag_name for t in cafe.tags[:8]])
-                    
-                    # 營業時間簡要
-                    hours_parts = []
-                    for h in sorted(cafe.hours, key=lambda x: x.day_of_week or 0):
-                        if h.is_closed:
-                            hours_parts.append(f"週{DAY_NAMES[h.day_of_week]}:公休")
-                        elif h.open_time and h.close_time:
-                            hours_parts.append(f"週{DAY_NAMES[h.day_of_week]}:{h.open_time.strftime('%H:%M')}-{h.close_time.strftime('%H:%M')}")
-                    hours_str = '、'.join(hours_parts) if hours_parts else '未提供'
-
-                    cafe_lines.append(
-                        f"- {cafe.name} | 地址：{cafe.address or '未提供'} | 消費：{cafe.cost or '未提供'} | "
-                        f"標籤：{tags_str or '無'} | 營業：{hours_str}"
-                    )
-                
-                cafe_context = "\n\n【以下是系統資料庫中的咖啡廳資料，請優先參考這些資料來回答】\n" + "\n".join(cafe_lines) + "\n"
-            except Exception as e:
-                print(f"RAG 查詢失敗: {e}")
-                cafe_context = ""
-
-        # 4. 組裝最終 Prompt
-        ollama_url = "http://localhost:11434/api/generate"
+        # 4. 組裝 Prompt
         model_name = app.config.get('OLLAMA_MODEL', 'llama3.2:3b')
+        prompt_text = ai_service.build_prompt(user_message, history, is_cafe_related, cafe_context)
 
-        if is_cafe_related:
-            system_prompt = """你是「啡你莫屬」的資深咖啡廳顧問，正與熟客輕鬆聊天。請嚴格遵守以下對話原則：
-1. 【語氣自然有溫度】：說話要像真人朋友一樣，絕對不要像機器人一樣列點，或說出「等待您的回應」。
-2. 【漸進式引導與強制推薦】：每次最多只問 1 個最關鍵的問題。如果使用者已經明確回答了你的問題，或者你覺得資訊已經夠了，請「立刻」從系統資料庫中挑選 1 到 2 家最適合的店介紹給他，**絕對不允許再無止盡地提問**。
-3. 【精華介紹】：介紹要像朋友分享一樣精華，不要貼出一大串資料。
-4. 【絕不編造】：只能推薦系統資料庫中出現的店家。
-5. 【極度簡短】：每一次的回覆請保持在 2 到 3 句話的長度，讓對話有來有往。"""
-        else:
-            system_prompt = """你是「啡你莫屬」系統的友善助手。
-請用繁體中文簡短、自然地回答使用者的問題。說話要像朋友一樣輕鬆，如果話題適合，你可以主動用「一個」簡單的問題反問來延續話題。切記回答要非常簡潔，且不要每次都自我介紹。"""
+        # 5. 取得當前使用者 ID（若有登入）
+        user_id = None
+        user_email = session.get('user_email')
+        if user_email:
+            current_user = User.query.filter_by(email=user_email).first()
+            if current_user:
+                user_id = current_user.id
 
-        # 將歷史對話組合成字串
-        history_text = ""
-        if history:
-            history_text = "\n\n【歷史對話紀錄】\n"
-            for msg in history:
-                role_name = "使用者" if msg.get("role") == "user" else "助手"
-                history_text += f"{role_name}：{msg.get('content', '')}\n"
+        # 6. 串流生成（ai_service 會在結束時自動攔截 Token 並寫入 AiQueryLog）
+        generator = ai_service.stream_generate(
+            model_name=model_name,
+            prompt_text=prompt_text,
+            is_cafe_related=is_cafe_related,
+            cafe_context=cafe_context,
+            db=db,
+            AiQueryLog=AiQueryLog,
+            user_id=user_id
+        )
 
-        prompt_text = f"{system_prompt}{cafe_context}{history_text}\n\n【最新訊息】\n使用者：{user_message}\n助手："
-        
-        payload = {
-            "model": model_name,
-            "prompt": prompt_text,
-            "stream": True
-        }
-
-        # 4. 使用 Generator 轉發資料流給前端
-        #    重點：先送出 debug_info，再連線 Ollama，讓前端不用等
-        def generate():
-            import json
-            # ★ 先送出第一包 debug_info — 前端立刻就能顯示
-            initial_debug = {
-                "type": "debug_info",
-                "model": model_name,
-                "prompt": prompt_text,
-                "is_cafe_related": is_cafe_related,
-                "rag_context": cafe_context if cafe_context else "(未注入資料庫資料)"
-            }
-            yield json.dumps(initial_debug, ensure_ascii=False) + "\n"
-
-            # ★ 然後才去連 Ollama（這裡可能會卡一段時間等模型載入）
-            try:
-                response = requests.post(ollama_url, json=payload, stream=True, timeout=300)
-                response.raise_for_status()
-
-                for line in response.iter_lines():
-                    if line:
-                        yield line.decode('utf-8') + "\n"
-            except requests.exceptions.ConnectionError:
-                error_msg = json.dumps({"error": "Ollama 連線失敗，請確認 Ollama 是否已啟動。", "done": True}, ensure_ascii=False)
-                yield error_msg + "\n"
-            except requests.exceptions.Timeout:
-                error_msg = json.dumps({"error": "Ollama 回應逾時，模型可能正在載入中，請稍後再試。", "done": True}, ensure_ascii=False)
-                yield error_msg + "\n"
-            except Exception as e:
-                error_msg = json.dumps({"error": f"Ollama 發生錯誤：{str(e)}", "done": True}, ensure_ascii=False)
-                yield error_msg + "\n"
-
-        resp = app.response_class(generate(), mimetype='application/x-ndjson')
+        resp = app.response_class(stream_with_context(generator), mimetype='application/x-ndjson')
         resp.headers['Cache-Control'] = 'no-cache'
         resp.headers['X-Accel-Buffering'] = 'no'
         return resp
@@ -989,30 +880,164 @@ def admin_get_logs():
         'current_page': logs.page
     })
 
+# --- 總覽數據 ---
+@app.route('/api/admin/overview', methods=['GET'])
+@admin_required
+def admin_get_overview():
+    """管理員總覽：提供 KPI、折線圖數據、熱門關鍵字、活躍使用者排行"""
+    from sqlalchemy import func, cast, Date
+    from datetime import timedelta
+
+    now = datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    seven_days_ago = today_start - timedelta(days=6)  # 含今天共 7 天
+
+    try:
+        # === KPI 卡片 ===
+        total_users = User.query.count()
+        total_cafes = Cafes.query.count()
+
+        # 今日 AI 查詢次數（從 AiQueryLog）
+        today_queries = AiQueryLog.query.filter(
+            AiQueryLog.created_at >= today_start
+        ).count()
+
+        # 今日 Token 總消耗
+        today_tokens_result = db.session.query(
+            func.coalesce(func.sum(AiQueryLog.prompt_tokens + AiQueryLog.completion_tokens), 0)
+        ).filter(AiQueryLog.created_at >= today_start).scalar()
+        today_tokens = int(today_tokens_result)
+
+        # 今日平均回應時間（毫秒 → 秒）
+        avg_time_result = db.session.query(
+            func.avg(AiQueryLog.total_time_ms)
+        ).filter(
+            AiQueryLog.created_at >= today_start,
+            AiQueryLog.total_time_ms > 0
+        ).scalar()
+        avg_response_sec = round(float(avg_time_result) / 1000, 1) if avg_time_result else 0
+
+        # === 折線圖數據：近 7 天 ===
+        chart_rows = db.session.query(
+            cast(AiQueryLog.created_at, Date).label('date'),
+            func.count(AiQueryLog.id).label('query_count'),
+            func.coalesce(func.sum(AiQueryLog.prompt_tokens), 0).label('prompt_tokens'),
+            func.coalesce(func.sum(AiQueryLog.completion_tokens), 0).label('completion_tokens')
+        ).filter(
+            AiQueryLog.created_at >= seven_days_ago
+        ).group_by(
+            cast(AiQueryLog.created_at, Date)
+        ).order_by(
+            cast(AiQueryLog.created_at, Date)
+        ).all()
+
+        # 建立完整 7 天的日期骨架（補零）
+        chart_data = []
+        for i in range(7):
+            target_date = (seven_days_ago + timedelta(days=i)).date()
+            found = False
+            for row in chart_rows:
+                if row.date == target_date:
+                    chart_data.append({
+                        'date': target_date.strftime('%m/%d'),
+                        'queries': row.query_count,
+                        'prompt_tokens': int(row.prompt_tokens),
+                        'completion_tokens': int(row.completion_tokens),
+                        'total_tokens': int(row.prompt_tokens) + int(row.completion_tokens)
+                    })
+                    found = True
+                    break
+            if not found:
+                chart_data.append({
+                    'date': target_date.strftime('%m/%d'),
+                    'queries': 0,
+                    'prompt_tokens': 0,
+                    'completion_tokens': 0,
+                    'total_tokens': 0
+                })
+
+        # === 熱門關鍵字分析（從 ChatSession 的 messages 欄位） ===
+        # 分析近 7 天的使用者對話內容
+        ANALYSIS_KEYWORDS = [
+            '安靜', '讀書', '工作', '約會', '聚會', '早午餐', '下午茶',
+            '便宜', '平價', '文青', '氛圍', '環境', '貓', '寵物', '座位',
+            'wifi', '插座', '不限時', '深夜', '拿鐵', '手沖', '甜點',
+            '蛋糕', '司康', '可頌', '鬆餅', '花蓮', '台北', '信義',
+            '中山', '大安', '松山', '中正', '萬華', '內湖'
+        ]
+
+        keyword_counts = {kw: 0 for kw in ANALYSIS_KEYWORDS}
+        recent_sessions = ChatSession.query.filter(
+            ChatSession.updated_at >= seven_days_ago
+        ).all()
+
+        for s in recent_sessions:
+            if s.messages:
+                for msg in s.messages:
+                    if msg.get('sender') == 'user' or msg.get('role') == 'user':
+                        text = (msg.get('text', '') + msg.get('content', '')).lower()
+                        for kw in ANALYSIS_KEYWORDS:
+                            if kw in text:
+                                keyword_counts[kw] += 1
+
+        # 取前 10 名
+        top_keywords = sorted(
+            [{'keyword': k, 'count': v} for k, v in keyword_counts.items() if v > 0],
+            key=lambda x: x['count'],
+            reverse=True
+        )[:10]
+
+        # === 活躍使用者排行（依 AI 查詢次數） ===
+        top_users_rows = db.session.query(
+            AiQueryLog.user_id,
+            func.count(AiQueryLog.id).label('query_count'),
+            func.coalesce(func.sum(AiQueryLog.prompt_tokens + AiQueryLog.completion_tokens), 0).label('total_tokens')
+        ).filter(
+            AiQueryLog.user_id.isnot(None),
+            AiQueryLog.created_at >= seven_days_ago
+        ).group_by(
+            AiQueryLog.user_id
+        ).order_by(
+            func.count(AiQueryLog.id).desc()
+        ).limit(5).all()
+
+        top_users = []
+        for row in top_users_rows:
+            user = User.query.get(row.user_id)
+            if user:
+                top_users.append({
+                    'name': user.name,
+                    'email': user.email,
+                    'query_count': row.query_count,
+                    'total_tokens': int(row.total_tokens)
+                })
+
+        return jsonify({
+            'kpi': {
+                'total_users': total_users,
+                'total_cafes': total_cafes,
+                'today_queries': today_queries,
+                'today_tokens': today_tokens,
+                'avg_response_sec': avg_response_sec
+            },
+            'chart_data': chart_data,
+            'top_keywords': top_keywords,
+            'top_users': top_users
+        })
+
+    except Exception as e:
+        print(f"Overview API Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
 # --- 模型管理 ---
 @app.route('/api/admin/model', methods=['GET'])
 @admin_required
 def admin_get_model():
     """取得目前使用的模型和 Ollama 已安裝的模型列表"""
-    # 目前使用的模型（從 chat API 中的設定讀取）
     current_model = app.config.get('OLLAMA_MODEL', 'llama3.2:3b')
-    
-    # 嘗試從 Ollama 取得已安裝的模型列表
-    installed_models = []
-    ollama_status = 'offline'
-    try:
-        resp = requests.get('http://localhost:11434/api/tags', timeout=5)
-        if resp.ok:
-            ollama_status = 'online'
-            models_data = resp.json().get('models', [])
-            installed_models = [{
-                'name': m.get('name', ''),
-                'size': m.get('size', 0),
-                'modified_at': m.get('modified_at', '')
-            } for m in models_data]
-    except:
-        ollama_status = 'offline'
-    
+    ollama_status, installed_models = ai_service.list_models()
     return jsonify({
         'current_model': current_model,
         'ollama_status': ollama_status,
@@ -1042,23 +1067,17 @@ def admin_delete_model():
     if not model_name:
         return jsonify({'error': '請指定模型名稱'}), 400
     
-    # 防止刪除目前正在使用的模型
     current_model = app.config.get('OLLAMA_MODEL', 'llama3.2:3b')
     if model_name == current_model:
         return jsonify({'error': '不能刪除目前正在使用的模型'}), 400
 
-    try:
-        # 發送刪除請求給 Ollama
-        # Ollama API: DELETE /api/delete {"name": "..."}
-        resp = requests.delete('http://localhost:11434/api/delete', json={'name': model_name})
-        if resp.ok:
-            current_email = session.get('user_email')
-            log_action(current_email, '刪除模型', f'刪除模型 {model_name}')
-            return jsonify({'success': True})
-        else:
-            return jsonify({'error': f'Ollama 刪除失敗: {resp.text}'}), 500
-    except Exception as e:
-        return jsonify({'error': f'連線失敗: {str(e)}'}), 500
+    success, error = ai_service.delete_model(model_name)
+    if success:
+        current_email = session.get('user_email')
+        log_action(current_email, '刪除模型', f'刪除模型 {model_name}')
+        return jsonify({'success': True})
+    else:
+        return jsonify({'error': error}), 500
 
 
 # ==========================================
