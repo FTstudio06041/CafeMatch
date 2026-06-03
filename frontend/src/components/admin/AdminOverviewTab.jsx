@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, AreaChart, Area
 } from 'recharts';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { AuthContext } from '../../context/AuthContext';
 
 // 自訂 Tooltip 元件
 function CustomTooltip({ active, payload, label }) {
@@ -22,6 +21,7 @@ function CustomTooltip({ active, payload, label }) {
 }
 
 export default function AdminOverviewTab() {
+  const { API_BASE_URL } = useContext(AuthContext);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -33,7 +33,7 @@ export default function AdminOverviewTab() {
   async function fetchOverview() {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/admin/overview`, { credentials: 'include' });
+      const res = await fetch(`${API_BASE_URL}/api/admin/overview`, { credentials: 'include' });
       if (!res.ok) throw new Error('載入失敗');
       const json = await res.json();
       setData(json);
