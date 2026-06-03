@@ -12,6 +12,7 @@ ai_service.py — CafeMatch AI 服務模組
 
 import json
 import requests
+import os
 from datetime import datetime
 
 
@@ -149,7 +150,7 @@ def retrieve_cafe_context(matched_keywords, Cafes, Tags):
 # 3. Prompt 組裝
 # ==========================================
 
-def build_prompt(user_message, history, is_cafe_related, cafe_context):
+def build_prompt(user_message, history, is_cafe_related, cafe_context, guide_instruction=None):
     """
     將 system prompt、RAG 上下文、歷史對話、使用者訊息組裝成完整的 Prompt。
 
@@ -157,6 +158,10 @@ def build_prompt(user_message, history, is_cafe_related, cafe_context):
         prompt_text: str
     """
     system_prompt = CAFE_SYSTEM_PROMPT if is_cafe_related else GENERAL_SYSTEM_PROMPT
+
+    # 注入對話引導指令（由 conversation_guide 模組提供）
+    if guide_instruction:
+        system_prompt += f"\n\n【本輪任務】\n{guide_instruction}"
 
     # 組裝歷史對話
     history_text = ""
@@ -291,6 +296,23 @@ def check_health():
         return resp.ok
     except Exception:
         return False
+
+
+def get_default_model():
+    """
+    動態取得預設模型。
+    先嘗試從環境變數讀取 OLLAMA_MODEL，若無，則向 Ollama 請求已安裝的模型清單，
+    並回傳第一個模型的名稱。若 Ollama 無回應或無模型，則回傳空字串。
+    """
+    env_model = os.getenv('OLLAMA_MODEL')
+    if env_model:
+        return env_model
+        
+    status, models = list_models()
+    if status == 'online' and models:
+        return models[0]['name']
+        
+    return ""
 
 
 def list_models():

@@ -10,6 +10,7 @@ import AdminLogsTab from '../components/admin/AdminLogsTab';
 import AdminModelTab from '../components/admin/AdminModelTab';
 import AdminAnnouncementsTab from '../components/admin/AdminAnnouncementsTab';
 import AdminBugReportsTab from '../components/admin/AdminBugReportsTab';
+import AdminGuideTab from '../components/admin/AdminGuideTab';
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('overview');
@@ -33,6 +34,7 @@ export default function AdminPage() {
               { key: 'model', label: '模型管理' },
               { key: 'announcement', label: '系統公告' },
               { key: 'bug_report', label: 'Bug 反饋' },
+              { key: 'guide', label: '對話引導' },
             ].map(tab => (
               <button
                 key={tab.key}
@@ -52,6 +54,7 @@ export default function AdminPage() {
           {activeTab === 'model' && <AdminModelTab />}
           {activeTab === 'announcement' && <AdminAnnouncementsTab />}
           {activeTab === 'bug_report' && <AdminBugReportsTab />}
+          {activeTab === 'guide' && <AdminGuideTab />}
         </div>
     </MainLayout>
   );

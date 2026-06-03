@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 import requests
 import uuid
 from services import ai_service
+from services import conversation_guide
 
 load_dotenv()
 
@@ -854,6 +855,12 @@ def delete_chat_session(session_id):
         db.session.rollback()
         return jsonify({"error": str(e)}), 500
 
+def get_current_model():
+    """取得當前使用的模型。如果未設定，則動態抓取 Ollama 預設模型"""
+    if 'OLLAMA_MODEL' not in app.config or not app.config['OLLAMA_MODEL']:
+        app.config['OLLAMA_MODEL'] = ai_service.get_default_model()
+    return app.config['OLLAMA_MODEL']
+
 @app.route('/api/chat', methods=['POST'])
 def chat_with_ai():
     try:
@@ -875,9 +882,14 @@ def chat_with_ai():
         if is_cafe_related:
             cafe_context = ai_service.retrieve_cafe_context(matched_keywords, Cafes, Tags)
 
+        # 3.5 對話引導：分析 history，決定是否引導提問
+        guide_instruction = None
+        if is_cafe_related:
+            guide_instruction = conversation_guide.analyze_and_guide(history)
+
         # 4. 組裝 Prompt
-        model_name = app.config.get('OLLAMA_MODEL', 'llama3.2:3b')
-        prompt_text = ai_service.build_prompt(user_message, history, is_cafe_related, cafe_context)
+        model_name = get_current_model()
+        prompt_text = ai_service.build_prompt(user_message, history, is_cafe_related, cafe_context, guide_instruction)
 
         # 5. 取得當前使用者 ID（若有登入）
         user_id = None
@@ -1186,7 +1198,7 @@ def admin_get_overview():
 @admin_required
 def admin_get_model():
     """取得目前使用的模型和 Ollama 已安裝的模型列表"""
-    current_model = app.config.get('OLLAMA_MODEL', 'llama3.2:3b')
+    current_model = get_current_model()
     ollama_status, installed_models = ai_service.list_models()
     return jsonify({
         'current_model': current_model,
@@ -1217,7 +1229,7 @@ def admin_delete_model():
     if not model_name:
         return jsonify({'error': '請指定模型名稱'}), 400
     
-    current_model = app.config.get('OLLAMA_MODEL', 'llama3.2:3b')
+    current_model = get_current_model()
     if model_name == current_model:
         return jsonify({'error': '不能刪除目前正在使用的模型'}), 400
 
@@ -1228,6 +1240,24 @@ def admin_delete_model():
         return jsonify({'success': True})
     else:
         return jsonify({'error': error}), 500
+
+# --- 對話引導策略管理 ---
+@app.route('/api/admin/guide-strategy', methods=['GET'])
+@admin_required
+def admin_get_guide_strategy():
+    """取得對話引導策略參數"""
+    strategy = conversation_guide.get_strategy()
+    return jsonify(strategy)
+
+@app.route('/api/admin/guide-strategy', methods=['PUT'])
+@admin_required
+def admin_update_guide_strategy():
+    """更新對話引導策略參數"""
+    data = request.json
+    updated = conversation_guide.update_strategy(data)
+    current_email = session.get('user_email')
+    log_action(current_email, '更新對話引導策略', f'更新為 {updated}')
+    return jsonify({'success': True, 'strategy': updated})
 
 
 # ==========================================
