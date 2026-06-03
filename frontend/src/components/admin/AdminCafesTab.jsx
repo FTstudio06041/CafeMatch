@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
 export default function AdminCafesTab() {
@@ -10,18 +10,18 @@ export default function AdminCafesTab() {
   const [editingCafe, setEditingCafe] = useState(null);
   const [editForm, setEditForm] = useState({});
 
-  useEffect(() => {
-    fetchCafes();
-  }, []);
-
-  const fetchCafes = async () => {
+  const fetchCafes = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/cafes`, { credentials: 'include' });
       if (res.ok) setCafes(await res.json());
     } catch (e) { console.error(e); }
     setLoading(false);
-  };
+  }, [API_BASE_URL]);
+
+  useEffect(() => {
+    Promise.resolve().then(fetchCafes);
+  }, [fetchCafes]);
 
   const openEditCafe = (cafe) => {
     setEditingCafe(cafe);
@@ -102,8 +102,8 @@ export default function AdminCafesTab() {
                 <tr key={c.id}>
                   <td>{c.id}</td>
                   <td>
-                    {c.image ? (
-                      <img src={c.image} alt={c.name} style={{width:'48px',height:'48px',borderRadius:'8px',objectFit:'cover'}} />
+                    {(c.image_url || c.image) ? (
+                      <img src={c.image_url || c.image} alt={c.name} style={{width:'48px',height:'48px',borderRadius:'8px',objectFit:'cover'}} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                     ) : (
                       <div style={{width:'48px',height:'48px',borderRadius:'8px',background:'#e0d6cc',display:'flex',alignItems:'center',justifyContent:'center',color:'#999',fontSize:'0.7rem'}}>無圖</div>
                     )}

@@ -1,12 +1,11 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useState, useEffect, useContext, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import '../ExplorePage.css';
 import MainLayout from '../layouts/MainLayout';
 
 export default function ExplorePage() {
   const { user, API_BASE_URL } = useContext(AuthContext);
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // 狀態管理
@@ -14,26 +13,10 @@ export default function ExplorePage() {
   // 探索頁專用狀態
   const [shops, setShops] = useState([]);
   const [currentFilter, setCurrentFilter] = useState('all'); // 'all', 'fav', 'visited'
-  const [selectedShop, setSelectedShop] = useState(null); // 控制全頁店家檢視資料
+  const openShopId = searchParams.get('open_shop_id');
+  const selectedShop = openShopId ? shops.find(item => String(item.id) === openShopId) || null : null;
 
-  // 1. 初始化：讀取側欄對話紀錄與抓取咖啡廳資料
-  useEffect(() => {
-    fetchCafes();
-  }, []);
-
-  useEffect(() => {
-    const openShopId = searchParams.get('open_shop_id');
-
-    if (!openShopId) {
-      setSelectedShop(null);
-      return;
-    }
-
-    const shop = shops.find(item => String(item.id) === openShopId);
-    if (shop) setSelectedShop(shop);
-  }, [searchParams, shops]);
-
-  const fetchCafes = async () => {
+  const fetchCafes = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/cafes`, { credentials: 'include' });
       const data = await response.json();
@@ -41,7 +24,12 @@ export default function ExplorePage() {
     } catch (error) {
       console.error('Failed to fetch cafes:', error);
     }
-  };
+  }, [API_BASE_URL]);
+
+  // 1. 初始化：讀取側欄對話紀錄與抓取咖啡廳資料
+  useEffect(() => {
+    Promise.resolve().then(fetchCafes);
+  }, [fetchCafes]);
 
   // 2. 篩選邏輯 (根據 currentFilter 狀態自動過濾)
   const filteredShops = shops.filter(shop => {
@@ -51,13 +39,17 @@ export default function ExplorePage() {
   });
 
   const openShop = (shop) => {
-    setSelectedShop(shop);
     setSearchParams({ open_shop_id: String(shop.id) });
   };
 
   const closeShop = () => {
-    setSelectedShop(null);
     setSearchParams({});
+  };
+
+  const getShopImage = (shop) => shop?.image_url || shop?.image || '';
+  const getImageAttribution = (shop) => {
+    if (shop?.image_source !== 'google') return '';
+    return shop.image_attribution ? `圖片：${shop.image_attribution}` : '圖片：Google Maps';
   };
 
   // 3. 點擊收藏/去過的 API 呼叫
@@ -92,19 +84,6 @@ export default function ExplorePage() {
           }
           return shop;
         }));
-
-        // 修正 2：獨立且乾淨地更新當前 Modal 顯示的 selectedShop
-        setSelectedShop(prevSelected => {
-          // 雙重確認更新的是同一家店
-          if (prevSelected && prevSelected.id === targetId) {
-            return {
-              ...prevSelected,
-              is_fav: type === 'fav' ? result.fav : prevSelected.is_fav,
-              is_visited: type === 'visited' ? result.visited : prevSelected.is_visited
-            };
-          }
-          return prevSelected;
-        });
 
       } else {
         alert("請先登入才能使用此功能！");
@@ -170,7 +149,12 @@ export default function ExplorePage() {
                 </div>
 
                 <div className="detail-hero-img" style={{ backgroundColor: selectedShop.color }}>
-                  {selectedShop.image && <img src={selectedShop.image} alt={selectedShop.name} />}
+                  {getShopImage(selectedShop) && (
+                    <>
+                      <img src={getShopImage(selectedShop)} alt={selectedShop.name} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                      {getImageAttribution(selectedShop) && <div className="image-attribution detail">{getImageAttribution(selectedShop)}</div>}
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -201,7 +185,12 @@ export default function ExplorePage() {
                   filteredShops.map(shop => (
                     <div key={shop.id} className={`shop-card ${shop.is_fav ? 'is-fav' : ''} ${shop.is_visited ? 'is-visited' : ''}`} onClick={() => openShop(shop)}>
                       <div className="card-img" style={{ backgroundColor: shop.color }}>
-                        {shop.image && <img src={shop.image} alt={shop.name} style={{width:'100%',height:'100%',objectFit:'cover'}} />}
+                        {getShopImage(shop) && (
+                          <>
+                            <img src={getShopImage(shop)} alt={shop.name} onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                            {getImageAttribution(shop) && <div className="image-attribution">{getImageAttribution(shop)}</div>}
+                          </>
+                        )}
                       </div>
                       <div className="card-status-icons">
                         {shop.is_fav && (

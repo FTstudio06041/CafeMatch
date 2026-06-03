@@ -21,6 +21,7 @@ app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev_key')
 app.config['GOOGLE_CLIENT_ID'] = os.getenv('GOOGLE_CLIENT_ID')
 app.config['GOOGLE_CLIENT_SECRET'] = os.getenv('GOOGLE_CLIENT_SECRET')
+app.config['GOOGLE_MAPS_API_KEY'] = os.getenv('GOOGLE_MAPS_API_KEY')
 local_db_uri = 'mysql+pymysql://root:@localhost/cafematch'
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DB_URI', local_db_uri)
 
@@ -119,6 +120,8 @@ class Cafes(db.Model):
     website = db.Column(db.String(255))
     cost = db.Column(db.String(50))
     image = db.Column(db.Text)  # 店家圖片（Base64）
+    google_place_id = db.Column(db.String(255))
+    google_photo_attribution = db.Column(db.Text)
     
     # 建立關聯 (方便查詢)
     # 透過 secondary 指定中間表，直接關聯到 Tags
@@ -303,6 +306,105 @@ class AiQueryLog(db.Model):
 # 新增：API 接口
 # ==========================================
 
+GOOGLE_PLACES_TEXT_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText'
+
+def has_google_maps_key():
+    return bool(app.config.get('GOOGLE_MAPS_API_KEY'))
+
+def get_cafe_image_url(cafe):
+    if cafe.image:
+        return cafe.image
+    if not has_google_maps_key():
+        return ''
+    return url_for('get_cafe_photo', cafe_id=cafe.id, _external=True)
+
+def build_google_place_query(cafe):
+    parts = [cafe.name]
+    if cafe.address:
+        parts.append(cafe.address)
+    else:
+        parts.append('花蓮 咖啡廳')
+    return ' '.join(part for part in parts if part)
+
+def ensure_google_place_id(cafe):
+    if cafe.google_place_id:
+        return cafe.google_place_id
+
+    api_key = app.config.get('GOOGLE_MAPS_API_KEY')
+    if not api_key:
+        return None
+
+    headers = {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': api_key,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress',
+    }
+    payload = {
+        'textQuery': build_google_place_query(cafe),
+        'languageCode': 'zh-TW',
+        'regionCode': 'TW',
+    }
+
+    response = requests.post(GOOGLE_PLACES_TEXT_SEARCH_URL, headers=headers, json=payload, timeout=10)
+    response.raise_for_status()
+    places = response.json().get('places', [])
+    if not places:
+        return None
+
+    cafe.google_place_id = places[0].get('id')
+    db.session.commit()
+    return cafe.google_place_id
+
+def get_google_photo_uri(cafe, max_width=900):
+    api_key = app.config.get('GOOGLE_MAPS_API_KEY')
+    place_id = ensure_google_place_id(cafe)
+    if not api_key or not place_id:
+        return None
+
+    details_url = f'https://places.googleapis.com/v1/places/{place_id}'
+    details_headers = {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': api_key,
+        'X-Goog-FieldMask': 'photos',
+    }
+    details_response = requests.get(
+        details_url,
+        headers=details_headers,
+        params={'languageCode': 'zh-TW'},
+        timeout=10
+    )
+    details_response.raise_for_status()
+    photos = details_response.json().get('photos', [])
+    if not photos:
+        return None
+
+    photo = photos[0]
+    attributions = photo.get('authorAttributions') or []
+    attribution_text = ', '.join(
+        item.get('displayName', '').strip()
+        for item in attributions
+        if item.get('displayName')
+    )
+    if attribution_text != (cafe.google_photo_attribution or ''):
+        cafe.google_photo_attribution = attribution_text
+        db.session.commit()
+
+    photo_name = photo.get('name')
+    if not photo_name:
+        return None
+
+    media_response = requests.get(
+        f'https://places.googleapis.com/v1/{photo_name}/media',
+        params={
+            'maxWidthPx': max(1, min(int(max_width), 4800)),
+            'skipHttpRedirect': 'true',
+            'key': api_key,
+        },
+        timeout=10
+    )
+    media_response.raise_for_status()
+    return media_response.json().get('photoUri')
+
 @app.route('/api/cafes', methods=['GET'])
 def get_cafes():
     try:
@@ -369,6 +471,9 @@ def get_cafes():
                 "desc": cafe.website or "尚無介紹",
                 "color": random.choice(palette), 
                 "image": cafe.image or "",
+                "image_url": get_cafe_image_url(cafe),
+                "image_source": "manual" if cafe.image else ("google" if has_google_maps_key() else ""),
+                "image_attribution": cafe.google_photo_attribution or "",
                 "map_url": map_link, 
                 "is_fav": my_state['fav'],          # 傳給前端亮燈
                 "is_visited": my_state['visited']   # 傳給前端亮燈
@@ -379,6 +484,28 @@ def get_cafes():
     except Exception as e:
         print("Database Error:", e)
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/cafes/<int:cafe_id>/photo', methods=['GET'])
+def get_cafe_photo(cafe_id):
+    cafe = Cafes.query.get_or_404(cafe_id)
+
+    if not has_google_maps_key():
+        return jsonify({'error': 'Google Maps API key is not configured'}), 503
+
+    try:
+        max_width = request.args.get('width', 900, type=int)
+        photo_uri = get_google_photo_uri(cafe, max_width=max_width)
+        if not photo_uri:
+            return jsonify({'error': 'No Google photo found for this cafe'}), 404
+        return redirect(photo_uri, code=302)
+    except requests.RequestException as e:
+        print(f'Google Places photo error for cafe {cafe_id}: {e}')
+        db.session.rollback()
+        return jsonify({'error': 'Failed to fetch Google photo'}), 502
+    except Exception as e:
+        print(f'Cafe photo error for cafe {cafe_id}: {e}')
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
     
 
 # --- 設定 OAuth ---
@@ -414,6 +541,18 @@ with app.app_context():
         print('[INIT] 已為 cafes 表新增 image 欄位')
     except Exception:
         db.session.rollback()  # 欄位已存在，忽略錯誤
+    try:
+        db.session.execute(db.text("ALTER TABLE cafes ADD COLUMN google_place_id VARCHAR(255) DEFAULT NULL"))
+        db.session.commit()
+        print('[INIT] 已為 cafes 表新增 google_place_id 欄位')
+    except Exception:
+        db.session.rollback()
+    try:
+        db.session.execute(db.text("ALTER TABLE cafes ADD COLUMN google_photo_attribution TEXT"))
+        db.session.commit()
+        print('[INIT] 已為 cafes 表新增 google_photo_attribution 欄位')
+    except Exception:
+        db.session.rollback()
     # 手動為既有的 community_posts 表加上 original_post_id 欄位
     try:
         db.session.execute(db.text("ALTER TABLE community_posts ADD COLUMN original_post_id INT DEFAULT NULL"))
@@ -826,6 +965,9 @@ def admin_get_cafes():
         'website': c.website or '',
         'cost': c.cost or '',
         'image': c.image or '',
+        'image_url': get_cafe_image_url(c),
+        'image_source': 'manual' if c.image else ('google' if has_google_maps_key() else ''),
+        'image_attribution': c.google_photo_attribution or '',
         'tags': ', '.join([t.tag_name for t in c.tags])
     } for c in cafes])
 
@@ -834,12 +976,20 @@ def admin_get_cafes():
 def admin_update_cafe(cafe_id):
     cafe = Cafes.query.get_or_404(cafe_id)
     data = request.json
-    if 'name' in data: cafe.name = data['name']
-    if 'address' in data: cafe.address = data['address']
+    should_refresh_google_place = False
+    if 'name' in data and data['name'] != cafe.name:
+        cafe.name = data['name']
+        should_refresh_google_place = True
+    if 'address' in data and data['address'] != cafe.address:
+        cafe.address = data['address']
+        should_refresh_google_place = True
     if 'phone' in data: cafe.phone = data['phone']
     if 'website' in data: cafe.website = data['website']
     if 'cost' in data: cafe.cost = data['cost']
     if 'image' in data: cafe.image = data['image']
+    if should_refresh_google_place:
+        cafe.google_place_id = None
+        cafe.google_photo_attribution = None
     db.session.commit()
     current_email = session.get('user_email')
     log_action(current_email, '更新店家', f'更新 {cafe.name} (ID: {cafe_id})')
