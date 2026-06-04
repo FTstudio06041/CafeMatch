@@ -24,7 +24,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     try {
-      const data = await apiClient('/api/me');
+      const data = await apiClient('/api/me', { suppressToast: true });
       if (data && data.is_logged_in) {
         localStorage.removeItem('guestMode');
         setUser(data);

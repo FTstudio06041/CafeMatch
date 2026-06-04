@@ -183,7 +183,7 @@ export default function ChatPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -208,26 +208,27 @@ export default function ChatPage() {
         const lines = chunk.split('\n').filter(line => line.trim() !== '');
 
         for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6);
-            if (dataStr === '[DONE]') {
+          try {
+            // 嘗試將每行解析為 JSON (因為後端傳回的是 NDJSON)
+            const parsed = JSON.parse(line);
+            
+            if (parsed.debug_info) {
+              currentDebugInfo = parsed.debug_info;
+              await syncStreamState(currentAiContent, currentDebugInfo);
+            } else if (parsed.content || parsed.response) {
+              // 支援 content 或 response (Ollama 原生欄位)
+              currentAiContent += (parsed.content || parsed.response);
+              await syncStreamState(currentAiContent, currentDebugInfo);
+            } else if (parsed.error) {
+              toast.error(`錯誤：${parsed.error}`);
+            }
+            
+            // 處理完成訊號
+            if (parsed.done) {
               await syncStreamState(currentAiContent, currentDebugInfo, '', true);
-              break;
             }
-            try {
-              const parsed = JSON.parse(dataStr);
-              if (parsed.debug_info) {
-                currentDebugInfo = parsed.debug_info;
-                await syncStreamState(currentAiContent, currentDebugInfo);
-              } else if (parsed.content) {
-                currentAiContent += parsed.content;
-                await syncStreamState(currentAiContent, currentDebugInfo);
-              } else if (parsed.error) {
-                toast.error(`錯誤：${parsed.error}`);
-              }
-            } catch (e) {
-              // 忽略 JSON parse error
-            }
+          } catch (e) {
+            // 忽略無法解析為 JSON 的行（例如空白或不完整的 chunk）
           }
         }
       }
@@ -308,7 +309,8 @@ export default function ChatPage() {
         })
         .catch(err => logger.error('Failed to load session:', err));
     }
-  }, [location.search, API_BASE_URL, user?.isGuest, executeChatStream, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search, API_BASE_URL, user?.isGuest, navigate]);
 
 
 
@@ -418,16 +420,6 @@ export default function ChatPage() {
           setIsDebugMode={setIsDebugMode}
         />
 
-        {/* --- 維護中彈窗 --- */}
-        <div className="maintenance-overlay">
-           <div className="maintenance-card">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color: 'var(--accent-color)', marginBottom: '16px', display: 'inline-block'}}>
-                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
-              </svg>
-              <h2>系統維護中</h2>
-              <p>AI 聊天功能維護中<br/>敬請期待！</p>
-           </div>
-        </div>
       </div>
 
       <WelcomeModal show={showWelcomeModal} onClose={() => setShowWelcomeModal(false)} />

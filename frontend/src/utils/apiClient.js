@@ -1,4 +1,5 @@
 import { logger } from './logger';
+import { toast } from './toast';
 
 // 判斷是否在 devtunnels 或 localhost
 export const API_BASE_URL = window.location.hostname.includes('devtunnels.ms')
@@ -8,7 +9,7 @@ export const API_BASE_URL = window.location.hostname.includes('devtunnels.ms')
 /**
  * 統一的 API 請求工具
  * - 自動加上 Credentials (以便帶上 Session Cookie)
- * - 統一攔截錯誤與 401 狀態
+ * - 統一攔截錯誤與 401 狀態，並自動彈出 Toast
  * 
  * @param {string} endpoint 請求端點，如 '/api/explore'
  * @param {object} options fetch 參數選項
@@ -41,7 +42,10 @@ export const apiClient = async (endpoint, options = {}) => {
       const errorMsg = data?.error || data?.message || `請求失敗 (HTTP ${response.status})`;
       logger.error(`API 錯誤 [${options.method || 'GET'} ${endpoint}]:`, errorMsg);
       
-      // 可以自訂一個 Error 物件帶上 status
+      if (!options.suppressToast) {
+        toast.error(errorMsg); // <--- 全域自動顯示錯誤 (除非被禁用)
+      }
+      
       const error = new Error(errorMsg);
       error.status = response.status;
       error.data = data;
@@ -50,7 +54,10 @@ export const apiClient = async (endpoint, options = {}) => {
 
     return data;
   } catch (error) {
-    logger.error(`網路或伺服器錯誤 [${options.method || 'GET'} ${endpoint}]:`, error.message);
+    if (!error.status) { // 只有在沒有 status 的時候（代表網路連線失敗或 fetch 拋出例外）才顯示
+      logger.error(`網路或伺服器錯誤 [${options.method || 'GET'} ${endpoint}]:`, error.message);
+      toast.error('無法連接到伺服器，請檢查網路狀態'); // <--- 全域自動顯示錯誤
+    }
     throw error;
   }
 };

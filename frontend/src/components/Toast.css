@@ -33,15 +33,21 @@
 }
 
 .toast.success {
-  border-left-color: #2e7d32;
+  background-color: #f0fdf4;
+  border-left-color: #22c55e;
+  color: #166534;
 }
 
 .toast.error {
-  border-left-color: #d32f2f;
+  background-color: #fef2f2;
+  border-left-color: #ef4444;
+  color: #991b1b;
 }
 
 .toast.info {
-  border-left-color: #0288d1;
+  background-color: #f0f9ff;
+  border-left-color: #0ea5e9;
+  color: #075985;
 }
 
 .toast-icon {
