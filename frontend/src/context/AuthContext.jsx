@@ -1,15 +1,14 @@
 import React, { createContext, useState, useEffect } from 'react';
-
+import { apiClient, API_BASE_URL as ApiUrl } from '../utils/apiClient';
+import { logger } from '../utils/logger';
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 共用的 API 基礎路徑
-  const API_BASE_URL = window.location.hostname.includes('devtunnels.ms')
-    ? `https://${window.location.host.replace('-5173', '-5000')}`
-    : 'http://localhost:5000';
+  // 共用的 API 基礎路徑 (已移至 apiClient)
+  const API_BASE_URL = ApiUrl;
 
   useEffect(() => {
     checkAuthStatus();
@@ -25,22 +24,15 @@ export const AuthProvider = ({ children }) => {
     };
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/me`, {
-        credentials: 'include', // 重要：帶上跨域 Cookie
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.is_logged_in) {
-          localStorage.removeItem('guestMode');
-          setUser(data);
-        } else {
-          handleGuestFallback();
-        }
+      const data = await apiClient('/api/me');
+      if (data && data.is_logged_in) {
+        localStorage.removeItem('guestMode');
+        setUser(data);
       } else {
         handleGuestFallback();
       }
     } catch (error) {
-      console.error('Auth check failed:', error);
+      logger.error('Auth check failed:', error);
       handleGuestFallback();
     } finally {
       setIsLoading(false);
