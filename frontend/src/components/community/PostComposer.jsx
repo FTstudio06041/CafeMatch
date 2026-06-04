@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
+import { toast } from '../../utils/toast';
+import { logger } from '../../utils/logger';
 /**
  * 正常貼文編輯器
  * 文字 + 圖片上傳 + 店家選擇
@@ -28,7 +30,7 @@ export default function PostComposer({ onSubmit }) {
         setCafes(data);
       }
     } catch (err) {
-      console.error('載入咖啡廳列表失敗:', err);
+      logger.error('載入咖啡廳列表失敗:', err);
     }
   };
 
@@ -39,7 +41,7 @@ export default function PostComposer({ onSubmit }) {
 
     // 限制檔案大小（5MB）
     if (file.size > 5 * 1024 * 1024) {
-      alert('圖片大小不可超過 5MB');
+      toast.info('圖片大小不可超過 5MB');
       return;
     }
 
@@ -53,7 +55,7 @@ export default function PostComposer({ onSubmit }) {
   // 發布貼文
   const handleSubmit = async () => {
     if (user?.isGuest) {
-      alert("請先登入才能發布貼文喔！");
+      toast.info("請先登入才能發布貼文喔！");
       return;
     }
     if (!content.trim() || isSubmitting) return;
@@ -70,7 +72,7 @@ export default function PostComposer({ onSubmit }) {
       setCafeId('');
       setShowCafeSelector(false);
     } catch (err) {
-      console.error('發布貼文失敗:', err);
+      logger.error('發布貼文失敗:', err);
     } finally {
       setIsSubmitting(false);
     }

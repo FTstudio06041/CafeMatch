@@ -1,6 +1,5 @@
 import React, { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
-import MainLayout from '../layouts/MainLayout';
 import '../CommunityPage.css';
 import NoteStrip from '../components/community/NoteStrip';
 import NotePopup from '../components/community/NotePopup';
@@ -43,7 +42,7 @@ export default function CommunityPage() {
   // 渲染
   // =========================================
   return (
-    <MainLayout>
+    <>
       <div className="community-content">
         {/* 便利貼橫向列 */}
         <NoteStrip
@@ -94,6 +93,6 @@ export default function CommunityPage() {
           }}
         />
       )}
-    </MainLayout>
+    </>
   );
 }

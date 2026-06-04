@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
+import { toast } from '../../utils/toast';
+import { logger } from '../../utils/logger';
 export default function AdminModelTab() {
   const { API_BASE_URL } = useContext(AuthContext);
   const [modelInfo, setModelInfo] = useState({ current_model: '', ollama_status: 'offline', installed_models: [] });
@@ -15,7 +17,7 @@ export default function AdminModelTab() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/model`, { credentials: 'include' });
       if (res.ok) setModelInfo(await res.json());
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
     setLoading(false);
   };
 
@@ -27,7 +29,7 @@ export default function AdminModelTab() {
         body: JSON.stringify({ model: modelName })
       });
       if (res.ok) fetchModel();
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
   };
 
   const deleteModel = async (modelName) => {
@@ -41,9 +43,9 @@ export default function AdminModelTab() {
       if (res.ok) fetchModel();
       else {
         const data = await res.json();
-        alert(data.error || '刪除失敗');
+        toast.info(data.error || '刪除失敗');
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
   };
 
   const formatSize = (bytes) => {

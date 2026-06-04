@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import '../ChatPage.css'; // 保留側欄的相關 CSS 樣式
 
+import { toast } from '../utils/toast';
+import { logger } from '../utils/logger';
 export default function Sidebar() {
   const { user, API_BASE_URL } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(window.innerWidth <= 768);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(window.innerWidth <= 1366);
   const [sessions, setSessions] = useState([]);
 
   // Bug 回報狀態
@@ -27,7 +29,7 @@ export default function Sidebar() {
   });
 
   // 取得對話紀錄清單
-  const fetchSessions = async () => {
+  const fetchSessions = useCallback(async () => {
     if (!user || user.isGuest) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/chat/sessions`, {
@@ -40,9 +42,9 @@ export default function Sidebar() {
         setSessions(rawSessions.map(normalizeSession).filter(session => session.id));
       }
     } catch (e) {
-      console.error('載入對話紀錄失敗:', e);
+      logger.error('載入對話紀錄失敗:', e);
     }
-  };
+  }, [user, API_BASE_URL]);
 
   useEffect(() => {
     fetchSessions();
@@ -51,7 +53,7 @@ export default function Sidebar() {
     window.addEventListener('chat-updated', handleChatUpdated);
     
     const handleResize = () => {
-      if (window.innerWidth <= 768) {
+      if (window.innerWidth <= 1366) {
         setIsSidebarCollapsed(true);
       } else {
         setIsSidebarCollapsed(false);
@@ -63,7 +65,7 @@ export default function Sidebar() {
       window.removeEventListener('chat-updated', handleChatUpdated);
       window.removeEventListener('resize', handleResize);
     };
-  }, [user, API_BASE_URL]);
+  }, [fetchSessions]);
 
   const handleDelete = async (e, id) => {
     e.stopPropagation();
@@ -81,7 +83,7 @@ export default function Sidebar() {
         window.dispatchEvent(new Event('chat-updated'));
       }
     } catch (err) {
-      console.error('刪除對話失敗:', err);
+      logger.error('刪除對話失敗:', err);
     }
   };
 
@@ -101,15 +103,15 @@ export default function Sidebar() {
         })
       });
       if (res.ok) {
-        alert('回報提交成功！感謝您的支持與反饋 ❤️');
+        toast.info('回報提交成功！感謝您的支持與反饋 ❤️');
         setReportContent('');
         setShowReportModal(false);
       } else {
-        alert('提交失敗，請稍後再試！');
+        toast.info('提交失敗，請稍後再試！');
       }
     } catch (err) {
-      console.error('提交反饋錯誤:', err);
-      alert('網路連線錯誤，請稍後再試！');
+      logger.error('提交反饋錯誤:', err);
+      toast.info('網路連線錯誤，請稍後再試！');
     } finally {
       setIsSubmitting(false);
     }
@@ -159,7 +161,7 @@ export default function Sidebar() {
               className={`chat-item ${chat.id === currentChatId ? 'active' : ''}`} 
               onClick={() => {
                 navigate(`/chat?id=${chat.id}`);
-                if (window.innerWidth <= 768) setIsSidebarCollapsed(true);
+                if (window.innerWidth <= 1366) setIsSidebarCollapsed(true);
               }}
             >
               <div className="chat-icon">

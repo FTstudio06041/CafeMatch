@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
+import { toast } from '../../utils/toast';
+import { logger } from '../../utils/logger';
 /**
  * 便利貼展開小視窗
  * 顯示完整內容 + 愛心按鈕 + 留言功能
@@ -28,14 +30,14 @@ export default function NotePopup({ note, onClose, onDelete, onLikeUpdate }) {
         setComments(data.comments || []);
       }
     } catch (err) {
-      console.error('載入留言失敗:', err);
+      logger.error('載入留言失敗:', err);
     }
   };
 
   // 按愛心 / 取消愛心
   const handleLike = async () => {
     if (!user || user.isGuest) {
-      alert("請先登入才能按讚喔！");
+      toast.info("請先登入才能按讚喔！");
       return;
     }
     try {
@@ -50,7 +52,7 @@ export default function NotePopup({ note, onClose, onDelete, onLikeUpdate }) {
         onLikeUpdate?.(note.id, data.is_liked, data.like_count);
       }
     } catch (err) {
-      console.error('愛心操作失敗:', err);
+      logger.error('愛心操作失敗:', err);
     }
   };
 
@@ -70,7 +72,7 @@ export default function NotePopup({ note, onClose, onDelete, onLikeUpdate }) {
         fetchComments(); // 重新載入留言
       }
     } catch (err) {
-      console.error('留言失敗:', err);
+      logger.error('留言失敗:', err);
     } finally {
       setIsSubmitting(false);
     }

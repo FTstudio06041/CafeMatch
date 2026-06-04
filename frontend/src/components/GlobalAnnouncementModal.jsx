@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 
+import { logger } from '../utils/logger';
 export default function GlobalAnnouncementModal() {
   const { user, API_BASE_URL } = useContext(AuthContext);
   const [announcement, setAnnouncement] = useState(null);
@@ -34,7 +35,7 @@ export default function GlobalAnnouncementModal() {
         }
       }
     } catch (e) {
-      console.error('檢查公告失敗:', e);
+      logger.error('檢查公告失敗:', e);
     }
   };
 
@@ -47,7 +48,7 @@ export default function GlobalAnnouncementModal() {
           credentials: 'include',
         });
       } catch (e) {
-        console.error('標記公告已讀失敗:', e);
+        logger.error('標記公告已讀失敗:', e);
       }
     }
   };

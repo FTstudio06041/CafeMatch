@@ -1,52 +1,6 @@
-@import "tailwindcss";
 
-:root {
-    --bg-main: #ddccb9;
-    --bg-sidebar: #d6c2a5;
-    --bg-card: #FFFFFF;
-    --accent-color: #432a00;
-    --text-main: #4E342E;
-    --text-light: #795548;
 
-    --border-radius: 24px;
-    --sidebar-width: 280px;
-    --sidebar-width-collapsed: 88px;
-    --transition-speed: 0.3s;
-}
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: "Microsoft JhengHei", "PingFang TC", sans-serif;
-}
-
-/* 全域卷軸樣式 */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-    background-color: #d6c2a5;
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background-color: #b5a191;
-}
-
-body {
-    background-color: var(--bg-main);
-    color: var(--text-main);
-    height: 100vh;
-    display: flex;
-    overflow: hidden;
-}
 
 /* --- 個人主頁內容 --- */
 .profile-content {
@@ -514,9 +468,9 @@ body {
 }
 
 /* =========================================
-   Mobile Responsive (max-width: 768px)
+   Mobile Responsive (max-width: 1366px)
    ========================================= */
-@media (max-width: 768px) {
+@media (max-width: 1366px) {
     .profile-content {
         padding: 15px 15px 40px;
     }

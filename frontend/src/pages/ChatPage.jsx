@@ -1,10 +1,14 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import React, { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import MainLayout from '../layouts/MainLayout';
+
 import '../ChatPage.css';
 import MessageBubble from '../components/MessageBubble';
+import ChatInputArea from '../components/chat/ChatInputArea';
+import WelcomeModal from '../components/chat/WelcomeModal';
 
+import { toast } from '../utils/toast';
+import { logger } from '../utils/logger';
 const EMPTY_CHAT = { id: null, title: '新對話', messages: [] };
 
 const normalizeMessage = (msg) => {
@@ -75,75 +79,10 @@ export default function ChatPage() {
     }
   }, [currentChat.messages, isTyping]);
 
-  // 初始化與載入特定對話
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get('welcome') === 'true') {
-      setShowWelcomeModal(true);
-      // 清除 welcome param
-      navigate('/chat', { replace: true });
-      return;
-    }
-
-    const urlId = params.get('id');
-
-    // 處理測驗結果跳轉
-    const rawQuizContext = localStorage.getItem('targetQuizContext');
-    if (rawQuizContext) {
-      localStorage.removeItem('targetQuizContext');
-      let promptText = '';
-      try {
-        const quizData = JSON.parse(rawQuizContext);
-        const scoreParts = [];
-        const scoreLabels = { work: '工作讀書', env: '空間氛圍', social: '社交舒適', taste: '餐飲口味', cp: 'CP值' };
-        if (quizData.scores) {
-          for (const [key, val] of Object.entries(quizData.scores)) {
-            scoreParts.push(`${scoreLabels[key] || key}：${val}`);
-          }
-        }
-        promptText = `我剛完成了咖啡人格測驗，以下是我的完整結果：\n`
-          + `\n【咖啡人格】${quizData.title}`
-          + (quizData.inner_voice ? `\n【內心獨白】${quizData.inner_voice}` : '')
-          + (quizData.profile ? `\n【特質側寫】${quizData.profile}` : '')
-          + (scoreParts.length > 0 ? `\n【五維分數】${scoreParts.join('、')}` : '')
-          + (quizData.cafe_match ? `\n【氛圍對應】${quizData.cafe_match}` : '')
-          + `\n\n請根據以上測驗結果，推薦適合我的花蓮咖啡廳，並說明為什麼適合我。`;
-      } catch {
-        promptText = `我剛做完測驗，結果適合「${rawQuizContext}」，請根據這個結果推薦我類似的咖啡廳或豆子。`;
-      }
-      
-      setNormalizedCurrentChat(EMPTY_CHAT);
-      setTimeout(() => {
-        executeChatStream(promptText, { customTitle: '我做完測驗，結果...' });
-      }, 0);
-      return;
-    }
-
-    // 正常載入對話
-    if (!urlId || urlId === 'new') {
-      setNormalizedCurrentChat(EMPTY_CHAT);
-    } else {
-      if (user?.isGuest) {
-        navigate('/chat?id=new', { replace: true });
-        return;
-      }
-      // 載入資料庫對話
-      fetch(`${API_BASE_URL}/api/chat/sessions/${urlId}`, { credentials: 'include' })
-        .then(res => res.json())
-        .then(data => {
-          if (data.id) {
-            setNormalizedCurrentChat(data);
-          } else {
-            // 找不到對話，回到新對話
-            navigate('/chat?id=new', { replace: true });
-          }
-        })
-        .catch(err => console.error('Failed to load session:', err));
-    }
-  }, [location.search, API_BASE_URL, user?.isGuest]);
-
+  // ==========================================
   // 保存對話到後端
-  const saveSessionToBackend = async (chatState) => {
+  // ==========================================
+  const saveSessionToBackend = useCallback(async (chatState) => {
     if (user?.isGuest) return;
     try {
       const normalizedChat = normalizeChatSession(chatState);
@@ -171,69 +110,14 @@ export default function ChatPage() {
         window.dispatchEvent(new Event('chat-updated')); // 觸發 Sidebar 更新
       }
     } catch (e) {
-      console.error("Failed to save session:", e);
+      logger.error('Failed to save session:', e);
     }
-  };
-
-  // ==========================================
-  // 反饋與重試邏輯
-  // ==========================================
-  const handleFeedback = async (msgIdx, type) => {
-    if (user?.isGuest) {
-      alert("訪客模式無法提供回饋，登入後就能完整體驗喔！");
-      return;
-    }
-    const msg = currentChat.messages[msgIdx];
-    const userMsg = currentChat.messages[msgIdx - 1]?.content || '';
-    if (!msg) return;
-    
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/chat/feedback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          feedback_type: type,
-          user_message: userMsg,
-          ai_response: msg.content
-        })
-      });
-      if (response.ok) {
-        // 更新 UI 狀態
-        const newMsgs = [...currentChatRef.current.messages];
-        newMsgs[msgIdx] = { ...newMsgs[msgIdx], feedback: type };
-        const updatedChat = { ...currentChatRef.current, messages: newMsgs };
-
-        setNormalizedCurrentChat(updatedChat);
-        saveSessionToBackend(updatedChat);
-      }
-    } catch (e) {
-      console.error("Feedback failed:", e);
-    }
-  };
-
-  const handleRetry = (msgIdx) => {
-    if (isTyping || msgIdx <= 0) return;
-    
-    // 取出重試之前的 user 訊息
-    const prevUserMsg = currentChat.messages[msgIdx - 1];
-    if (!prevUserMsg || prevUserMsg.role !== 'user') return;
-
-    // 將包含該 AI 訊息以及其後的所有訊息刪除
-    const newMessages = currentChat.messages.slice(0, msgIdx - 1);
-    
-    const retriedChat = normalizeChatSession({ ...currentChatRef.current, messages: newMessages });
-    currentChatRef.current = retriedChat;
-    setCurrentChat(retriedChat);
-    
-    // 重新發送
-    executeChatStream(prevUserMsg.content);
-  };
+  }, [API_BASE_URL, user?.isGuest, navigate]);
 
   // ==========================================
   // 核心發送與串流邏輯
   // ==========================================
-  const executeChatStream = async (messageText, options = {}) => {
+  const executeChatStream = useCallback(async (messageText, options = {}) => {
     const { customTitle = null } = options;
     if (!messageText.trim() || isTyping) return;
     
@@ -299,77 +183,188 @@ export default function ChatPage() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/chat`, {
+      const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ 
-          message: messageText, 
-          history: historyToSend 
+        body: JSON.stringify({
+          message: messageText,
+          history: historyToSend,
+          use_rag: true
         }),
         signal: abortControllerRef.current.signal
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: '伺服器回傳錯誤' }));
-        throw new Error(errorData.error || '伺服器回傳錯誤');
-      }
+      if (!response.ok) throw new Error('Network response was not ok');
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) {
-          await syncStreamState(currentAiContent, currentDebugInfo, '', true); // 結束並寫入後端
-          break;
-        }
+        if (done) break;
 
-        const chunkStr = decoder.decode(value, { stream: true });
-        const lines = chunkStr.split('\n').filter(l => l.trim() !== '');
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n').filter(line => line.trim() !== '');
 
         for (const line of lines) {
-          try {
-            const data = JSON.parse(line);
-            if (data.type === 'debug_info') {
-              currentDebugInfo = {
-                model: data.model, prompt: data.prompt,
-                is_cafe_related: data.is_cafe_related ? '✅ 是 (已注入資料庫)' : '❌ 否 (一般聊天)',
-                rag_context: data.rag_context || '',
-                total_duration_ms: '...', eval_count: '...',
-                eval_duration_ms: '...', tokens_per_sec: '...'
-              };
-            } else if (data.response) {
-              currentAiContent += data.response;
-            } else if (data.error) {
-              currentAiContent += '\n[系統錯誤: ' + data.error + ']';
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6);
+            if (dataStr === '[DONE]') {
+              await syncStreamState(currentAiContent, currentDebugInfo, '', true);
+              break;
             }
-
-            if (data.done && currentDebugInfo) {
-              currentDebugInfo.total_duration_ms = (data.total_duration / 1e6).toFixed(2);
-              currentDebugInfo.eval_count = data.eval_count;
-              currentDebugInfo.eval_duration_ms = (data.eval_duration / 1e6).toFixed(2);
-              currentDebugInfo.tokens_per_sec = data.eval_duration > 0
-                ? (data.eval_count / (data.eval_duration / 1e9)).toFixed(2)
-                : 0;
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.debug_info) {
+                currentDebugInfo = parsed.debug_info;
+                await syncStreamState(currentAiContent, currentDebugInfo);
+              } else if (parsed.content) {
+                currentAiContent += parsed.content;
+                await syncStreamState(currentAiContent, currentDebugInfo);
+              } else if (parsed.error) {
+                toast.error(`錯誤：${parsed.error}`);
+              }
+            } catch (e) {
+              // 忽略 JSON parse error
             }
-          } catch (_) { /* 忽略不完整的 chunk */ }
+          }
         }
-        
-        // 串流途中只更新 React state
-        syncStreamState(currentAiContent, currentDebugInfo, '', false);
       }
     } catch (error) {
       if (error.name === 'AbortError') {
-        await syncStreamState(currentAiContent, currentDebugInfo, ' [已停止生成]', true);
+        await syncStreamState(currentAiContent, currentDebugInfo, ' [已中斷]', true);
       } else {
-        console.error('AI Error:', error);
-        await syncStreamState(currentAiContent, currentDebugInfo, '\n抱歉，連線發生錯誤：' + error.message, true);
+        logger.error('Stream error:', error);
+        toast.error('系統發生錯誤，請稍後再試。');
       }
     } finally {
       setIsTyping(false);
-      abortControllerRef.current = null;
     }
+  }, [API_BASE_URL, isTyping, saveSessionToBackend]);
+
+  // 初始化與載入特定對話
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('welcome') === 'true') {
+      setShowWelcomeModal(true);
+      // 清除 welcome param
+      navigate('/chat', { replace: true });
+      return;
+    }
+
+    const urlId = params.get('id');
+
+    // 處理測驗結果跳轉
+    const rawQuizContext = localStorage.getItem('targetQuizContext');
+    if (rawQuizContext) {
+      localStorage.removeItem('targetQuizContext');
+      let promptText = '';
+      try {
+        const quizData = JSON.parse(rawQuizContext);
+        const scoreParts = [];
+        const scoreLabels = { work: '工作讀書', env: '空間氛圍', social: '社交舒適', taste: '餐飲口味', cp: 'CP值' };
+        if (quizData.scores) {
+          for (const [key, val] of Object.entries(quizData.scores)) {
+            scoreParts.push(`${scoreLabels[key] || key}：${val}`);
+          }
+        }
+        promptText = `我剛完成了咖啡人格測驗，以下是我的完整結果：\n`
+          + `\n【咖啡人格】${quizData.title}`
+          + (quizData.inner_voice ? `\n【內心獨白】${quizData.inner_voice}` : '')
+          + (quizData.profile ? `\n【特質側寫】${quizData.profile}` : '')
+          + (scoreParts.length > 0 ? `\n【五維分數】${scoreParts.join('、')}` : '')
+          + (quizData.cafe_match ? `\n【氛圍對應】${quizData.cafe_match}` : '')
+          + `\n\n請根據以上測驗結果，推薦適合我的花蓮咖啡廳，並說明為什麼適合我。`;
+      } catch {
+        promptText = `我剛做完測驗，結果適合「${rawQuizContext}」，請根據這個結果推薦我類似的咖啡廳或豆子。`;
+      }
+      
+      setNormalizedCurrentChat(EMPTY_CHAT);
+      setTimeout(() => {
+        executeChatStream(promptText, { customTitle: '我做完測驗，結果...' });
+      }, 0);
+      return;
+    }
+
+    // 正常載入對話
+    if (!urlId || urlId === 'new') {
+      setNormalizedCurrentChat(EMPTY_CHAT);
+    } else {
+      if (user?.isGuest) {
+        navigate('/chat?id=new', { replace: true });
+        return;
+      }
+      // 載入資料庫對話
+      fetch(`${API_BASE_URL}/api/chat/sessions/${urlId}`, { credentials: 'include' })
+        .then(res => res.json())
+        .then(data => {
+          if (data.id) {
+            setNormalizedCurrentChat(data);
+          } else {
+            // 找不到對話，回到新對話
+            navigate('/chat?id=new', { replace: true });
+          }
+        })
+        .catch(err => logger.error('Failed to load session:', err));
+    }
+  }, [location.search, API_BASE_URL, user?.isGuest, executeChatStream, navigate]);
+
+
+
+  // ==========================================
+  // 反饋與重試邏輯
+  // ==========================================
+  const handleFeedback = async (msgIdx, type) => {
+    if (user?.isGuest) {
+      toast.info("訪客模式無法提供回饋，登入後就能完整體驗喔！");
+      return;
+    }
+    const msg = currentChat.messages[msgIdx];
+    const userMsg = currentChat.messages[msgIdx - 1]?.content || '';
+    if (!msg) return;
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/chat/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          feedback_type: type,
+          user_message: userMsg,
+          ai_response: msg.content
+        })
+      });
+      if (response.ok) {
+        // 更新 UI 狀態
+        const newMsgs = [...currentChatRef.current.messages];
+        newMsgs[msgIdx] = { ...newMsgs[msgIdx], feedback: type };
+        const updatedChat = { ...currentChatRef.current, messages: newMsgs };
+
+        setNormalizedCurrentChat(updatedChat);
+        saveSessionToBackend(updatedChat);
+      }
+    } catch (e) {
+      logger.error("Feedback failed:", e);
+    }
+  };
+
+  const handleRetry = (msgIdx) => {
+    if (isTyping || msgIdx <= 0) return;
+    
+    // 取出重試之前的 user 訊息
+    const prevUserMsg = currentChat.messages[msgIdx - 1];
+    if (!prevUserMsg || prevUserMsg.role !== 'user') return;
+
+    // 將包含該 AI 訊息以及其後的所有訊息刪除
+    const newMessages = currentChat.messages.slice(0, msgIdx - 1);
+    
+    const retriedChat = normalizeChatSession({ ...currentChatRef.current, messages: newMessages });
+    currentChatRef.current = retriedChat;
+    setCurrentChat(retriedChat);
+    
+    // 重新發送
+    executeChatStream(prevUserMsg.content);
   };
 
   const sendMessage = () => executeChatStream(inputMsg);
@@ -383,7 +378,7 @@ export default function ChatPage() {
   // 渲染
   // ==========================================
   return (
-    <MainLayout>
+    <>
       <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div className="chat-window" ref={chatWindowRef}>
           {!currentChat.messages || currentChat.messages.length === 0 ? (
@@ -409,48 +404,19 @@ export default function ChatPage() {
             ))
           )}
         </div>
-
-        <div className="input-area">
-          <div className="input-wrapper">
-            {user?.is_admin && (
-              <div style={{ position: 'relative' }}>
-                <button 
-                  className="options-btn" 
-                  onClick={() => setShowOptionsMenu(!showOptionsMenu)}
-                  title="選項"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
-                </button>
-                {showOptionsMenu && (
-                  <div className="options-menu">
-                    <button className="options-menu-item" onClick={() => { setIsDebugMode(!isDebugMode); setShowOptionsMenu(false); }}>
-                      {isDebugMode ? '關閉 Debug 模式' : '開啟 Debug 模式'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-            <input 
-              type="text" 
-              className="chat-input" 
-              placeholder={isTyping ? "AI 正在思考中..." : "輸入訊息..."} 
-              value={inputMsg}
-              onChange={(e) => setInputMsg(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && !isTyping && sendMessage()}
-              disabled={isTyping}
-            />
-            {isTyping ? (
-              <button className="send-btn" onClick={handleStop} style={{ backgroundColor: '#D32F2F' }} title="停止生成">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="6" width="12" height="12"></rect></svg>
-              </button>
-            ) : (
-              <button className="send-btn" onClick={sendMessage} disabled={!inputMsg.trim()}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-              </button>
-            )}
-          </div>
-          <div className="disclaimer-text">AI 生成內容可能含有錯誤，請斟酌採納生成內容。</div>
-        </div>
+        
+        <ChatInputArea
+          user={user}
+          inputMsg={inputMsg}
+          setInputMsg={setInputMsg}
+          isTyping={isTyping}
+          sendMessage={sendMessage}
+          handleStop={handleStop}
+          showOptionsMenu={showOptionsMenu}
+          setShowOptionsMenu={setShowOptionsMenu}
+          isDebugMode={isDebugMode}
+          setIsDebugMode={setIsDebugMode}
+        />
 
         {/* --- 維護中彈窗 --- */}
         <div className="maintenance-overlay">
@@ -464,17 +430,7 @@ export default function ChatPage() {
         </div>
       </div>
 
-        {/* --- 歡迎彈窗 --- */}
-        <div className={`welcome-modal-overlay ${showWelcomeModal ? 'active' : ''}`}>
-           <div className="welcome-card">
-              <h2 className="welcome-title">歡迎來到 啡你莫屬！</h2>
-              <p className="welcome-text">這似乎是您第一次來訪。<br/>建議您先進行心理測驗，<br/>讓啡啡更了解您的喜好喔！</p>
-              <div className="welcome-actions">
-                  <button className="btn-secondary" onClick={() => setShowWelcomeModal(false)}>先不用</button>
-                  <button className="btn-primary" onClick={() => navigate('/quiz')}>開始測驗</button>
-              </div>
-           </div>
-        </div>
-    </MainLayout>
+      <WelcomeModal show={showWelcomeModal} onClose={() => setShowWelcomeModal(false)} />
+    </>
   );
 }

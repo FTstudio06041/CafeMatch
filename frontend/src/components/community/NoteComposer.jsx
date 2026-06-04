@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 
+import { logger } from '../../utils/logger';
 const NOTE_COLORS = [
   { key: 0, bg: '#FFF3E0' },
   { key: 1, bg: '#FCE4EC' },
@@ -32,7 +33,7 @@ export default function NoteComposer({ initialNote, onSubmit, onClose, onDelete 
       await onSubmit({ content: content.trim(), color_index: colorIndex });
       onClose();
     } catch (err) {
-      console.error('發布便利貼失敗:', err);
+      logger.error('發布便利貼失敗:', err);
     } finally {
       setIsSubmitting(false);
     }

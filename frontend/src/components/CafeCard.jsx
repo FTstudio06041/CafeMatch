@@ -1,6 +1,8 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 
+import { toast } from '../utils/toast';
+import { logger } from '../utils/logger';
 export default function CafeCard({ cafe }) {
   const { user, API_BASE_URL } = useContext(AuthContext);
   // 使用本地狀態來達到即時 UI 更新 (Optimistic UI update)
@@ -9,7 +11,7 @@ export default function CafeCard({ cafe }) {
 
   const toggleState = async (type) => {
     if (!user || user.isGuest) {
-      alert("請先登入才能使用此功能！");
+      toast.info("請先登入才能使用此功能！");
       return;
     }
 
@@ -30,10 +32,10 @@ export default function CafeCard({ cafe }) {
       if (!data.success) {
         if (type === 'fav') setIsFav(!isFav);
         if (type === 'visited') setIsVisited(!isVisited);
-        console.error("更新失敗", data.message);
+        logger.error("更新失敗", data.message);
       }
     } catch (error) {
-      console.error('Error updating state:', error);
+      logger.error('Error updating state:', error);
     }
   };
 

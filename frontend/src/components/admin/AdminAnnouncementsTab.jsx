@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
+import { toast } from '../../utils/toast';
+import { logger } from '../../utils/logger';
 export default function AdminAnnouncementsTab() {
   const { API_BASE_URL } = useContext(AuthContext);
   const [announcements, setAnnouncements] = useState([]);
@@ -20,7 +22,7 @@ export default function AdminAnnouncementsTab() {
         setAnnouncements(data.announcements || []);
       }
     } catch (e) {
-      console.error('載入公告失敗:', e);
+      logger.error('載入公告失敗:', e);
     }
     setLoading(false);
   };
@@ -37,13 +39,13 @@ export default function AdminAnnouncementsTab() {
       if (res.ok) {
         setAnnouncementText('');
         fetchAnnouncements();
-        alert('公告發布成功！');
+        toast.info('公告發布成功！');
       } else {
         const data = await res.json();
-        alert(data.message || '發布失敗');
+        toast.info(data.message || '發布失敗');
       }
     } catch (e) {
-      console.error('發布公告失敗:', e);
+      logger.error('發布公告失敗:', e);
     }
   };
 
@@ -57,10 +59,10 @@ export default function AdminAnnouncementsTab() {
       if (res.ok) {
         fetchAnnouncements();
       } else {
-        alert('刪除失敗');
+        toast.info('刪除失敗');
       }
     } catch (e) {
-      console.error('刪除公告失敗:', e);
+      logger.error('刪除公告失敗:', e);
     }
   };
 

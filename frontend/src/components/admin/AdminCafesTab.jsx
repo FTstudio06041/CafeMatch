@@ -1,6 +1,8 @@
 import { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
+import { toast } from '../../utils/toast';
+import { logger } from '../../utils/logger';
 export default function AdminCafesTab() {
   const { API_BASE_URL } = useContext(AuthContext);
   const [cafes, setCafes] = useState([]);
@@ -15,7 +17,7 @@ export default function AdminCafesTab() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/cafes`, { credentials: 'include' });
       if (res.ok) setCafes(await res.json());
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
     setLoading(false);
   }, [API_BASE_URL]);
 
@@ -36,7 +38,7 @@ export default function AdminCafesTab() {
         body: JSON.stringify(editForm)
       });
       if (res.ok) { setEditingCafe(null); fetchCafes(); }
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
   };
 
   const deleteCafe = async (cafeId, name) => {
@@ -46,14 +48,14 @@ export default function AdminCafesTab() {
         method: 'DELETE', credentials: 'include'
       });
       if (res.ok) fetchCafes();
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
   };
 
   const handleCafeImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      alert('圖片大小不可超過 5MB');
+      toast.info('圖片大小不可超過 5MB');
       return;
     }
     const reader = new FileReader();

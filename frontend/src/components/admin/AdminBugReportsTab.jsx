@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
+import { toast } from '../../utils/toast';
+import { logger } from '../../utils/logger';
 export default function AdminBugReportsTab() {
   const { API_BASE_URL } = useContext(AuthContext);
   const [bugReports, setBugReports] = useState([]);
@@ -19,7 +21,7 @@ export default function AdminBugReportsTab() {
         setBugReports(data.reports || []);
       }
     } catch (e) {
-      console.error('載入 Bug 回報失敗:', e);
+      logger.error('載入 Bug 回報失敗:', e);
     }
     setLoading(false);
   };
@@ -34,10 +36,10 @@ export default function AdminBugReportsTab() {
       if (res.ok) {
         fetchBugReports();
       } else {
-        alert('刪除失敗');
+        toast.info('刪除失敗');
       }
     } catch (e) {
-      console.error('刪除 Bug 失敗:', e);
+      logger.error('刪除 Bug 失敗:', e);
     }
   };
 

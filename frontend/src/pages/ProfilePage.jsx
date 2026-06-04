@@ -2,9 +2,10 @@ import React, { useState, useEffect, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import Cropper from 'react-cropper';
-import MainLayout from '../layouts/MainLayout';
 import '../ProfilePage.css';
 
+import { toast } from '../utils/toast';
+import { logger } from '../utils/logger';
 export default function ProfilePage() {
   const { user, API_BASE_URL, logout } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -71,7 +72,7 @@ export default function ProfilePage() {
           }
         }
       } catch (err) {
-        console.error('Failed to fetch profile data:', err);
+        logger.error('Failed to fetch profile data:', err);
       }
     };
 
@@ -101,7 +102,7 @@ export default function ProfilePage() {
     let files = e.target.files;
     if (files && files.length > 0) {
       if (files[0].size > 5 * 1024 * 1024) {
-        alert("圖片太大囉！請上傳 5MB 以下的圖片。");
+        toast.info("圖片太大囉！請上傳 5MB 以下的圖片。");
         return;
       }
       setFileName(files[0].name);
@@ -139,7 +140,7 @@ export default function ProfilePage() {
   // ==========================================
   const saveProfile = async () => {
     if (!newName.trim()) {
-      alert('請輸入顯示名稱');
+      toast.info('請輸入顯示名稱');
       return;
     }
     
@@ -155,14 +156,14 @@ export default function ProfilePage() {
       });
       const result = await response.json();
       if (result.success) {
-        alert('更新成功！');
+        toast.info('更新成功！');
         window.location.reload(); // 強制刷新讓 Context 抓到新資料
       } else {
-        alert(result.error || '更新失敗');
+        toast.info(result.error || '更新失敗');
       }
     } catch (err) {
-      console.error(err);
-      alert('連線錯誤，請稍後再試');
+      logger.error(err);
+      toast.info('連線錯誤，請稍後再試');
     }
   };
 
@@ -174,14 +175,14 @@ export default function ProfilePage() {
       });
       const data = await response.json();
       if (data.success) {
-        alert("帳號已成功刪除，後會有期！");
+        toast.info("帳號已成功刪除，後會有期！");
         window.location.href = '/';
       } else {
-        alert(data.error || '刪除失敗');
+        toast.info(data.error || '刪除失敗');
       }
     } catch (error) {
-      console.error("Delete failed", error);
-      alert('連線錯誤，無法刪除帳號');
+      logger.error("Delete failed", error);
+      toast.info('連線錯誤，無法刪除帳號');
     }
   };
 
@@ -189,7 +190,7 @@ export default function ProfilePage() {
   // 渲染
   // ==========================================
   return (
-    <MainLayout>
+    <>
         <div className="profile-content">
           {/* 使用者資訊卡片 */}
           <div className="profile-header-card">
@@ -358,6 +359,6 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
-    </MainLayout>
+    </>
   );
 }

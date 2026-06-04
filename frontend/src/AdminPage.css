@@ -572,9 +572,9 @@
 }
 
 /* =========================================
-   Mobile Responsive (max-width: 768px)
+   Mobile Responsive (max-width: 1366px)
    ========================================= */
-@media (max-width: 768px) {
+@media (max-width: 1366px) {
     .admin-content {
         padding: 20px 15px;
     }
@@ -851,7 +851,7 @@
 /* =========================================
    Overview Mobile Responsive
    ========================================= */
-@media (max-width: 768px) {
+@media (max-width: 1366px) {
     .overview-kpi-grid {
         grid-template-columns: 1fr 1fr;
     }

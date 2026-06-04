@@ -4,19 +4,7 @@
 
 .quiz-page-container {
     animation: quizPageEnter 0.6s ease-out both;
-    /* 延續主色調 */
-    --bg-main: #ddccb9;
-    --bg-sidebar: #d6c2a5;
-    --bg-card: #FFFFFF;
-    --accent-color: #432a00;
-    --text-main: #4E342E;
-    --text-light: #795548;
-    --btn-active: #bcaaa4;
 
-    --border-radius: 24px;
-    --sidebar-width: 280px;
-    --sidebar-width-collapsed: 88px;
-    --transition-speed: 0.3s;
 
     /* 測驗擴充色票 */
     --accent-warm: #8a7066;
@@ -934,7 +922,7 @@
 /* =============================================
    響應式調整
    ============================================= */
-@media (max-width: 768px) {
+@media (max-width: 1366px) {
     .quiz-content {
         padding: 24px 20px;
     }

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import CafeCard from './CafeCard';
 
+import { logger } from '../utils/logger';
 export default function CafeList() {
   const [cafes, setCafes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,7 +20,7 @@ export default function CafeList() {
       const data = await response.json();
       setCafes(data);
     } catch (error) {
-      console.error('Failed to fetch cafes:', error);
+      logger.error('Failed to fetch cafes:', error);
     } finally {
       setLoading(false);
     }

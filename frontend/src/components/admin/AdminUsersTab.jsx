@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
+import { toast } from '../../utils/toast';
+import { logger } from '../../utils/logger';
 export default function AdminUsersTab() {
   const { API_BASE_URL } = useContext(AuthContext);
   const [users, setUsers] = useState([]);
@@ -26,18 +28,18 @@ export default function AdminUsersTab() {
           else setSelectedUser(null);
         }
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
     setLoading(false);
   };
 
   const toggleAdmin = async (userId) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/toggle_admin`, {
-        method: 'POST', credentials: 'include'
+      const res = await fetch(`${API_BASE_URL}/api/admin/users/${userId}/admin`, {
+        method: 'PUT', credentials: 'include'
       });
       if (res.ok) fetchUsers();
-      else { const d = await res.json(); alert(d.error); }
-    } catch (e) { console.error(e); }
+      else { const d = await res.json(); toast.info(d.error); }
+    } catch (e) { logger.error(e); }
   };
 
   const deleteUser = async (userId, email) => {
@@ -50,8 +52,8 @@ export default function AdminUsersTab() {
         fetchUsers();
         setSelectedUser(null);
       }
-      else { const d = await res.json(); alert(d.error); }
-    } catch (e) { console.error(e); }
+      else { const d = await res.json(); toast.info(d.error); }
+    } catch (e) { logger.error(e); }
   };
 
   const filteredUsers = users.filter(u =>

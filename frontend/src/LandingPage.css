@@ -1,33 +1,4 @@
-@import "tailwindcss";
 
-:root {
-    /* 延續主色調 */
-    --bg-main: #ddccb9;
-    --bg-white: #FFFFFF;
-    --accent-color: #432a00;
-    --text-main: #4E342E;
-    --text-light: #795548;
-    --border-radius: 24px;
-}
-
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: "Microsoft JhengHei", sans-serif;
-}
-
-body {
-    background-color: var(--bg-main);
-    color: var(--text-main);
-    min-height: 100vh;
-    /* Allow scrolling if content is long */
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    /* Enable vertical scroll */
-    overflow-x: hidden;
-}
 
 /* --- Landing Body --- */
 .landing-body {
@@ -35,7 +6,8 @@ body {
     flex-direction: column;
     min-height: 100vh;
     position: relative;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .liquid-surface {
@@ -351,9 +323,9 @@ body {
 }
 
 /* =========================================
-   Mobile Responsive (max-width: 768px)
+   Mobile Responsive (max-width: 1366px)
    ========================================= */
-@media (max-width: 768px) {
+@media (max-width: 1366px) {
     .landing-header {
         padding: 12px 20px;
     }

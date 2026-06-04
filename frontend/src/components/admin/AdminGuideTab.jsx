@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
+import { toast } from '../../utils/toast';
+import { logger } from '../../utils/logger';
 export default function AdminGuideTab() {
   const { API_BASE_URL } = useContext(AuthContext);
   const [strategy, setStrategy] = useState(null);
@@ -21,7 +23,7 @@ export default function AdminGuideTab() {
         setStrategy(data);
       }
     } catch (e) {
-      console.error('Failed to fetch guide strategy:', e);
+      logger.error('Failed to fetch guide strategy:', e);
     }
     setLoading(false);
   };
@@ -48,7 +50,7 @@ export default function AdminGuideTab() {
         setTimeout(() => setToast(''), 2500);
       }
     } catch (e) {
-      console.error('Failed to save guide strategy:', e);
+      logger.error('Failed to save guide strategy:', e);
       setToast('❌ 儲存失敗：連線錯誤');
       setTimeout(() => setToast(''), 2500);
     }

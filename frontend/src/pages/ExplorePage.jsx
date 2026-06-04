@@ -2,8 +2,9 @@ import { useState, useEffect, useContext, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import '../ExplorePage.css';
-import MainLayout from '../layouts/MainLayout';
 
+import { toast } from '../utils/toast';
+import { logger } from '../utils/logger';
 export default function ExplorePage() {
   const { user, API_BASE_URL } = useContext(AuthContext);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -22,7 +23,7 @@ export default function ExplorePage() {
       const data = await response.json();
       setShops(data);
     } catch (error) {
-      console.error('Failed to fetch cafes:', error);
+      logger.error('Failed to fetch cafes:', error);
     }
   }, [API_BASE_URL]);
 
@@ -56,7 +57,7 @@ export default function ExplorePage() {
   const toggleAction = async (type) => {
     if (!selectedShop) return;
     if (user?.isGuest) {
-      alert("請先登入才能使用此功能！");
+      toast.info("請先登入才能使用此功能！");
       return;
     }
 
@@ -86,15 +87,15 @@ export default function ExplorePage() {
         }));
 
       } else {
-        alert("請先登入才能使用此功能！");
+        toast.info("請先登入才能使用此功能！");
       }
     } catch (error) {
-      console.error("Error updating state:", error);
+      logger.error("Error updating state:", error);
     }
   };
 
   return (
-    <MainLayout>
+    <>
         <div className={`explore-content ${selectedShop ? 'detail-mode' : ''}`}>
           {selectedShop ? (
             <section className="shop-detail-page">
@@ -215,6 +216,6 @@ export default function ExplorePage() {
             </>
           )}
         </div>
-    </MainLayout>
+    </>
   );
 }

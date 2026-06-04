@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ClipboardList, BarChart3, MapPin, Play, Store } from 'lucide-react';
 import RadarChart from '../components/RadarChart';
-import MainLayout from '../layouts/MainLayout';
 import '../QuizPage.css';
 
+import { toast } from '../utils/toast';
+import { logger } from '../utils/logger';
 // sessionStorage key — 用來在頁面切換時保留測驗結果
 const QUIZ_RESULT_CACHE_KEY = 'quizResultCache';
 
@@ -68,7 +69,7 @@ export default function QuizPage() {
       setQuizResult(null);
       setQuizState('question');
     } catch (err) {
-      console.error('取得題目失敗：', err);
+      logger.error('取得題目失敗：', err);
       setErrorMsg(err.message || '無法取得題目，請稍後再試');
       setQuizState('intro');
     }
@@ -109,7 +110,7 @@ export default function QuizPage() {
       // 持久化到 sessionStorage，頁面切換後仍能顯示結果
       sessionStorage.setItem(QUIZ_RESULT_CACHE_KEY, JSON.stringify(data));
     } catch (err) {
-      console.error('提交答案失敗：', err);
+      logger.error('提交答案失敗：', err);
       setErrorMsg(err.message || '提交失敗，請稍後再試');
       setQuizState('question');
     }
@@ -172,7 +173,7 @@ export default function QuizPage() {
   // 帶著結果去諮詢 AI
   const handleConsultAI = () => {
     if (user?.isGuest) {
-      alert("請先登入才能將測驗結果帶去詢問 AI 喔！");
+      toast.info("請先登入才能將測驗結果帶去詢問 AI 喔！");
       login();
       return;
     }
@@ -201,7 +202,7 @@ export default function QuizPage() {
   // 渲染
   // =============================================
   return (
-    <MainLayout>
+    <>
         <div className={`quiz-content ${quizState === 'intro' ? 'intro-active' : ''}`}>
 
           {/* ===== 介紹頁：直接渲染在 quiz-content 內（全版佈滿） ===== */}
@@ -432,6 +433,6 @@ export default function QuizPage() {
             </div>
           )}
         </div>
-    </MainLayout>
+    </>
   );
 }

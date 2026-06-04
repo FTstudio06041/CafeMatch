@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
+import { logger } from '../../utils/logger';
 export default function AdminLogsTab() {
   const { API_BASE_URL } = useContext(AuthContext);
   const [logs, setLogs] = useState({ logs: [], total: 0, pages: 1, current_page: 1 });
@@ -15,7 +16,7 @@ export default function AdminLogsTab() {
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/logs?page=${page}&per_page=30`, { credentials: 'include' });
       if (res.ok) setLogs(await res.json());
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
     setLoading(false);
   };
 

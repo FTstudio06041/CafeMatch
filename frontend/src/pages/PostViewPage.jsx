@@ -6,6 +6,7 @@ import useCommunityPosts from '../hooks/useCommunityPosts';
 import { decodeId } from '../utils/hashId';
 import '../CommunityPage.css';
 
+import { toast } from '../utils/toast';
 export default function PostViewPage() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -112,7 +113,7 @@ export default function PostViewPage() {
         onRepost={async (content) => {
           await handleRepostPost(post.id, content);
           // 轉發後可能導回首頁或維持原樣
-          alert('已成功轉發貼文！');
+          toast.info('已成功轉發貼文！');
         }}
       />
     </div>

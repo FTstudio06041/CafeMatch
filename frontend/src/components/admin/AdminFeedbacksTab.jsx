@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
+import { logger } from '../../utils/logger';
 export default function AdminFeedbacksTab() {
   const { API_BASE_URL } = useContext(AuthContext);
   const [feedbacks, setFeedbacks] = useState([]);
@@ -18,7 +19,7 @@ export default function AdminFeedbacksTab() {
         const data = await res.json();
         setFeedbacks(data.feedbacks || []);
       }
-    } catch (e) { console.error(e); }
+    } catch (e) { logger.error(e); }
     setLoading(false);
   };
 
