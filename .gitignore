@@ -18,3 +18,11 @@ node_modules/
 # 忽略作業系統縮圖
 .DS_Store
 Thumbs.db
+
+# 忽略大型資料庫備份與 SQL 檔
+*.sql
+*.bak
+backups/
+
+# 忽略 Vite 日誌
+vite-*.log
