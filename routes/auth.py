@@ -94,7 +94,7 @@ def update_user_profile():
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return jsonify({"success": False, "message": "系統發生錯誤，請稍後再試"}), 500
     
 @auth_bp.route('/api/user/shop_state', methods=['POST'])
 def update_shop_state():
@@ -107,64 +107,8 @@ def update_shop_state():
         if not user:
             return jsonify({"success": False, "message": "使用者不存在"}), 404
 
-        data = request.json
-        cafe_id = data.get('cafe_id')
-        action_type = data.get('type')
-        
-        state = UserShopState.query.filter_by(user_id=user.id, cafe_id=cafe_id).first()
-        if not state:
-            state = UserShopState(user_id=user.id, cafe_id=cafe_id)
-            db.session.add(state)
-        
-        if action_type == 'fav':
-            state.is_fav = not state.is_fav
-        elif action_type == 'visited':
-            state.is_visited = not state.is_visited
-            
-        db.session.commit()
-        return jsonify({"success": True, "fav": state.is_fav, "visited": state.is_visited})
-        
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
-
-@auth_bp.route('/api/user/delete', methods=['POST'])
-def delete_user_account():
-    user_email = session.get('user_email')
-    if not user_email:
-        return jsonify({"success": False, "message": "未登入"}), 401
-
-    try:
-        user = User.query.filter_by(email=user_email).first()
-        if not user:
-            return jsonify({"success": False, "message": "使用者不存在"}), 404
-
-        from models import UserShopState, ChatSession, ChatFeedback, UserQuizResult, CommunityPost, PostLike, PostComment, CommunityNote, CommunityLike, CommunityComment
-
-        # 刪除社群互動
-        PostLike.query.filter_by(user_id=user.id).delete()
-        PostComment.query.filter_by(user_id=user.id).delete()
-        CommunityLike.query.filter_by(user_id=user.id).delete()
-        CommunityComment.query.filter_by(user_id=user.id).delete()
-        
-        # 刪除社群便利貼
-        CommunityNote.query.filter_by(user_id=user.id).delete()
-        
-        # 刪除貼文
-        posts = CommunityPost.query.filter_by(user_id=user.id).all()
-        for post in posts:
-            PostLike.query.filter_by(post_id=post.id).delete()
-            PostComment.query.filter_by(post_id=post.id).delete()
-            CommunityPost.query.filter_by(original_post_id=post.id).update({CommunityPost.original_post_id: None})
-            db.session.delete(post)
-            
-        # 刪除聊天紀錄與測驗
-        ChatSession.query.filter_by(user_id=user.id).delete()
-        ChatFeedback.query.filter_by(user_id=user.id).delete()
-        UserQuizResult.query.filter_by(user_id=user.id).delete()
-
-        UserShopState.query.filter_by(user_id=user.id).delete()
-        db.session.delete(user)
+        from utils import delete_user_data
+        delete_user_data(user.id, db)
         db.session.commit()
         session.pop('user_email', None)
         
@@ -172,4 +116,4 @@ def delete_user_account():
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return jsonify({"success": False, "message": "系統發生錯誤，請稍後再試"}), 500

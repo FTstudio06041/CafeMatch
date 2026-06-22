@@ -26,3 +26,7 @@ backups/
 
 # 忽略 Vite 日誌
 vite-*.log
+
+# 忽略系統日誌
+*.log
+api_error.log

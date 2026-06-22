@@ -39,8 +39,9 @@ def admin_delete_user(user_id):
     if target.email == current_email:
         return jsonify({'error': '不能刪除自己'}), 400
     email = target.email
-    UserShopState.query.filter_by(user_id=target.id).delete()
-    db.session.delete(target)
+    
+    from utils import delete_user_data
+    delete_user_data(target.id, db)
     db.session.commit()
     log_action(current_email, '刪除用戶', f'已刪除 {email}')
     return jsonify({'success': True})
@@ -257,7 +258,7 @@ def admin_get_overview():
         current_app.logger.error(f"Overview API Error: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "系統發生錯誤，請稍後再試"}), 500
 
 def get_current_model():
     if 'OLLAMA_MODEL' not in current_app.config or not current_app.config['OLLAMA_MODEL']:
@@ -346,4 +347,4 @@ def admin_get_feedbacks():
             })
         return jsonify({"success": True, "feedbacks": result})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({"success": False, "error": "系統發生錯誤，請稍後再試"}), 500

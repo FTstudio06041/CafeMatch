@@ -54,16 +54,18 @@ def get_cafes():
                 "#78909C", "#607D8B", "#546E7A"             
             ]
             
+            color_idx = cafe.id % len(palette)
+            
             results.append({
                 "id": cafe.id,
                 "name": cafe.name,
                 "tags": tag_str,
-                "rating": round(random.uniform(3.8, 5.0), 1),
+                "rating": None,
                 "hours": hours_str,
                 "phone": cafe.phone or "無電話",
                 "address": cafe.address or "地址未知",
                 "desc": cafe.website or "尚無介紹",
-                "color": random.choice(palette), 
+                "color": palette[color_idx], 
                 "image": cafe.image or "",
                 "image_url": get_cafe_image_url(cafe),
                 "image_source": "manual" if cafe.image else ("google" if has_google_maps_key() else ""),
@@ -77,7 +79,7 @@ def get_cafes():
 
     except Exception as e:
         current_app.logger.error("Database Error:", e)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "系統發生錯誤，請稍後再試"}), 500
 
 @explore_bp.route('/api/cafes/<int:cafe_id>/photo', methods=['GET'])
 def get_cafe_photo(cafe_id):
@@ -99,4 +101,4 @@ def get_cafe_photo(cafe_id):
     except Exception as e:
         current_app.logger.error(f'Cafe photo error for cafe {cafe_id}: {e}')
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "系統發生錯誤，請稍後再試"}), 500

@@ -123,7 +123,7 @@ def quiz_submit():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'測驗提交錯誤：{e}')
-        return jsonify({'error': f'提交失敗：{str(e)}'}), 500
+        return jsonify({"error": "系統發生錯誤，請稍後再試"}), 500
 
 
 @quiz_bp.route('/api/quiz/history', methods=['GET'])

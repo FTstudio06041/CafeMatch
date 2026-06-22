@@ -57,7 +57,7 @@ def community_get_notes():
 
     except Exception as e:
         current_app.logger.error(f'取得便利貼錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 
 @community_bp.route('/api/community/notes', methods=['POST'])
@@ -114,7 +114,7 @@ def community_create_note():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'新增便利貼錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 
 @community_bp.route('/api/community/notes/<int:note_id>', methods=['DELETE'])
@@ -144,7 +144,7 @@ def community_delete_note(note_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'刪除便利貼錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 
 @community_bp.route('/api/community/notes/<int:note_id>/like', methods=['POST'])
@@ -186,35 +186,34 @@ def community_toggle_like(note_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'愛心操作錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 
 @community_bp.route('/api/community/notes/<int:note_id>/comments', methods=['GET'])
 def community_get_comments(note_id):
     try:
-        note = CommunityNote.query.get(note_id)
-        if not note:
-            return jsonify({'success': False, 'message': '便利貼不存在'}), 404
-
-        comments = CommunityComment.query.filter_by(note_id=note_id)\
-            .order_by(CommunityComment.created_at.asc()).all()
-
+        comments = CommunityComment.query.filter_by(note_id=note_id).order_by(CommunityComment.created_at.desc()).all()
+        
+        # 批次查詢使用者
+        user_ids = list(set([c.user_id for c in comments]))
+        users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()}
+        
         result = []
         for c in comments:
-            author = User.query.get(c.user_id)
+            author = users.get(c.user_id)
             result.append({
                 'id': c.id,
                 'content': c.content,
-                'user_name': author.name if author else '匿名',
-                'user_picture': author.picture if author else '',
-                'created_at': c.created_at.strftime('%Y-%m-%d %H:%M') if c.created_at else ''
+                'created_at': c.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'author': {
+                    'name': author.name if author else '未知',
+                    'email': author.email if author else '',
+                    'avatar': author.avatar if author else None
+                }
             })
-
-        return jsonify({'success': True, 'comments': result})
-
+        return jsonify(result)
     except Exception as e:
-        current_app.logger.error(f'取得留言錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, 'message': "系統發生錯誤，請稍後再試"}), 500
 
 
 @community_bp.route('/api/community/notes/<int:note_id>/comments', methods=['POST'])
@@ -262,7 +261,7 @@ def community_create_comment(note_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'新增留言錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 
 @community_bp.route('/api/community/posts', methods=['GET'])
@@ -363,7 +362,7 @@ def community_get_posts():
 
     except Exception as e:
         current_app.logger.error(f'取得貼文錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 @community_bp.route('/api/community/posts/<int:post_id>', methods=['GET'])
 def community_get_single_post(post_id):
@@ -426,7 +425,7 @@ def community_get_single_post(post_id):
         return jsonify({'success': True, 'post': post_data})
     except Exception as e:
         current_app.logger.error(f'取得單一貼文錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 @community_bp.route('/api/community/posts/<int:post_id>/like', methods=['POST'])
 def community_like_post(post_id):
@@ -457,26 +456,33 @@ def community_like_post(post_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'貼文按讚錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 @community_bp.route('/api/community/posts/<int:post_id>/comments', methods=['GET'])
 def community_get_post_comments(post_id):
     try:
-        comments = PostComment.query.filter_by(post_id=post_id).order_by(PostComment.created_at.asc()).all()
+        comments = PostComment.query.filter_by(post_id=post_id).order_by(PostComment.created_at.desc()).all()
+        
+        # 批次查詢使用者
+        user_ids = list(set([c.user_id for c in comments]))
+        users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()}
+        
         result = []
         for c in comments:
-            author = User.query.get(c.user_id)
+            author = users.get(c.user_id)
             result.append({
                 'id': c.id,
                 'content': c.content,
-                'user_name': author.name if author else '匿名',
-                'user_picture': author.picture if author else '',
-                'created_at': c.created_at.strftime('%Y-%m-%d %H:%M') if c.created_at else ''
+                'created_at': c.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'author': {
+                    'name': author.name if author else '未知',
+                    'email': author.email if author else '',
+                    'avatar': author.avatar if author else None
+                }
             })
-        return jsonify({'success': True, 'comments': result})
+        return jsonify(result)
     except Exception as e:
-        current_app.logger.error(f'取得貼文留言錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, 'message': "系統發生錯誤，請稍後再試"}), 500
 
 @community_bp.route('/api/community/posts/<int:post_id>/comments', methods=['POST'])
 def community_create_post_comment(post_id):
@@ -505,7 +511,7 @@ def community_create_post_comment(post_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'新增貼文留言錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 @community_bp.route('/api/community/posts/<int:post_id>/repost', methods=['POST'])
 def community_repost(post_id):
@@ -537,7 +543,7 @@ def community_repost(post_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'轉發貼文錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 
 @community_bp.route('/api/community/posts', methods=['POST'])
@@ -590,7 +596,7 @@ def community_create_post():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'新增貼文錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 
 @community_bp.route('/api/community/posts/<int:post_id>', methods=['DELETE'])
@@ -622,4 +628,4 @@ def community_delete_post(post_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'刪除貼文錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500

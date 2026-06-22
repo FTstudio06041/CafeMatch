@@ -74,11 +74,16 @@ def save_chat_session():
         return jsonify({"error": "訊息數量過多"}), 413
 
     allowed_roles = {'user', 'ai', 'system'}
+    allowed_keys = {'role', 'content', 'feedback', 'debug_info', 'status'}
+    cleaned_messages = []
     for msg in messages:
         if not isinstance(msg, dict):
             return jsonify({"error": "訊息格式錯誤"}), 400
         if msg.get('role') not in allowed_roles:
             return jsonify({"error": "包含不合法的角色"}), 400
+        cleaned_msg = {k: v for k, v in msg.items() if k in allowed_keys}
+        cleaned_messages.append(cleaned_msg)
+    messages = cleaned_messages
 
     try:
         if session_id:
@@ -103,7 +108,7 @@ def save_chat_session():
         return jsonify({"success": True, "id": chat_session.id})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "系統發生錯誤，請稍後再試"}), 500
 
 @chat_bp.route('/api/chat/sessions/<session_id>', methods=['DELETE'])
 def delete_chat_session(session_id):
@@ -125,7 +130,7 @@ def delete_chat_session(session_id):
         return jsonify({"success": True})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "系統發生錯誤，請稍後再試"}), 500
 
 def get_current_model():
     if 'OLLAMA_MODEL' not in current_app.config or not current_app.config['OLLAMA_MODEL']:
@@ -260,4 +265,4 @@ def chat_feedback():
         return jsonify({"success": True})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({"success": False, "error": "系統發生錯誤，請稍後再試"}), 500

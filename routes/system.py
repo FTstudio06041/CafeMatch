@@ -37,7 +37,7 @@ def get_latest_announcement():
         })
     except Exception as e:
         current_app.logger.error(f'取得最新公告錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 
 @system_bp.route('/api/announcements/read', methods=['POST'])
@@ -59,7 +59,7 @@ def mark_announcement_as_read():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'更新公告已讀記錄錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 
 @system_bp.route('/api/admin/announcements', methods=['GET'])
@@ -77,7 +77,7 @@ def admin_get_announcements():
         return jsonify({'success': True, 'announcements': result})
     except Exception as e:
         current_app.logger.error(f'管理員載入公告錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 
 @system_bp.route('/api/admin/announcements', methods=['POST'])
@@ -100,7 +100,7 @@ def admin_create_announcement():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'發布公告錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 
 @system_bp.route('/api/admin/announcements/<int:ann_id>', methods=['DELETE'])
@@ -121,7 +121,7 @@ def admin_delete_announcement(ann_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'刪除公告錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 
 @system_bp.route('/api/bug_reports', methods=['POST'])
@@ -155,7 +155,7 @@ def create_bug_report():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'提交 Bug 回報錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 
 @system_bp.route('/api/admin/bug_reports', methods=['GET'])
@@ -177,7 +177,7 @@ def admin_get_bug_reports():
         return jsonify({'success': True, 'reports': result})
     except Exception as e:
         current_app.logger.error(f'管理員載入 Bug 回報錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 
 @system_bp.route('/api/admin/bug_reports/<int:report_id>', methods=['DELETE'])
@@ -198,4 +198,4 @@ def admin_delete_bug_report(report_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f'刪除 Bug 回報錯誤：{e}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, "message": "系統發生錯誤，請稍後再試"}), 500

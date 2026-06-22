@@ -299,7 +299,7 @@ def stream_generate(model_name, prompt_text, is_cafe_related, cafe_context, db, 
         yield error_msg + "\n"
     except Exception as e:
         error_msg = json.dumps(
-            {"error": f"Ollama 發生錯誤：{str(e)}", "done": True},
+            {"error": "系統發生錯誤，請稍後再試", "done": True},
             ensure_ascii=False
         )
         yield error_msg + "\n"
