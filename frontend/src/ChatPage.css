@@ -177,13 +177,50 @@
 /* --- 打字中動畫 (Typing Indicator) --- */
 .typing-indicator {
     display: flex;
-    gap: 6px;
+    gap: 10px;
     padding: 15px 20px;
     background-color: transparent;
     width: fit-content;
     align-self: flex-start;
     margin-bottom: 10px;
-    animation: fadeIn 0.3s ease;
+    animation: fadeIn 0.4s ease;
+}
+
+.thinking-text {
+    font-size: 0.95rem;
+    font-weight: 600;
+    background: linear-gradient(90deg, var(--text-main), var(--hover-color), var(--text-main));
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: gradientShine 3s linear infinite;
+    letter-spacing: 0.5px;
+    transition: opacity 0.4s ease;
+}
+
+.fade-in {
+    opacity: 1;
+}
+
+.fade-out {
+    opacity: 0;
+}
+
+@keyframes gradientShine {
+    to {
+        background-position: 200% center;
+    }
+}
+
+@keyframes gentlePulse {
+    0%, 100% {
+        opacity: 0.8;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.02);
+    }
 }
 
 .typing-dot {
@@ -509,3 +546,41 @@ button:focus {
         width: 100%;
     }
 }
+
+/* 測驗邀請卡片樣式 */
+.quiz-invite-card {
+    padding: 15px;
+    background-color: transparent;
+    border-radius: 8px;
+    border: 1px solid var(--text-main);
+    text-align: center;
+}
+
+.quiz-invite-title {
+    margin-bottom: 10px;
+    font-weight: bold;
+    color: var(--text-main);
+}
+
+.quiz-invite-desc {
+    margin-bottom: 15px;
+    font-size: 0.9rem;
+    color: var(--text-main);
+    opacity: 0.8;
+}
+
+.quiz-start-btn {
+    padding: 8px 20px;
+    background-color: transparent;
+    color: var(--text-main);
+    border: 1px solid var(--text-main);
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.2s;
+}
+
+.quiz-start-btn:hover {
+    background-color: var(--text-main);
+    color: var(--bg-main);
+}

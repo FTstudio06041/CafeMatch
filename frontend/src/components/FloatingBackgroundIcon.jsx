@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { Coffee, Bean, MapPin, Map, Store, MessageCircleMore } from 'lucide-react';
 import InteractiveIcon from './InteractiveIcon';
 
@@ -27,13 +27,19 @@ const FloatingBackgroundIcons = () => {
         const cellW = 100 / gridW;       // 每格寬 (vw)
         const cellH = 100 / gridH;       // 每格高 (vh)
 
+        // 簡單的決定性偽隨機函數
+        const seededRandom = (seed) => {
+            const x = Math.sin(seed) * 10000;
+            return x - Math.floor(x);
+        };
+
         // 為基礎圖案的每個位置產生固定的隨機偏移
         const tileOffsets = [];
         for (let r = 0; r < tileRows; r++) {
             for (let c = 0; c < tileCols; c++) {
                 tileOffsets.push({
-                    ox: (Math.random() - 0.5) * cellW * 0.35,
-                    oy: (Math.random() - 0.5) * cellH * 0.35,
+                    ox: (seededRandom(r * 10 + c) - 0.5) * cellW * 0.35,
+                    oy: (seededRandom(r * 10 + c + 100) - 0.5) * cellH * 0.35,
                 });
             }
         }

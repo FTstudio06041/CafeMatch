@@ -18,12 +18,29 @@ def community_get_notes():
             current_user = User.query.filter_by(email=user_email).first()
 
         result = []
-        for note in notes:
-            author = User.query.get(note.user_id)
-            like_count = CommunityLike.query.filter_by(note_id=note.id).count()
-            comment_count = CommunityComment.query.filter_by(note_id=note.id).count()
+        
+        if not notes:
+            return jsonify({'success': True, 'notes': result})
 
-            note_data = {
+        from sqlalchemy import func
+        user_ids = {n.user_id for n in notes}
+        users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()}
+        note_ids = [n.id for n in notes]
+
+        like_counts_q = db.session.query(CommunityLike.note_id, func.count(CommunityLike.id)).filter(CommunityLike.note_id.in_(note_ids)).group_by(CommunityLike.note_id).all()
+        like_counts = {nid: cnt for nid, cnt in like_counts_q}
+
+        comment_counts_q = db.session.query(CommunityComment.note_id, func.count(CommunityComment.id)).filter(CommunityComment.note_id.in_(note_ids)).group_by(CommunityComment.note_id).all()
+        comment_counts = {nid: cnt for nid, cnt in comment_counts_q}
+
+        user_liked_set = set()
+        if current_user:
+            user_likes = CommunityLike.query.filter(CommunityLike.note_id.in_(note_ids), CommunityLike.user_id == current_user.id).all()
+            user_liked_set = {like.note_id for like in user_likes}
+
+        for note in notes:
+            author = users.get(note.user_id)
+            result.append({
                 'id': note.id,
                 'content': note.content,
                 'color_index': note.color_index,
@@ -31,19 +48,10 @@ def community_get_notes():
                 'user_name': author.name if author else '匿名',
                 'user_picture': author.picture if author else '',
                 'user_email': author.email if author else '',
-                'like_count': like_count,
-                'comment_count': comment_count
-            }
-
-            if current_user:
-                existing_like = CommunityLike.query.filter_by(
-                    user_id=current_user.id, note_id=note.id
-                ).first()
-                note_data['is_liked'] = existing_like is not None
-            else:
-                note_data['is_liked'] = False
-
-            result.append(note_data)
+                'like_count': like_counts.get(note.id, 0),
+                'comment_count': comment_counts.get(note.id, 0),
+                'is_liked': note.id in user_liked_set
+            })
 
         return jsonify({'success': True, 'notes': result})
 
@@ -274,49 +282,74 @@ def community_get_posts():
             .paginate(page=page, per_page=per_page, error_out=False)
 
         result = []
-        for post in pagination.items:
-            author = User.query.get(post.user_id)
+        posts = pagination.items
+        
+        if not posts:
+            return jsonify({
+                'success': True,
+                'posts': result,
+                'total': pagination.total,
+                'pages': pagination.pages,
+                'current_page': pagination.page
+            })
+            
+        from sqlalchemy import func
+        user_ids = {p.user_id for p in posts}
+        cafe_ids = {p.cafe_id for p in posts if p.cafe_id}
+        post_ids = [p.id for p in posts]
+        orig_post_ids = {p.original_post_id for p in posts if p.original_post_id}
 
-            cafe_name = None
-            if post.cafe_id:
-                cafe = Cafes.query.get(post.cafe_id)
-                cafe_name = cafe.name if cafe else None
+        orig_posts = {p.id: p for p in CommunityPost.query.filter(CommunityPost.id.in_(orig_post_ids)).all()} if orig_post_ids else {}
+        all_user_ids = user_ids.union({p.user_id for p in orig_posts.values()})
+        
+        users = {u.id: u for u in User.query.filter(User.id.in_(all_user_ids)).all()} if all_user_ids else {}
+        cafes = {c.id: c for c in Cafes.query.filter(Cafes.id.in_(cafe_ids)).all()} if cafe_ids else {}
 
-            like_count = PostLike.query.filter_by(post_id=post.id).count()
-            comment_count = PostComment.query.filter_by(post_id=post.id).count()
-            repost_count = CommunityPost.query.filter_by(original_post_id=post.id).count()
-            is_liked = False
-            if current_user_id:
-                is_liked = PostLike.query.filter_by(post_id=post.id, user_id=current_user_id).first() is not None
+        like_counts_q = db.session.query(PostLike.post_id, func.count(PostLike.id)).filter(PostLike.post_id.in_(post_ids)).group_by(PostLike.post_id).all()
+        like_counts = {pid: cnt for pid, cnt in like_counts_q}
+
+        comment_counts_q = db.session.query(PostComment.post_id, func.count(PostComment.id)).filter(PostComment.post_id.in_(post_ids)).group_by(PostComment.post_id).all()
+        comment_counts = {pid: cnt for pid, cnt in comment_counts_q}
+
+        repost_counts_q = db.session.query(CommunityPost.original_post_id, func.count(CommunityPost.id)).filter(CommunityPost.original_post_id.in_(post_ids)).group_by(CommunityPost.original_post_id).all()
+        repost_counts = {pid: cnt for pid, cnt in repost_counts_q}
+
+        user_liked_set = set()
+        if current_user_id:
+            user_likes = PostLike.query.filter(PostLike.post_id.in_(post_ids), PostLike.user_id == current_user_id).all()
+            user_liked_set = {like.post_id for like in user_likes}
+
+        for post in posts:
+            author = users.get(post.user_id)
+            cafe = cafes.get(post.cafe_id)
 
             original_post_data = None
-            if post.original_post_id:
-                orig = CommunityPost.query.get(post.original_post_id)
-                if orig:
-                    orig_author = User.query.get(orig.user_id)
-                    original_post_data = {
-                        'id': orig.id,
-                        'content': orig.content,
-                        'image': orig.image or '',
-                        'user_name': orig_author.name if orig_author else '匿名',
-                        'user_picture': orig_author.picture if orig_author else '',
-                        'created_at': orig.created_at.strftime('%Y-%m-%d %H:%M') if orig.created_at else ''
-                    }
+            if post.original_post_id and post.original_post_id in orig_posts:
+                orig = orig_posts[post.original_post_id]
+                orig_author = users.get(orig.user_id)
+                original_post_data = {
+                    'id': orig.id,
+                    'content': orig.content,
+                    'image': orig.image or '',
+                    'user_name': orig_author.name if orig_author else '匿名',
+                    'user_picture': orig_author.picture if orig_author else '',
+                    'created_at': orig.created_at.strftime('%Y-%m-%d %H:%M') if orig.created_at else ''
+                }
 
             result.append({
                 'id': post.id,
                 'content': post.content,
                 'image': post.image or '',
                 'cafe_id': post.cafe_id,
-                'cafe_name': cafe_name or '',
+                'cafe_name': cafe.name if cafe else '',
                 'user_name': author.name if author else '匿名',
                 'user_picture': author.picture if author else '',
                 'user_email': author.email if author else '',
                 'created_at': post.created_at.strftime('%Y-%m-%d %H:%M') if post.created_at else '',
-                'like_count': like_count,
-                'comment_count': comment_count,
-                'repost_count': repost_count,
-                'is_liked': is_liked,
+                'like_count': like_counts.get(post.id, 0),
+                'comment_count': comment_counts.get(post.id, 0),
+                'repost_count': repost_counts.get(post.id, 0),
+                'is_liked': post.id in user_liked_set,
                 'original_post': original_post_data
             })
 
@@ -574,8 +607,12 @@ def community_delete_post(post_id):
         post = CommunityPost.query.get(post_id)
         if not post:
             return jsonify({'success': False, 'message': '貼文不存在'}), 404
-        if post.user_id != user.id:
+        if post.user_id != user.id and not getattr(user, 'is_admin', False):
             return jsonify({'success': False, 'message': '只能刪除自己的貼文'}), 403
+
+        PostLike.query.filter_by(post_id=post.id).delete()
+        PostComment.query.filter_by(post_id=post.id).delete()
+        CommunityPost.query.filter_by(original_post_id=post.id).update({CommunityPost.original_post_id: None})
 
         db.session.delete(post)
         db.session.commit()

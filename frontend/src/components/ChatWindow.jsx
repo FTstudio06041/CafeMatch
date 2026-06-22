@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import { useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 
 export default function ChatWindow() {
@@ -26,7 +26,7 @@ export default function ChatWindow() {
       const data = await response.json();
       
       setMessages([...newMessages, { sender: 'ai', text: data.reply || data.error }]);
-    } catch (error) {
+    } catch (e) { // eslint-disable-line no-unused-vars
       setMessages([...newMessages, { sender: 'ai', text: '連線發生錯誤，請稍後再試。' }]);
     } finally {
       setIsTyping(false);

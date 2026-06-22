@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import CafeCard from './CafeCard';
 
@@ -8,11 +8,7 @@ export default function CafeList() {
   const [loading, setLoading] = useState(true);
   const { API_BASE_URL, user } = useContext(AuthContext);
 
-  useEffect(() => {
-    fetchCafes();
-  }, [user]); // 當 user 狀態改變(登入/登出)時，重新抓取以更新亮燈狀態
-
-  const fetchCafes = async () => {
+  const fetchCafes = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/cafes`, {
         credentials: 'include',
@@ -24,7 +20,12 @@ export default function CafeList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [API_BASE_URL]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchCafes();
+  }, [fetchCafes, user]); // 當 user 狀態改變(登入/登出)時，重新抓取以更新亮燈狀態
 
   if (loading) return <div style={{ padding: '2rem' }}>載入中...</div>;
 

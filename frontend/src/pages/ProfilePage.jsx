@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import { useState, useEffect, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import Cropper from 'react-cropper';
@@ -35,6 +35,7 @@ export default function ProfilePage() {
   useEffect(() => {
     // 1. 初始化使用者編輯資料
     if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNewName(user.name || '');
       setCroppedImageBase64(user.picture || '');
       if (user.picture) setFileName('使用目前的頭像');

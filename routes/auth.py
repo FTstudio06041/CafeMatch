@@ -139,6 +139,30 @@ def delete_user_account():
         if not user:
             return jsonify({"success": False, "message": "使用者不存在"}), 404
 
+        from models import UserShopState, ChatSession, ChatFeedback, UserQuizResult, CommunityPost, PostLike, PostComment, CommunityNote, CommunityLike, CommunityComment
+
+        # 刪除社群互動
+        PostLike.query.filter_by(user_id=user.id).delete()
+        PostComment.query.filter_by(user_id=user.id).delete()
+        CommunityLike.query.filter_by(user_id=user.id).delete()
+        CommunityComment.query.filter_by(user_id=user.id).delete()
+        
+        # 刪除社群便利貼
+        CommunityNote.query.filter_by(user_id=user.id).delete()
+        
+        # 刪除貼文
+        posts = CommunityPost.query.filter_by(user_id=user.id).all()
+        for post in posts:
+            PostLike.query.filter_by(post_id=post.id).delete()
+            PostComment.query.filter_by(post_id=post.id).delete()
+            CommunityPost.query.filter_by(original_post_id=post.id).update({CommunityPost.original_post_id: None})
+            db.session.delete(post)
+            
+        # 刪除聊天紀錄與測驗
+        ChatSession.query.filter_by(user_id=user.id).delete()
+        ChatFeedback.query.filter_by(user_id=user.id).delete()
+        UserQuizResult.query.filter_by(user_id=user.id).delete()
+
         UserShopState.query.filter_by(user_id=user.id).delete()
         db.session.delete(user)
         db.session.commit()

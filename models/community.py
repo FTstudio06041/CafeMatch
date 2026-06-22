@@ -17,6 +17,7 @@ class PostLike(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey('community_posts.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint('user_id', 'post_id', name='uix_user_post_like'),)
 
 class PostComment(db.Model):
     __tablename__ = 'post_comments'
@@ -40,6 +41,7 @@ class CommunityLike(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     note_id = db.Column(db.Integer, db.ForeignKey('community_notes.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint('user_id', 'note_id', name='uix_user_note_like'),)
 
 class CommunityComment(db.Model):
     __tablename__ = 'community_comments'

@@ -1,4 +1,3 @@
-import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { encodeId } from '../../utils/hashId';
 import { formatTime } from '../../utils/formatters';

@@ -7,7 +7,8 @@ from database import db
 from extensions import oauth
 
 load_dotenv()
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+if os.getenv('FLASK_ENV') == 'development' or os.getenv('ALLOW_INSECURE_OAUTH') == '1':
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 app = Flask(__name__)
 
@@ -19,7 +20,14 @@ logging.basicConfig(
 app.logger.setLevel(logging.INFO)
 
 # --- 設定密鑰與 Config ---
-app.secret_key = os.getenv('SECRET_KEY', 'dev_key')
+secret_key = os.getenv('SECRET_KEY')
+if not secret_key:
+    if os.getenv('FLASK_ENV') == 'development' or os.getenv('FLASK_DEBUG') == '1':
+        app.logger.warning("No SECRET_KEY set. Falling back to dev_key for development.")
+        secret_key = 'dev_key'
+    else:
+        raise RuntimeError("SECRET_KEY must be set in production")
+app.secret_key = secret_key
 app.config['GOOGLE_CLIENT_ID'] = os.getenv('GOOGLE_CLIENT_ID')
 app.config['GOOGLE_CLIENT_SECRET'] = os.getenv('GOOGLE_CLIENT_SECRET')
 app.config['GOOGLE_MAPS_API_KEY'] = os.getenv('GOOGLE_MAPS_API_KEY')
@@ -29,7 +37,8 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DB_URI', local_db_uri)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # 啟用 CORS
-CORS(app, supports_credentials=True)
+cors_origins = [o.strip() for o in os.getenv('CORS_ORIGINS', os.getenv('FRONTEND_URL', 'http://localhost:5173')).split(',') if o.strip()]
+CORS(app, supports_credentials=True, origins=cors_origins)
 
 # 綁定 Extensions
 db.init_app(app)
@@ -49,8 +58,9 @@ from routes import register_blueprints
 
 register_blueprints(app)
 
-# 程式啟動時，自動建立資料表與欄位
-with app.app_context():
+@app.cli.command("init-db")
+def init_db():
+    """初始化資料庫與管理員"""
     db.create_all()
 
     try:
@@ -96,12 +106,16 @@ with app.app_context():
         db.session.rollback()
         
     # 初始化管理員帳號
-    admin_email = 'wjy28396@gmail.com'
-    admin_user = models.User.query.filter_by(email=admin_email).first()
-    if admin_user and not admin_user.is_admin:
-        admin_user.is_admin = True
-        db.session.commit()
-        print(f'[INIT] 已將 {admin_email} 設為管理員')
+    admin_emails = os.getenv('ADMIN_EMAILS', 'wjy28396@gmail.com').split(',')
+    for admin_email in admin_emails:
+        admin_email = admin_email.strip()
+        if not admin_email:
+            continue
+        admin_user = models.User.query.filter_by(email=admin_email).first()
+        if admin_user and not admin_user.is_admin:
+            admin_user.is_admin = True
+            db.session.commit()
+            print(f'[INIT] 已將 {admin_email} 設為管理員')
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
-import { toast } from '../../utils/toast';
 import { logger } from '../../utils/logger';
 export default function AdminGuideTab() {
   const { API_BASE_URL } = useContext(AuthContext);
@@ -10,11 +9,7 @@ export default function AdminGuideTab() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
 
-  useEffect(() => {
-    fetchStrategy();
-  }, []);
-
-  const fetchStrategy = async () => {
+  const fetchStrategy = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/guide-strategy`, { credentials: 'include' });
@@ -26,7 +21,12 @@ export default function AdminGuideTab() {
       logger.error('Failed to fetch guide strategy:', e);
     }
     setLoading(false);
-  };
+  }, [API_BASE_URL]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchStrategy();
+  }, [fetchStrategy]);
 
   const handleChange = (key, value) => {
     const numValue = Math.max(0, Math.min(parseInt(value) || 0, FIELD_CONFIG[key].max));

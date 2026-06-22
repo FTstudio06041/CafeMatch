@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ClipboardList, BarChart3, MapPin, Play, Store } from 'lucide-react';
@@ -36,6 +36,7 @@ export default function QuizPage() {
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setQuizResult(parsed);
         setQuizState('result');
       } catch {

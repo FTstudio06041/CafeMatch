@@ -1,23 +1,84 @@
 import React from 'react';
+import { useState, useEffect } from 'react';
+import InlineQuiz from './chat/InlineQuiz';
+import { THINKING_TEXTS } from '../utils/thinkingTexts';
 
-export default function MessageBubble({ msg, idx, isTyping, handleRetry, handleFeedback, isDebugMode }) {
+export default function MessageBubble({ msg, idx, isTyping, handleRetry, handleFeedback, isDebugMode, onQuizComplete }) {
   const role = msg?.role === 'user' ? 'user' : 'ai';
-  const content = msg?.content ?? msg?.text ?? '';
-  const safeContent = typeof content === 'string' ? content : String(content ?? '');
+  let content = msg?.content ?? msg?.text ?? '';
+  let safeContent = typeof content === 'string' ? content : String(content ?? '');
+
+  const [isQuizActive, setIsQuizActive] = useState(false);
+  const [textIndex, setTextIndex] = useState(0);
+  const [fade, setFade] = useState(true);
+
+  const statusKey = msg?.status || 'default';
+  const currentTexts = THINKING_TEXTS[statusKey] || THINKING_TEXTS.default;
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTextIndex(0);
+    setFade(true);
+  }, [statusKey]);
+
+  useEffect(() => {
+    if (role === 'ai' && safeContent === '') {
+      const interval = setInterval(() => {
+        setFade(false);
+        setTimeout(() => {
+          setTextIndex(prev => (prev + 1) % currentTexts.length);
+          setFade(true);
+        }, 400); // 讓文字有足夠時間淡出
+      }, 3500); // 每 3.5 秒輪換一次文字
+
+      return () => clearInterval(interval);
+    }
+  }, [role, safeContent, currentTexts.length]);
+
+  const hasQuizCard = safeContent.includes('[SHOW_QUIZ_CARD]');
+  if (hasQuizCard) {
+    safeContent = safeContent.replace('[SHOW_QUIZ_CARD]', '').trim();
+  }
 
   return (
     <React.Fragment>
       <div className={`message ${role}`}>
-        {role === 'ai' && safeContent === '' ? (
-          <div className="typing-indicator" style={{ margin: 0, padding: 0, background: 'transparent' }}>
-            <div className="typing-dot"></div>
-            <div className="typing-dot"></div>
-            <div className="typing-dot"></div>
-          </div>
+        {role === 'ai' && safeContent === '' && !hasQuizCard ? (
+          isTyping ? (
+            <div className="typing-indicator" style={{ margin: 0, padding: 0, background: 'transparent', display: 'flex', alignItems: 'center' }}>
+              <span className={`thinking-text ${fade ? 'fade-in' : 'fade-out'}`}>
+                {currentTexts[textIndex]}
+              </span>
+            </div>
+          ) : null
         ) : (
           <>
-            <div className="message-text">{safeContent}</div>
-            {role === 'ai' && !isTyping && safeContent !== '' && (
+            {safeContent && <div className="message-text">{safeContent}</div>}
+            {hasQuizCard && !isTyping && (
+              <div className="quiz-container" style={{ marginTop: '10px' }}>
+                {!isQuizActive ? (
+                  <div className="quiz-invite-card">
+                    <div className="quiz-invite-title">☕ 啡你莫屬人格解析</div>
+                    <div className="quiz-invite-desc">透過簡單的情境測驗，找出最適合你的咖啡廳！</div>
+                    <button 
+                      className="quiz-start-btn"
+                      onClick={() => setIsQuizActive(true)} 
+                    >
+                      開始測驗
+                    </button>
+                  </div>
+                ) : (
+                  <InlineQuiz 
+                    onComplete={(data) => {
+                      setIsQuizActive(false);
+                      if(onQuizComplete) onQuizComplete(data, idx);
+                    }} 
+                    onCancel={() => setIsQuizActive(false)}
+                  />
+                )}
+              </div>
+            )}
+            {role === 'ai' && !isTyping && (safeContent !== '' || hasQuizCard) && (
               <div className="message-actions">
                 <button 
                   className="action-btn retry" 

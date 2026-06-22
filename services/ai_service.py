@@ -35,7 +35,8 @@ CAFE_KEYWORDS = [
     '司康', '蛋糕', '鬆餅', '可頌', '冰', '熱'
 ]
 
-from config.prompts import CAFE_SYSTEM_PROMPT, GENERAL_SYSTEM_PROMPT
+from config.prompts import CAFE_SYSTEM_PROMPT, GENERAL_SYSTEM_PROMPT, PREFERENCE_EXTRACTION_PROMPT
+import re
 DAY_NAMES = ['', '一', '二', '三', '四', '五', '六', '日']
 
 
@@ -53,6 +54,61 @@ def classify_intent(user_message):
     lower_msg = user_message.lower()
     matched = [kw for kw in CAFE_KEYWORDS if kw in lower_msg]
     return len(matched) > 0, matched
+
+
+def extract_preferences_via_llm(history, user_message, model_name):
+    """
+    呼叫 LLM 進行意圖與偏好萃取，回傳 JSON。
+    若發生例外或解析失敗，回傳一個包含空字典的 Fallback 物件。
+    """
+    import logging
+    # 組裝供萃取的歷史字串
+    history_text = ""
+    for msg in history[-10:]:  # 只取最近 10 筆作為判斷依據
+        role = "使用者" if msg.get("role") == "user" else "助手"
+        history_text += f"{role}：{msg.get('content', '')}\n"
+    history_text += f"使用者：{user_message}\n"
+
+    prompt = PREFERENCE_EXTRACTION_PROMPT + "\n\n【歷史對話與最新訊息】\n" + history_text
+
+    ollama_url = f"{OLLAMA_BASE_URL}/api/generate"
+    payload = {
+        "model": model_name,
+        "prompt": prompt,
+        "stream": False,
+        "format": "json"
+    }
+
+    fallback_result = {
+        "preferences": {},
+        "quiz_consent": None,
+        "quiz_refused": False
+    }
+
+    try:
+        resp = requests.post(ollama_url, json=payload, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        response_text = data.get("response", "")
+
+        logging.debug(f"[LLM Extraction] Response: {response_text}")
+
+        # 嘗試從回應中抽出 JSON (有時模型即使設 format json 也會包在 ```json 中)
+        match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+            result = json.loads(json_str)
+            return {
+                "preferences": result.get("preferences", {}),
+                "quiz_consent": result.get("quiz_consent"),
+                "quiz_refused": result.get("quiz_refused", False)
+            }
+        else:
+            return fallback_result
+
+    except Exception as e:
+        logging.error(f"[LLM Extraction Error]: {e}")
+        return fallback_result
 
 
 # ==========================================
@@ -168,7 +224,7 @@ def build_prompt(user_message, history, is_cafe_related, cafe_context, guide_ins
 # 4. LLM 呼叫與串流 (含 Token 攔截)
 # ==========================================
 
-def stream_generate(model_name, prompt_text, is_cafe_related, cafe_context, db, AiQueryLog, user_id=None):
+def stream_generate(model_name, prompt_text, is_cafe_related, cafe_context, db, AiQueryLog, user_id=None, show_debug=False):
     """
     呼叫 Ollama API 進行串流生成，並在串流結束時攔截 Token 統計資料，
     寫入 AiQueryLog 資料表。
@@ -192,15 +248,16 @@ def stream_generate(model_name, prompt_text, is_cafe_related, cafe_context, db, 
         "stream": True
     }
 
-    # ★ 先送出第一包 debug_info — 前端立刻就能顯示
-    initial_debug = {
-        "type": "debug_info",
-        "model": model_name,
-        "prompt": prompt_text,
-        "is_cafe_related": is_cafe_related,
-        "rag_context": cafe_context if cafe_context else "(未注入資料庫資料)"
-    }
-    yield json.dumps(initial_debug, ensure_ascii=False) + "\n"
+    if show_debug:
+        # ★ 先送出第一包 debug_info — 前端立刻就能顯示
+        initial_debug = {
+            "type": "debug_info",
+            "model": model_name,
+            "prompt": prompt_text,
+            "is_cafe_related": is_cafe_related,
+            "rag_context": cafe_context if cafe_context else "(未注入資料庫資料)"
+        }
+        yield json.dumps(initial_debug, ensure_ascii=False) + "\n"
 
     # ★ 然後才去連 Ollama（這裡可能會卡一段時間等模型載入）
     try:

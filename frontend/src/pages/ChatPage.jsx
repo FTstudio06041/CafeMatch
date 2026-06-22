@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef, useCallback } from 'react';
+import { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 
@@ -118,7 +118,7 @@ export default function ChatPage() {
   // 核心發送與串流邏輯
   // ==========================================
   const executeChatStream = useCallback(async (messageText, options = {}) => {
-    const { customTitle = null } = options;
+    const { customTitle = null, hiddenPrompt = false, isQuizResult = false, replaceMsgIdx = null } = options;
     if (!messageText.trim() || isTyping) return;
     
     setIsTyping(true);
@@ -129,17 +129,22 @@ export default function ChatPage() {
       chatTitle = customTitle || messageText.substring(0, 10) + '...';
     }
 
-    const updatedMessages = [
-      ...currentChatRef.current.messages,
-      { role: 'user', content: messageText },
-      { role: 'ai', content: '', debug_info: null }
-    ];
+    let nextMessages = [...currentChatRef.current.messages];
 
-    // 更新 state (新增 user 和空白的 ai 訊息)
+    if (replaceMsgIdx !== null && replaceMsgIdx >= 0 && replaceMsgIdx < nextMessages.length) {
+      nextMessages = nextMessages.slice(0, replaceMsgIdx);
+    }
+
+    if (!hiddenPrompt) {
+      nextMessages.push({ role: 'user', content: messageText });
+    }
+    nextMessages.push({ role: 'ai', content: '', debug_info: null, status: null });
+
+    // 更新 state
     const chatWithPendingAi = normalizeChatSession({
       ...currentChatRef.current,
       title: chatTitle,
-      messages: updatedMessages
+      messages: nextMessages
     });
     currentChatRef.current = chatWithPendingAi;
     setCurrentChat(chatWithPendingAi);
@@ -147,9 +152,11 @@ export default function ChatPage() {
     abortControllerRef.current = new AbortController();
     let currentAiContent = "";
     let currentDebugInfo = null;
+    let currentStatus = null;
 
     // 內部輔助函式：同步狀態，最後一次寫入後端
-    const syncStreamState = async (content, debugInfo, appendText = '', isFinal = false) => {
+    const syncStreamState = async (content, debugInfo, appendText = '', isFinal = false, status = null) => {
+      if (status) currentStatus = status;
       const finalContent = content + appendText;
       const baseChat = currentChatRef.current;
       const msgs = [...baseChat.messages];
@@ -159,7 +166,8 @@ export default function ChatPage() {
         msgs[msgs.length - 1] = {
           ...last,
           content: finalContent,
-          debug_info: debugInfo ? { ...debugInfo } : last.debug_info
+          debug_info: debugInfo ? { ...debugInfo } : last.debug_info,
+          status: currentStatus || last.status
         };
       }
 
@@ -172,10 +180,11 @@ export default function ChatPage() {
       }
     };
 
-    // 準備歷史對話紀錄傳給後端 (只取最近 6 筆，排除剛才 push 的 user+ai)
+    // 準備歷史對話紀錄傳給後端 (只取最近 6 筆，排除剛才 push 的暫存訊息)
     let historyToSend = [];
-    if (updatedMessages.length >= 2) {
-      const prevMsgs = updatedMessages.slice(0, -2);
+    const excludeCount = hiddenPrompt ? 1 : 2;
+    if (nextMessages.length >= excludeCount) {
+      const prevMsgs = nextMessages.slice(0, -excludeCount);
       historyToSend = prevMsgs.slice(-6).map(m => ({
         role: m.role,
         content: m.content
@@ -190,7 +199,8 @@ export default function ChatPage() {
         body: JSON.stringify({
           message: messageText,
           history: historyToSend,
-          use_rag: true
+          use_rag: true,
+          is_quiz_result: isQuizResult
         }),
         signal: abortControllerRef.current.signal
       });
@@ -199,37 +209,56 @@ export default function ChatPage() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
+      let ndjsonBuffer = '';
+
+      const processParsed = async (parsed) => {
+        if (parsed.status) {
+          await syncStreamState(currentAiContent, currentDebugInfo, '', false, parsed.status);
+        } else if (parsed.debug_info || parsed.type === 'debug_info') {
+          currentDebugInfo = parsed.debug_info || parsed;
+          await syncStreamState(currentAiContent, currentDebugInfo, '', false, currentStatus);
+        } else if (parsed.content || parsed.response) {
+          currentAiContent += (parsed.content || parsed.response);
+          await syncStreamState(currentAiContent, currentDebugInfo, '', false, currentStatus);
+        } else if (parsed.error) {
+          toast.error(`錯誤：${parsed.error}`);
+        }
+        
+        if (parsed.done) {
+          await syncStreamState(currentAiContent, currentDebugInfo, '', true, currentStatus);
+        }
+      };
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true });
+          ndjsonBuffer += chunk;
+          const lines = ndjsonBuffer.split('\n');
+          ndjsonBuffer = lines.pop(); // keep the last potentially incomplete line
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n').filter(line => line.trim() !== '');
-
-        for (const line of lines) {
-          try {
-            // 嘗試將每行解析為 JSON (因為後端傳回的是 NDJSON)
-            const parsed = JSON.parse(line);
-            
-            if (parsed.debug_info) {
-              currentDebugInfo = parsed.debug_info;
-              await syncStreamState(currentAiContent, currentDebugInfo);
-            } else if (parsed.content || parsed.response) {
-              // 支援 content 或 response (Ollama 原生欄位)
-              currentAiContent += (parsed.content || parsed.response);
-              await syncStreamState(currentAiContent, currentDebugInfo);
-            } else if (parsed.error) {
-              toast.error(`錯誤：${parsed.error}`);
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const parsed = JSON.parse(line);
+              await processParsed(parsed);
+            } catch (e) {
+              console.warn('Failed to parse NDJSON line:', line.substring(0, 50) + '...', e);
             }
-            
-            // 處理完成訊號
-            if (parsed.done) {
-              await syncStreamState(currentAiContent, currentDebugInfo, '', true);
-            }
-          } catch (e) {
-            // 忽略無法解析為 JSON 的行（例如空白或不完整的 chunk）
           }
+        }
+
+        if (done) {
+          if (ndjsonBuffer.trim()) {
+            try {
+              const parsed = JSON.parse(ndjsonBuffer);
+              await processParsed(parsed);
+            } catch (e) {
+              console.warn('Failed to parse final NDJSON chunk:', ndjsonBuffer.substring(0, 50) + '...', e);
+            }
+          }
+          break;
         }
       }
     } catch (error) {
@@ -248,6 +277,7 @@ export default function ChatPage() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('welcome') === 'true') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowWelcomeModal(true);
       // 清除 welcome param
       navigate('/chat', { replace: true });
@@ -376,6 +406,26 @@ export default function ChatPage() {
     setIsTyping(false);
   };
 
+  const handleQuizComplete = useCallback((quizData, msgIdx) => {
+    const scoreParts = [];
+    const scoreLabels = { work: '工作讀書', env: '空間氛圍', social: '社交舒適', taste: '餐飲口味', cp: 'CP值' };
+    if (quizData.scores) {
+      for (const [key, val] of Object.entries(quizData.scores)) {
+        scoreParts.push(`${scoreLabels[key] || key}：${val}`);
+      }
+    }
+    const promptText = `我剛完成了心理測驗，以下是我的結果：\n`
+      + `\n【咖啡人格】${quizData.title}`
+      + (quizData.profile ? `\n【特質側寫】${quizData.profile}` : '')
+      + (scoreParts.length > 0 ? `\n【五維分數】${scoreParts.join('、')}` : '')
+      + (quizData.cafe_match ? `\n【氛圍對應】${quizData.cafe_match}` : '')
+      + `\n\n【任務】請用親切自然的語氣，先為我公佈並稍微分析一下我的咖啡人格與特質，接著再無縫地為我推薦適合的花蓮咖啡廳。`;
+    
+    setTimeout(() => {
+      executeChatStream(promptText, { customTitle: '分析結果與推薦', hiddenPrompt: true, isQuizResult: true, replaceMsgIdx: msgIdx });
+    }, 300);
+  }, [executeChatStream]);
+
   // ==========================================
   // 渲染
   // ==========================================
@@ -402,6 +452,7 @@ export default function ChatPage() {
                 handleRetry={handleRetry}
                 handleFeedback={handleFeedback}
                 isDebugMode={isDebugMode}
+                onQuizComplete={handleQuizComplete}
               />
             ))
           )}

@@ -31,29 +31,61 @@ CONFIG_PATH = os.path.join(
 # 公開介面
 # ==========================================
 
-def analyze_and_guide(history: list) -> str | None:
+def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
     """
     對話引導的唯一入口。
 
     分析對話歷史，決定 AI 這一輪應該繼續引導提問，還是直接推薦。
 
     參數:
-        history: list[dict] — 對話歷史，格式為
-                 [{"role": "user"|"ai", "content": "..."}, ...]
+        history: list[dict] — 對話歷史
+        extracted_data: dict — 透過 LLM 萃取出來的偏好與狀態
 
     回傳:
-        str  — 注入給 AI 的引導指令（AI 應據此自然地提問）
+        str  — 注入給 AI 的引導指令
         None — 不需引導，AI 應直接根據資料庫資料推薦店家
     """
     config = _load_config()
     dimensions = config["dimensions"]
     strategy = config["strategy"]
 
-    collected = _extract_collected_dimensions(history, dimensions)
+    extracted_data = extracted_data or {}
+    collected = extracted_data.get("preferences", {})
+    
+    # 計算收集到的總維度數量
+    collected_keys = [k for k, v in collected.items() if v]
+    collected_count = len(collected_keys)
+
     question_count = _count_ai_questions(history)
     user_rounds = sum(1 for m in history if m.get("role") == "user")
+    ai_rounds = sum(1 for m in history if m.get("role") in ("ai", "assistant"))
+    
+    # 檢查是否已經推薦過了 (簡單檢查 AI 歷史訊息長度是否較長，或是否包含推薦關鍵字)
+    has_recommended = False
+    for msg in history:
+        if msg.get("role") in ("ai", "assistant"):
+            if "推薦" in msg.get("content", "") and "地址" in msg.get("content", ""):
+                has_recommended = True
+                break
+
+    # === 心理測驗邏輯 ===
+    quiz_consent = extracted_data.get("quiz_consent")
+    quiz_refused = extracted_data.get("quiz_refused", False)
+    
+    # 如果使用者剛剛同意做測驗
+    if quiz_consent is True:
+        return "【任務】使用者已同意進行測驗。請在您的回覆中，確切包含字串：「[SHOW_QUIZ_CARD]」，並可附帶一句簡短自然的引導（例如：太好了！那請點擊下方卡片，我們馬上開始囉～）。絕不要推薦店家，也不要再問其他問題。"
+    
+    # 如果是第一輪對話，且尚未做過測驗、也沒有拒絕，且收集到的偏好還不足以推薦
+    # (如果第一句話就把條件給滿了，就直接推薦，不一定要強迫做測驗)
+    if user_rounds == 1 and not quiz_refused and collected_count < strategy["min_dimensions_to_recommend"]:
+        return "【任務】請詢問使用者：「為了給您更精準的推薦，您願意先花 1 分鐘做個心理測驗小遊戲嗎？」請用語氣自然的方式發問。"
 
     # === 停止條件（硬性，不靠 AI 判斷） ===
+
+    # 若已經推薦過，進入推薦後階段
+    if has_recommended:
+        return "【任務】你已經推薦過咖啡廳了。請回答使用者關於推薦店家的問題，若使用者不滿意或想換口味，可以再推薦其他家。"
 
     # 條件 1：AI 已問太多次 → 直接推薦
     if question_count >= strategy["max_questions"]:
@@ -63,22 +95,23 @@ def analyze_and_guide(history: list) -> str | None:
     if user_rounds >= strategy["recommend_after_rounds"]:
         return None
 
-    # 條件 3：已蒐集到足夠維度，且 AI 已至少問過一次 → 直接推薦
-    if (len(collected) >= strategy["min_dimensions_to_recommend"]
-            and question_count >= 1):
+    # 條件 3：已蒐集到足夠維度 → 直接推薦 (短路條件)
+    # 取消了必須 question_count >= 1 的限制
+    if collected_count >= strategy["min_dimensions_to_recommend"]:
         return None
 
     # === 產生引導指令 ===
 
     # 找出尚未蒐集的維度
-    missing = [d for d in dimensions if d["key"] not in collected]
+    missing = [d for d in dimensions if d["key"] not in collected_keys]
 
     if not missing:
         return None  # 所有維度都已蒐集，直接推薦
 
     # 組裝已知偏好摘要
     summary_parts = []
-    for key, keywords in collected.items():
+    for key in collected_keys:
+        keywords = collected[key]
         dim_label = next(
             (d["label"] for d in dimensions if d["key"] == key), key
         )
@@ -88,16 +121,25 @@ def analyze_and_guide(history: list) -> str | None:
 
     # 選取下一個要問的維度
     next_dim = missing[0]
-    example = next_dim["example_prompts"][0] if next_dim.get("example_prompts") else ""
+    import random
+    if next_dim.get("example_prompts"):
+        example = random.choice(next_dim["example_prompts"])
+    else:
+        example = ""
 
     instruction = (
-        f"使用者目前已透露的偏好：{summary}。\n"
-        f"你還不知道他的「{next_dim['label']}」。"
-        f"請用自然聊天的口吻，順著對話脈絡問一個相關問題。"
+        f"【任務】使用者目前已透露的偏好：{summary}。\n"
+        f"【目前進度】已提問次數：{question_count} / 最大上限：{strategy['max_questions']}。\n"
+        f"接下來，你需要幫忙釐清使用者的「{next_dim['label']}」。\n"
+        f"請以朋友般的自然口吻，順著聊天的感覺問出這個重點。"
     )
 
     if example:
-        instruction += f"\n參考問法（不要照抄）：{example}"
+        instruction += (
+            f"\n\n【重要禁止事項】\n"
+            f"絕對不可以原封不動照抄這句話：「{example}」。\n"
+            f"請你一定要發揮創意、換句話說，讓每次的問法都不一樣！"
+        )
 
     return instruction
 

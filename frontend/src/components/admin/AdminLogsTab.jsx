@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
 import { logger } from '../../utils/logger';
@@ -7,18 +7,19 @@ export default function AdminLogsTab() {
   const [logs, setLogs] = useState({ logs: [], total: 0, pages: 1, current_page: 1 });
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchLogs(1);
-  }, []);
-
-  const fetchLogs = async (page) => {
+  const fetchLogs = useCallback(async (page) => {
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/logs?page=${page}&per_page=30`, { credentials: 'include' });
       if (res.ok) setLogs(await res.json());
     } catch (e) { logger.error(e); }
     setLoading(false);
-  };
+  }, [API_BASE_URL]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchLogs(1);
+  }, [fetchLogs]);
 
   return (
     <>

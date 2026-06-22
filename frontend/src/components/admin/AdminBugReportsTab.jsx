@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
 import { toast } from '../../utils/toast';
@@ -8,11 +8,7 @@ export default function AdminBugReportsTab() {
   const [bugReports, setBugReports] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchBugReports();
-  }, []);
-
-  const fetchBugReports = async () => {
+  const fetchBugReports = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/bug_reports`, { credentials: 'include' });
@@ -24,7 +20,12 @@ export default function AdminBugReportsTab() {
       logger.error('載入 Bug 回報失敗:', e);
     }
     setLoading(false);
-  };
+    }, [API_BASE_URL]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchBugReports();
+  }, [fetchBugReports]);
 
   const deleteBugReport = async (reportId) => {
     if (!confirm('確定要刪除/標記處理此回報嗎？此操作會將其移出列表。')) return;

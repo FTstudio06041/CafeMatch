@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from 'react';
+import { useState, useEffect, useContext, useRef, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
 import { toast } from '../../utils/toast';
@@ -17,12 +17,7 @@ export default function PostComposer({ onSubmit }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef(null);
 
-  // 載入咖啡廳列表
-  useEffect(() => {
-    fetchCafes();
-  }, []);
-
-  const fetchCafes = async () => {
+  const fetchCafes = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/cafes`, { credentials: 'include' });
       if (res.ok) {
@@ -32,7 +27,13 @@ export default function PostComposer({ onSubmit }) {
     } catch (err) {
       logger.error('載入咖啡廳列表失敗:', err);
     }
-  };
+  }, [API_BASE_URL]);
+
+  // 載入咖啡廳列表
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchCafes();
+  }, [fetchCafes]);
 
   // 圖片上傳處理
   const handleImageUpload = (e) => {

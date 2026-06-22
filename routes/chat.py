@@ -1,4 +1,5 @@
 import uuid
+import json
 from datetime import datetime
 from flask import Blueprint, jsonify, request, session, stream_with_context, current_app
 from database import db
@@ -60,21 +61,36 @@ def save_chat_session():
         return jsonify({"error": "使用者不存在"}), 404
 
     data = request.json
+    if len(json.dumps(data)) > 1024 * 1024:
+        return jsonify({"error": "Payload 過大"}), 413
+
     session_id = data.get('id')
     title = data.get('title', '新對話')
+    if len(title) > 100:
+        title = title[:100]
+
     messages = data.get('messages', [])
+    if len(messages) > 1000:
+        return jsonify({"error": "訊息數量過多"}), 413
+
+    allowed_roles = {'user', 'ai', 'system'}
+    for msg in messages:
+        if not isinstance(msg, dict):
+            return jsonify({"error": "訊息格式錯誤"}), 400
+        if msg.get('role') not in allowed_roles:
+            return jsonify({"error": "包含不合法的角色"}), 400
 
     try:
-        chat_session = None
         if session_id:
             chat_session = ChatSession.query.filter_by(id=session_id, user_id=user.id).first()
-        
-        if chat_session:
+            if not chat_session:
+                return jsonify({"error": "找不到該對話"}), 404
+            
             chat_session.title = title
             chat_session.messages = messages
             chat_session.updated_at = datetime.utcnow()
         else:
-            new_id = session_id if session_id else str(uuid.uuid4())
+            new_id = str(uuid.uuid4())
             chat_session = ChatSession(
                 id=new_id,
                 user_id=user.id,
@@ -118,54 +134,102 @@ def get_current_model():
 
 @chat_bp.route('/api/chat', methods=['POST'])
 def chat_with_ai():
-    try:
-        data = request.json
-        user_message = data.get('message', '')
-        history = data.get('history', [])
+    def generate_pipeline():
+        try:
+            data = request.json
+            user_message = data.get('message', '')
+            history = data.get('history', [])
+            is_quiz_result = data.get('is_quiz_result', False)
+            is_debug_requested = data.get('debug', False)
 
-        if not user_message:
-            return jsonify({"error": "未提供訊息"}), 400
+            if not user_message:
+                yield json.dumps({"error": "未提供訊息", "done": True}, ensure_ascii=False) + "\n"
+                return
 
-        if not ai_service.check_health():
-            return jsonify({"error": "Ollama 連線失敗，請確認是否已啟動 Ollama。"}), 503
+            if not ai_service.check_health():
+                yield json.dumps({"error": "Ollama 連線失敗，請確認是否已啟動 Ollama。", "done": True}, ensure_ascii=False) + "\n"
+                return
 
-        is_cafe_related, matched_keywords = ai_service.classify_intent(user_message)
-        cafe_context = ""
-        if is_cafe_related:
-            cafe_context = ai_service.retrieve_cafe_context(matched_keywords, Cafes, Tags)
+            yield json.dumps({"status": "analyzing_intent"}, ensure_ascii=False) + "\n"
+            is_cafe_related, matched_keywords = ai_service.classify_intent(user_message)
+            if not is_cafe_related and len(history) > 0:
+                lower_msg = user_message.lower()
+                exit_keywords = ['聊天', '笑話', '說故事', '別提咖啡', '不想找', '隨便聊', '其他事']
+                if not any(kw in lower_msg for kw in exit_keywords):
+                    is_cafe_related = True
 
-        guide_instruction = None
-        if is_cafe_related:
-            guide_instruction = conversation_guide.analyze_and_guide(history)
+            extracted_data = None
+            guide_instruction = None
 
-        model_name = get_current_model()
-        prompt_text = ai_service.build_prompt(user_message, history, is_cafe_related, cafe_context, guide_instruction)
+            if is_cafe_related:
+                if is_quiz_result:
+                    yield json.dumps({"status": "processing_quiz_result"}, ensure_ascii=False) + "\n"
+                    extracted_data = {"quiz_consent": False, "quiz_refused": True}
+                    guide_instruction = None
+                else:
+                    yield json.dumps({"status": "extracting_preferences"}, ensure_ascii=False) + "\n"
+                    model_name = get_current_model()
+                    extracted_data = ai_service.extract_preferences_via_llm(history, user_message, model_name)
+                    
+                    all_keywords = []
+                    if extracted_data and "preferences" in extracted_data:
+                        for vals in extracted_data["preferences"].values():
+                            all_keywords.extend(vals)
+                    matched_keywords = list(set(matched_keywords + all_keywords))
 
-        user_id = None
-        user_email = session.get('user_email')
-        if user_email:
-            current_user = User.query.filter_by(email=user_email).first()
-            if current_user:
-                user_id = current_user.id
+                    temp_history = history.copy()
+                    temp_history.append({"role": "user", "content": user_message})
+                    guide_instruction = conversation_guide.analyze_and_guide(temp_history, extracted_data)
+                    
+                    if extracted_data and extracted_data.get("quiz_consent") is True:
+                        yield json.dumps({"status": "generating_response"}, ensure_ascii=False) + "\n"
+                        yield json.dumps({"response": "太好了！那請點擊下方卡片，我們馬上開始囉～\n\n[SHOW_QUIZ_CARD]"}, ensure_ascii=False) + "\n"
+                        yield json.dumps({"response": "", "done": True}, ensure_ascii=False) + "\n"
+                        return
 
-        generator = ai_service.stream_generate(
-            model_name=model_name,
-            prompt_text=prompt_text,
-            is_cafe_related=is_cafe_related,
-            cafe_context=cafe_context,
-            db=db,
-            AiQueryLog=AiQueryLog,
-            user_id=user_id
-        )
+            cafe_context = ""
+            if is_cafe_related:
+                yield json.dumps({"status": "retrieving_cafes"}, ensure_ascii=False) + "\n"
+                cafe_context = ai_service.retrieve_cafe_context(matched_keywords, Cafes, Tags)
+            else:
+                yield json.dumps({"status": "general_chat"}, ensure_ascii=False) + "\n"
 
-        resp = current_app.response_class(stream_with_context(generator), mimetype='application/x-ndjson')
-        resp.headers['Cache-Control'] = 'no-cache'
-        resp.headers['X-Accel-Buffering'] = 'no'
-        return resp
+            trimmed_history = history[-10:] if history else []
+            model_name = get_current_model()
+            prompt_text = ai_service.build_prompt(user_message, trimmed_history, is_cafe_related, cafe_context, guide_instruction)
 
-    except Exception as e:
-        current_app.logger.error("Chat API Error:", e)
-        return jsonify({"error": "系統發生未知的錯誤"}), 500
+            user_id = None
+            is_admin = False
+            user_email = session.get('user_email')
+            if user_email:
+                current_user = User.query.filter_by(email=user_email).first()
+                if current_user:
+                    user_id = current_user.id
+                    is_admin = getattr(current_user, 'is_admin', False)
+
+            show_debug = is_debug_requested and is_admin
+
+            yield json.dumps({"status": "generating_response"}, ensure_ascii=False) + "\n"
+            for chunk in ai_service.stream_generate(
+                model_name=model_name,
+                prompt_text=prompt_text,
+                is_cafe_related=is_cafe_related,
+                cafe_context=cafe_context,
+                db=db,
+                AiQueryLog=AiQueryLog,
+                user_id=user_id,
+                show_debug=show_debug
+            ):
+                yield chunk
+
+        except Exception as e:
+            current_app.logger.exception(f"Chat API Error: {e}")
+            yield json.dumps({"error": "系統暫時無法處理，請稍後再試", "done": True}, ensure_ascii=False) + "\n"
+
+    resp = current_app.response_class(stream_with_context(generate_pipeline()), mimetype='application/x-ndjson')
+    resp.headers['Cache-Control'] = 'no-cache'
+    resp.headers['X-Accel-Buffering'] = 'no'
+    return resp
 
 @chat_bp.route('/api/chat/feedback', methods=['POST'])
 def chat_feedback():

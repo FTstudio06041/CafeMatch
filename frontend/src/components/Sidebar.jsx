@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import '../ChatPage.css'; // 保留側欄的相關 CSS 樣式
@@ -47,6 +47,7 @@ export default function Sidebar() {
   }, [user, API_BASE_URL]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchSessions();
 
     const handleChatUpdated = () => fetchSessions();

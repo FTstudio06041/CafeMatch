@@ -1,4 +1,4 @@
-import React, { useContext, Suspense, lazy } from 'react';
+import { useContext, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthContext, AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
