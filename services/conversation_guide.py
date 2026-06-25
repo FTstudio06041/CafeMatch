@@ -12,6 +12,14 @@ conversation_guide.py — 對話引導狀態機
 
 import json
 import os
+import random
+
+from config.prompts import (
+    QUIZ_CONSENT_INSTRUCTION,
+    QUIZ_INVITATION_INSTRUCTION,
+    ALREADY_RECOMMENDED_INSTRUCTION,
+    get_clarification_instruction
+)
 
 
 # ==========================================
@@ -74,18 +82,21 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
     
     # 如果使用者剛剛同意做測驗
     if quiz_consent is True:
-        return "【任務】使用者已同意進行測驗。請在您的回覆中，確切包含字串：「[SHOW_QUIZ_CARD]」，並可附帶一句簡短自然的引導（例如：太好了！那請點擊下方卡片，我們馬上開始囉～）。絕不要推薦店家，也不要再問其他問題。"
+        return QUIZ_CONSENT_INSTRUCTION
     
-    # 如果是第一輪對話，且尚未做過測驗、也沒有拒絕，且收集到的偏好還不足以推薦
+    # 檢查 AI 歷史紀錄中是否已經邀請過做測驗
+    quiz_has_been_asked = any("測驗" in m.get("content", "") for m in history if m.get("role") in ("ai", "assistant"))
+
+    # 如果尚未問過測驗、尚未做過測驗、也沒有拒絕，且收集到的偏好還不足以推薦
     # (如果第一句話就把條件給滿了，就直接推薦，不一定要強迫做測驗)
-    if user_rounds == 1 and not quiz_refused and collected_count < strategy["min_dimensions_to_recommend"]:
-        return "【任務】請詢問使用者：「為了給您更精準的推薦，您願意先花 1 分鐘做個心理測驗小遊戲嗎？」請用語氣自然的方式發問。"
+    if not quiz_has_been_asked and not quiz_refused and collected_count < strategy["min_dimensions_to_recommend"]:
+        return QUIZ_INVITATION_INSTRUCTION
 
     # === 停止條件（硬性，不靠 AI 判斷） ===
 
     # 若已經推薦過，進入推薦後階段
     if has_recommended:
-        return "【任務】你已經推薦過咖啡廳了。請回答使用者關於推薦店家的問題，若使用者不滿意或想換口味，可以再推薦其他家。"
+        return ALREADY_RECOMMENDED_INSTRUCTION
 
     # 條件 1：AI 已問太多次 → 直接推薦
     if question_count >= strategy["max_questions"]:
@@ -121,27 +132,18 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
 
     # 選取下一個要問的維度
     next_dim = missing[0]
-    import random
     if next_dim.get("example_prompts"):
         example = random.choice(next_dim["example_prompts"])
     else:
         example = ""
 
-    instruction = (
-        f"【任務】使用者目前已透露的偏好：{summary}。\n"
-        f"【目前進度】已提問次數：{question_count} / 最大上限：{strategy['max_questions']}。\n"
-        f"接下來，你需要幫忙釐清使用者的「{next_dim['label']}」。\n"
-        f"請以朋友般的自然口吻，順著聊天的感覺問出這個重點。"
+    return get_clarification_instruction(
+        summary=summary,
+        question_count=question_count,
+        max_questions=strategy['max_questions'],
+        next_dim_label=next_dim['label'],
+        example=example
     )
-
-    if example:
-        instruction += (
-            f"\n\n【重要禁止事項】\n"
-            f"絕對不可以原封不動照抄這句話：「{example}」。\n"
-            f"請你一定要發揮創意、換句話說，讓每次的問法都不一樣！"
-        )
-
-    return instruction
 
 
 # ==========================================
@@ -214,35 +216,7 @@ def _load_config() -> dict:
     return _config_cache
 
 
-def _extract_collected_dimensions(
-    history: list, dimensions: list
-) -> dict:
-    """
-    掃描所有 user 訊息，比對各維度的 detect_keywords。
 
-    回傳:
-        dict — { dimension_key: [matched_keywords] }
-        例如 {"purpose": ["工作", "讀書"], "vibe": ["安靜"]}
-    """
-    collected = {}
-
-    # 將所有使用者訊息合併為一個大字串以便搜尋
-    user_texts = [
-        m.get("content", "").lower()
-        for m in history
-        if m.get("role") == "user"
-    ]
-    combined_text = " ".join(user_texts)
-
-    for dim in dimensions:
-        matched = [
-            kw for kw in dim.get("detect_keywords", [])
-            if kw in combined_text
-        ]
-        if matched:
-            collected[dim["key"]] = matched
-
-    return collected
 
 
 def _count_ai_questions(history: list) -> int:

@@ -1,9 +1,11 @@
 import { useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
+import { CHAT_WINDOW_UI_TEXTS } from '../utils/constants';
+import './ChatWindow.css';
 
 export default function ChatWindow() {
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([{ sender: 'ai', text: '你好！我是咖啡廳推薦助手，想找什麼樣的店呢？' }]);
+  const [messages, setMessages] = useState([{ sender: 'ai', text: CHAT_WINDOW_UI_TEXTS.welcomeMessage }]);
   const [inputMsg, setInputMsg] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const { API_BASE_URL } = useContext(AuthContext);
@@ -27,7 +29,7 @@ export default function ChatWindow() {
       
       setMessages([...newMessages, { sender: 'ai', text: data.reply || data.error }]);
     } catch (e) { // eslint-disable-line no-unused-vars
-      setMessages([...newMessages, { sender: 'ai', text: '連線發生錯誤，請稍後再試。' }]);
+      setMessages([...newMessages, { sender: 'ai', text: CHAT_WINDOW_UI_TEXTS.networkError }]);
     } finally {
       setIsTyping(false);
     }
@@ -35,49 +37,36 @@ export default function ChatWindow() {
 
   if (!isOpen) {
     return (
-      <button onClick={() => setIsOpen(true)} style={styles.floatingBtn}>
-        💬 聊聊
+      <button onClick={() => setIsOpen(true)} className="chat-floating-btn">
+        {CHAT_WINDOW_UI_TEXTS.chatButton}
       </button>
     );
   }
 
   return (
-    <div style={styles.chatWindow}>
-      <div style={styles.header}>
-        <h4>咖啡助手</h4>
-        <button onClick={() => setIsOpen(false)} style={styles.closeBtn}>X</button>
+    <div className="chat-window">
+      <div className="chat-window-header">
+        <h4>{CHAT_WINDOW_UI_TEXTS.chatHeader}</h4>
+        <button onClick={() => setIsOpen(false)} className="chat-window-close-btn">X</button>
       </div>
-      <div style={styles.messages}>
+      <div className="chat-window-messages">
         {messages.map((msg, i) => (
-          <div key={i} style={msg.sender === 'user' ? styles.userMsg : styles.aiMsg}>
+          <div key={i} className={msg.sender === 'user' ? 'chat-window-user-msg' : 'chat-window-ai-msg'}>
             {msg.text}
           </div>
         ))}
-        {isTyping && <div style={styles.aiMsg}>思考中...</div>}
+        {isTyping && <div className="chat-window-ai-msg">{CHAT_WINDOW_UI_TEXTS.typing}</div>}
       </div>
-      <div style={styles.inputArea}>
+      <div className="chat-window-input-area">
         <input 
           value={inputMsg} 
           onChange={(e) => setInputMsg(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-          style={styles.input}
-          placeholder="輸入訊息..."
+          className="chat-window-input"
+          placeholder={CHAT_WINDOW_UI_TEXTS.inputPlaceholder}
         />
-        <button onClick={sendMessage} style={styles.sendBtn}>送出</button>
+        <button onClick={sendMessage} className="chat-window-send-btn">{CHAT_WINDOW_UI_TEXTS.send}</button>
       </div>
     </div>
   );
 }
-
-const styles = {
-  floatingBtn: { position: 'fixed', bottom: '20px', right: '20px', padding: '15px 20px', borderRadius: '30px', backgroundColor: '#4E342E', color: 'white', border: 'none', cursor: 'pointer', boxShadow: '0 4px 8px rgba(0,0,0,0.2)' },
-  chatWindow: { position: 'fixed', bottom: '20px', right: '20px', width: '300px', height: '400px', backgroundColor: 'white', border: '1px solid #ddd', borderRadius: '10px', display: 'flex', flexDirection: 'column', boxShadow: '0 5px 15px rgba(0,0,0,0.2)', zIndex: 1000 },
-  header: { backgroundColor: '#4E342E', color: 'white', padding: '10px', display: 'flex', justifyContent: 'space-between', borderTopLeftRadius: '10px', borderTopRightRadius: '10px' },
-  closeBtn: { background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontWeight: 'bold' },
-  messages: { flex: 1, padding: '10px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px', backgroundColor: '#fafafa' },
-  userMsg: { alignSelf: 'flex-end', backgroundColor: '#DCF8C6', padding: '8px 12px', borderRadius: '15px' },
-  aiMsg: { alignSelf: 'flex-start', backgroundColor: '#E0E0E0', padding: '8px 12px', borderRadius: '15px' },
-  inputArea: { display: 'flex', padding: '10px', borderTop: '1px solid #ddd' },
-  input: { flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #ccc' },
-  sendBtn: { marginLeft: '5px', padding: '8px 15px', backgroundColor: '#4E342E', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }
-};

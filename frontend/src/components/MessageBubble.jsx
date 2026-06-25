@@ -2,8 +2,9 @@ import React from 'react';
 import { useState, useEffect } from 'react';
 import InlineQuiz from './chat/InlineQuiz';
 import { THINKING_TEXTS } from '../utils/thinkingTexts';
+import { CHAT_UI_TEXTS } from '../utils/constants';
 
-export default function MessageBubble({ msg, idx, isTyping, handleRetry, handleFeedback, isDebugMode, onQuizComplete }) {
+export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handleRetry, handleFeedback, isDebugMode, onQuizComplete }) {
   const role = msg?.role === 'user' ? 'user' : 'ai';
   let content = msg?.content ?? msg?.text ?? '';
   let safeContent = typeof content === 'string' ? content : String(content ?? '');
@@ -40,31 +41,34 @@ export default function MessageBubble({ msg, idx, isTyping, handleRetry, handleF
     safeContent = safeContent.replace('[SHOW_QUIZ_CARD]', '').trim();
   }
 
+  const isGenerating = isTyping && isLastMessage && role === 'ai' && safeContent === '' && !hasQuizCard;
+
   return (
     <React.Fragment>
       <div className={`message ${role}`}>
-        {role === 'ai' && safeContent === '' && !hasQuizCard ? (
-          isTyping ? (
-            <div className="typing-indicator" style={{ margin: 0, padding: 0, background: 'transparent', display: 'flex', alignItems: 'center' }}>
-              <span className={`thinking-text ${fade ? 'fade-in' : 'fade-out'}`}>
-                {currentTexts[textIndex]}
-              </span>
-            </div>
-          ) : null
+        {isGenerating ? (
+          <div className="typing-indicator" style={{ margin: 0, padding: 0, background: 'transparent', display: 'flex', alignItems: 'center' }}>
+            <span className={`thinking-text ${fade ? 'fade-in' : 'fade-out'}`}>
+              {currentTexts[textIndex]}
+            </span>
+          </div>
         ) : (
           <>
             {safeContent && <div className="message-text">{safeContent}</div>}
+            {!safeContent && role === 'ai' && !hasQuizCard && (
+               <div className="message-text" style={{ color: '#aaa', fontStyle: 'italic' }}>生成中斷或無回應</div>
+            )}
             {hasQuizCard && !isTyping && (
               <div className="quiz-container" style={{ marginTop: '10px' }}>
                 {!isQuizActive ? (
                   <div className="quiz-invite-card">
-                    <div className="quiz-invite-title">☕ 啡你莫屬人格解析</div>
-                    <div className="quiz-invite-desc">透過簡單的情境測驗，找出最適合你的咖啡廳！</div>
+                    <div className="quiz-invite-title">{CHAT_UI_TEXTS.quizTitle}</div>
+                    <div className="quiz-invite-desc">{CHAT_UI_TEXTS.quizDesc}</div>
                     <button 
                       className="quiz-start-btn"
                       onClick={() => setIsQuizActive(true)} 
                     >
-                      開始測驗
+                      {CHAT_UI_TEXTS.startQuiz}
                     </button>
                   </div>
                 ) : (
@@ -78,11 +82,11 @@ export default function MessageBubble({ msg, idx, isTyping, handleRetry, handleF
                 )}
               </div>
             )}
-            {role === 'ai' && !isTyping && (safeContent !== '' || hasQuizCard) && (
+            {role === 'ai' && !isGenerating && (
               <div className="message-actions">
                 <button 
                   className="action-btn retry" 
-                  title="重新傳送"
+                  title={CHAT_UI_TEXTS.retryBtn}
                   onClick={() => handleRetry(idx)}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -94,7 +98,7 @@ export default function MessageBubble({ msg, idx, isTyping, handleRetry, handleF
                 </button>
                 <button 
                   className={`action-btn like ${msg?.feedback === 'like' ? 'active' : ''}`}
-                  title="讚"
+                  title={CHAT_UI_TEXTS.likeBtn}
                   onClick={() => handleFeedback(idx, 'like')}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -103,7 +107,7 @@ export default function MessageBubble({ msg, idx, isTyping, handleRetry, handleF
                 </button>
                 <button 
                   className={`action-btn dislike ${msg?.feedback === 'dislike' ? 'active' : ''}`}
-                  title="倒讚"
+                  title={CHAT_UI_TEXTS.dislikeBtn}
                   onClick={() => handleFeedback(idx, 'dislike')}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -117,16 +121,16 @@ export default function MessageBubble({ msg, idx, isTyping, handleRetry, handleF
       </div>
       {isDebugMode && msg?.debug_info && (
         <div className="debug-console">
-          <div className="debug-header">Debug Console</div>
+          <div className="debug-header">{CHAT_UI_TEXTS.debugConsole}</div>
           <div className="debug-content">
-            <div><strong>Model:</strong> {msg.debug_info.model}</div>
-            <div><strong>Intent (意圖分類):</strong> {msg.debug_info.is_cafe_related}</div>
-            <div><strong>Generation Speed:</strong> {msg.debug_info.tokens_per_sec} tokens/s ({msg.debug_info.eval_count} tokens in {msg.debug_info.eval_duration_ms} ms)</div>
-            <div><strong>Total Duration:</strong> {msg.debug_info.total_duration_ms} ms</div>
+            <div><strong>{CHAT_UI_TEXTS.debugModel}</strong> {msg.debug_info.model}</div>
+            <div><strong>{CHAT_UI_TEXTS.debugIntent}</strong> {msg.debug_info.is_cafe_related}</div>
+            <div><strong>{CHAT_UI_TEXTS.debugSpeed}</strong> {msg.debug_info.tokens_per_sec} tokens/s ({msg.debug_info.eval_count} tokens in {msg.debug_info.eval_duration_ms} ms)</div>
+            <div><strong>{CHAT_UI_TEXTS.debugTotalDuration}</strong> {msg.debug_info.total_duration_ms} ms</div>
             {msg.debug_info.rag_context && msg.debug_info.rag_context !== '(未注入資料庫資料)' && (
-              <div className="debug-prompt"><strong>RAG 注入資料:</strong><br/>{msg.debug_info.rag_context}</div>
+              <div className="debug-prompt"><strong>{CHAT_UI_TEXTS.debugRag}</strong><br/>{msg.debug_info.rag_context}</div>
             )}
-            <div className="debug-prompt"><strong>完整 Prompt:</strong><br/>{msg.debug_info.prompt}</div>
+            <div className="debug-prompt"><strong>{CHAT_UI_TEXTS.debugPrompt}</strong><br/>{msg.debug_info.prompt}</div>
           </div>
         </div>
       )}

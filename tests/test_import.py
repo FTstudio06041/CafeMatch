@@ -1,13 +1,13 @@
 import sys
-sys.path.insert(0, '.')
-try:
-    from services import ai_service
-    print('ai_service import OK')
-except Exception as e:
-    print(f'Import error: {e}')
+import os
+
+# Add parent directory to path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from app import app
-    print('app import OK')
+    print("All imports successful!")
 except Exception as e:
-    print(f'App import error: {e}')
+    import traceback
+    print("Error importing app:")
+    traceback.print_exc()

@@ -3,7 +3,7 @@ from flask import Blueprint, session, redirect, url_for, request, jsonify, curre
 from extensions import oauth
 from database import db
 from models import User, UserShopState
-from utils import log_action
+from services.admin_service import AdminService
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -34,7 +34,7 @@ def authorize():
         is_new_user = True
 
     session['user_email'] = google_email
-    log_action(google_email, '登入', '新用戶' if is_new_user else '既有用戶')
+    AdminService.log_action(google_email, '登入', '新用戶' if is_new_user else '既有用戶')
     frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173/')
     
     if is_new_user:
@@ -46,7 +46,7 @@ def authorize():
 def logout():
     user_email = session.get('user_email')
     if user_email:
-        log_action(user_email, '登出')
+        AdminService.log_action(user_email, '登出')
     session.pop('user_email', None)
     frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173/')
     return redirect(frontend_url)
@@ -107,8 +107,8 @@ def update_shop_state():
         if not user:
             return jsonify({"success": False, "message": "使用者不存在"}), 404
 
-        from utils import delete_user_data
-        delete_user_data(user.id, db)
+        from services.user_service import delete_user_data
+        delete_user_data(user.id)
         db.session.commit()
         session.pop('user_email', None)
         

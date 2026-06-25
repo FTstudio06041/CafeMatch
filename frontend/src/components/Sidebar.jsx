@@ -2,6 +2,9 @@ import { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import '../ChatPage.css'; // 保留側欄的相關 CSS 樣式
+import './Sidebar.css';
+import { SIDEBAR_UI_TEXTS } from '../utils/constants';
+import BugReportModal from './BugReportModal';
 
 import { toast } from '../utils/toast';
 import { logger } from '../utils/logger';
@@ -25,7 +28,7 @@ export default function Sidebar() {
   const normalizeSession = (session) => ({
     ...session,
     id: String(session?.id ?? ''),
-    title: session?.title || '未命名對話'
+    title: session?.title || SIDEBAR_UI_TEXTS.unnamedChat
   });
 
   // 取得對話紀錄清單
@@ -70,7 +73,7 @@ export default function Sidebar() {
 
   const handleDelete = async (e, id) => {
     e.stopPropagation();
-    if (!window.confirm('確定要刪除此對話嗎？')) return;
+    if (!window.confirm(SIDEBAR_UI_TEXTS.confirmDelete)) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/chat/sessions/${id}`, {
         method: 'DELETE',
@@ -104,15 +107,15 @@ export default function Sidebar() {
         })
       });
       if (res.ok) {
-        toast.info('回報提交成功！感謝您的支持與反饋 ❤️');
+        toast.info(SIDEBAR_UI_TEXTS.reportSuccess);
         setReportContent('');
         setShowReportModal(false);
       } else {
-        toast.info('提交失敗，請稍後再試！');
+        toast.info(SIDEBAR_UI_TEXTS.reportFail);
       }
     } catch (err) {
       logger.error('提交反饋錯誤:', err);
-      toast.info('網路連線錯誤，請稍後再試！');
+      toast.info(SIDEBAR_UI_TEXTS.networkError);
     } finally {
       setIsSubmitting(false);
     }
@@ -128,7 +131,7 @@ export default function Sidebar() {
             <line x1="9" y1="3" x2="9" y2="21"></line>
           </svg>
         </button>
-        <span className="mobile-topbar-title">CafeMatch</span>
+        <span className="mobile-topbar-title">{SIDEBAR_UI_TEXTS.appTitle}</span>
       </div>
 
       <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
@@ -143,18 +146,18 @@ export default function Sidebar() {
         <div className="user-avatar" style={{ backgroundColor: user?.picture ? 'transparent' : 'var(--accent-color)' }}>
           {user?.picture ? <img src={user.picture} alt="avatar" style={{width: '100%', borderRadius: '50%'}} /> : 'U'}
         </div>
-        <span className="user-name text-label">{user?.name || '使用者名稱'}</span>
+        <span className="user-name text-label">{user?.name || SIDEBAR_UI_TEXTS.defaultUserName}</span>
       </button>
 
       <button className="new-chat-btn" onClick={() => navigate('/chat?id=new')}>
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-        <span className="text-label">新增對話</span>
+        <span className="text-label">{SIDEBAR_UI_TEXTS.newChat}</span>
       </button>
 
-      <div className="history-label text-label">對話紀錄</div>
+      <div className="history-label text-label">{SIDEBAR_UI_TEXTS.chatHistory}</div>
       <div className="chat-list">
         {sessions.length === 0 ? (
-          <div className="empty-sidebar-msg">尚無對話紀錄</div>
+          <div className="empty-sidebar-msg">{SIDEBAR_UI_TEXTS.noHistory}</div>
         ) : (
           sessions.map(chat => (
             <div 
@@ -179,230 +182,28 @@ export default function Sidebar() {
 
       {/* 底部：Bug 回報入口 */}
       <div className="sidebar-footer">
-        <style>{`
-          .sidebar-footer {
-            margin-top: auto;
-            padding: 12px 0 0;
-            border-top: 1px solid rgba(139, 90, 43, 0.08);
-          }
-          .bug-report-trigger-btn {
-            width: 100%;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            background: transparent;
-            border: none;
-            border-radius: 12px;
-            color: var(--text-light);
-            font-size: 0.9rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            text-align: left;
-            box-sizing: border-box;
-          }
-          .bug-report-trigger-btn:hover {
-            background: rgba(139, 90, 43, 0.06);
-            color: var(--accent-color);
-          }
-          .sidebar.collapsed .bug-report-trigger-btn {
-            justify-content: center;
-            padding: 12px 0;
-          }
-        `}</style>
-        <button className="bug-report-trigger-btn" onClick={() => setShowReportModal(true)} title="回報 Bug / 建議">
+        <button className="bug-report-trigger-btn" onClick={() => setShowReportModal(true)} title={SIDEBAR_UI_TEXTS.reportBug}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
             <line x1="12" y1="8" x2="12" y2="12"></line>
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
           </svg>
-          <span className="text-label">回報 Bug / 建議</span>
+          <span className="text-label">{SIDEBAR_UI_TEXTS.reportBug}</span>
         </button>
       </div>
     </aside>
 
     {/* --- Bug 回報彈窗 (Glassmorphism Modal) --- */}
-    {showReportModal && (
-      <div className="bug-report-overlay" onClick={() => setShowReportModal(false)}>
-        <style>{`
-          .bug-report-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(43, 27, 8, 0.4);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999999;
-            animation: bugFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-          }
-          .bug-report-modal {
-            background: rgba(255, 253, 250, 0.88);
-            backdrop-filter: blur(24px);
-            border: 1px solid rgba(139, 90, 43, 0.15);
-            border-radius: 24px;
-            width: 90%;
-            max-width: 440px;
-            padding: 28px;
-            box-shadow: 0 20px 50px rgba(43, 27, 8, 0.18);
-            display: flex;
-            flex-direction: column;
-            gap: 18px;
-            animation: bugModalUp 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-          }
-          .bug-report-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: #8b5a2b;
-          }
-          .bug-report-header h3 {
-            margin: 0;
-            font-size: 1.2rem;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-          }
-          .bug-report-form {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-          }
-          .bug-report-group {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-          }
-          .bug-report-label {
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: rgba(139, 90, 43, 0.8);
-          }
-          .bug-report-select {
-            padding: 10px 14px;
-            border: 1.5px solid rgba(139, 90, 43, 0.15);
-            border-radius: 12px;
-            font-size: 0.92rem;
-            color: #5c4033;
-            background: #fffdfa;
-            outline: none;
-            cursor: pointer;
-            transition: all 0.2s;
-          }
-          .bug-report-select:focus {
-            border-color: #8b5a2b;
-          }
-          .bug-report-textarea {
-            padding: 12px 14px;
-            border: 1.5px solid rgba(139, 90, 43, 0.15);
-            border-radius: 12px;
-            font-size: 0.92rem;
-            line-height: 1.5;
-            color: #5c4033;
-            background: #fffdfa;
-            outline: none;
-            resize: vertical;
-            font-family: inherit;
-            transition: all 0.25s ease;
-          }
-          .bug-report-textarea:focus {
-            border-color: #8b5a2b;
-            box-shadow: 0 0 8px rgba(139, 90, 43, 0.05);
-          }
-          .bug-report-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-            margin-top: 6px;
-          }
-          .bug-report-btn {
-            padding: 10px 20px;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 0.9rem;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: none;
-          }
-          .bug-report-btn.cancel {
-            background: rgba(139, 90, 43, 0.08);
-            color: #5c4033;
-          }
-          .bug-report-btn.cancel:hover {
-            background: rgba(139, 90, 43, 0.14);
-          }
-          .bug-report-btn.submit {
-            background: #8b5a2b;
-            color: #fffdfa;
-            box-shadow: 0 4px 12px rgba(139, 90, 43, 0.25);
-          }
-          .bug-report-btn.submit:hover:not(:disabled) {
-            background: #6f421e;
-            transform: translateY(-1.5px);
-            box-shadow: 0 6px 16px rgba(139, 90, 43, 0.35);
-          }
-          .bug-report-btn.submit:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-          }
-          @keyframes bugFadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-          }
-          @keyframes bugModalUp {
-            from { transform: scale(0.92) translateY(30px); opacity: 0; }
-            to { transform: scale(1) translateY(0); opacity: 1; }
-          }
-        `}</style>
-        <div className="bug-report-modal" onClick={(e) => e.stopPropagation()}>
-          <div className="bug-report-header">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="8" x2="12" y2="12"></line>
-              <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
-            <h3>回報問題與建議</h3>
-          </div>
-          <form className="bug-report-form" onSubmit={handleSubmitReport}>
-            <div className="bug-report-group">
-              <label className="bug-report-label">回報類型</label>
-              <select 
-                className="bug-report-select" 
-                value={reportType} 
-                onChange={(e) => setReportType(e.target.value)}
-              >
-                <option value="bug">🐞 程式出錯 (Bug)</option>
-                <option value="suggest">💡 功能建議 / 意見反饋</option>
-              </select>
-            </div>
-            <div className="bug-report-group">
-              <label className="bug-report-label">具體描述</label>
-              <textarea 
-                className="bug-report-textarea" 
-                placeholder="請具體描述您遇到的問題、操作步驟，或想給我們的建議..." 
-                value={reportContent} 
-                onChange={(e) => setReportContent(e.target.value)}
-                maxLength={1000}
-                rows={5}
-                required
-              />
-            </div>
-            <div className="bug-report-actions">
-              <button type="button" className="bug-report-btn cancel" onClick={() => setShowReportModal(false)}>
-                取消
-              </button>
-              <button type="submit" className="bug-report-btn submit" disabled={!reportContent.trim() || isSubmitting}>
-                {isSubmitting ? '提交中...' : '提交回報'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    )}
+    <BugReportModal 
+      showReportModal={showReportModal}
+      setShowReportModal={setShowReportModal}
+      reportType={reportType}
+      setReportType={setReportType}
+      reportContent={reportContent}
+      setReportContent={setReportContent}
+      handleSubmitReport={handleSubmitReport}
+      isSubmitting={isSubmitting}
+    />
     </>
   );
 }

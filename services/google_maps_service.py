@@ -1,33 +1,6 @@
-from database import db
-from models import AdminLog
-
-def log_action(email, action, detail=''):
-    try:
-        log = AdminLog(user_email=email, action=action, detail=detail)
-        db.session.add(log)
-        db.session.commit()
-    except Exception as e:
-        print(f'Log error: {e}')
-        db.session.rollback()
-
-def admin_required(f):
-    from functools import wraps
-    from flask import session, jsonify
-    from models import User
-    
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        user_email = session.get('user_email')
-        if not user_email:
-            return jsonify({"error": "未登入"}), 401
-        user = User.query.filter_by(email=user_email).first()
-        if not user or not user.is_admin:
-            return jsonify({"error": "權限不足"}), 403
-        return f(*args, **kwargs)
-    return decorated_function
-
 import requests
 from flask import current_app, url_for
+from database import db
 
 GOOGLE_PLACES_TEXT_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText'
 
@@ -127,43 +100,3 @@ def get_google_photo_uri(cafe, max_width=900):
     )
     media_response.raise_for_status()
     return media_response.json().get('photoUri')
-
-
-
-
-def delete_user_data(user_id, db):
-    from models import User, UserShopState, ChatSession, ChatFeedback, UserQuizResult, CommunityPost, PostLike, PostComment, CommunityNote, CommunityLike, CommunityComment
-    
-    # 刪除與此使用者相關的所有按讚和留言
-    PostLike.query.filter_by(user_id=user_id).delete()
-    PostComment.query.filter_by(user_id=user_id).delete()
-    CommunityLike.query.filter_by(user_id=user_id).delete()
-    CommunityComment.query.filter_by(user_id=user_id).delete()
-    
-    # 刪除便利貼 (必須先清空「所有」其他使用者對這些便利貼的按讚和留言)
-    user_notes = CommunityNote.query.filter_by(user_id=user_id).all()
-    for note in user_notes:
-        CommunityLike.query.filter_by(note_id=note.id).delete()
-        CommunityComment.query.filter_by(note_id=note.id).delete()
-        db.session.delete(note)
-        
-    # 刪除貼文 (必須先清空讚和留言，並斷開 repost 關聯)
-    posts = CommunityPost.query.filter_by(user_id=user_id).all()
-    for post in posts:
-        PostLike.query.filter_by(post_id=post.id).delete()
-        PostComment.query.filter_by(post_id=post.id).delete()
-        CommunityPost.query.filter_by(original_post_id=post.id).update({CommunityPost.original_post_id: None})
-        db.session.delete(post)
-        
-    # 刪除聊天紀錄與測驗
-    ChatSession.query.filter_by(user_id=user_id).delete()
-    ChatFeedback.query.filter_by(user_id=user_id).delete()
-    UserQuizResult.query.filter_by(user_id=user_id).delete()
-
-    # 刪除收藏
-    UserShopState.query.filter_by(user_id=user_id).delete()
-    
-    # 刪除使用者
-    user = User.query.get(user_id)
-    if user:
-        db.session.delete(user)
