@@ -9,13 +9,18 @@ CAFE_RECOMMENDATION_FORMAT = """【輸出格式】
 
 PREFERENCE_EXTRACTION_FORMAT = """【輸出格式】
 你必須「只」輸出一段合法的 JSON 字串，不可以包含任何 Markdown 標記（例如 ```json）或其他文字解釋。
+若對話中沒有提及該維度的偏好，請一律填入空陣列 []。若沒有提及是否同意測驗，請填入 null。
+（如果真的有提及偏好，例如讀書或安靜，才填入對應的陣列中，如 ["讀書"]）
 請輸出如以下格式的 JSON 結構：
 {
   "preferences": {
-    "purpose": ["讀書", "工作"],
-    "vibe": ["安靜"]
+    "purpose": [],
+    "vibe": [],
+    "taste": [],
+    "budget": [],
+    "special": []
   },
-  "quiz_consent": true,
+  "quiz_consent": null,
   "quiz_refused": false
 }
 """

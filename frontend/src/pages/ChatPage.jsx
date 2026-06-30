@@ -9,7 +9,7 @@ import WelcomeModal from '../components/chat/WelcomeModal';
 
 import { toast } from '../utils/toast';
 import { logger } from '../utils/logger';
-import { useChatLogic } from '../hooks/useChatLogic';
+import { useChat } from '../context/ChatContext';
 import { chatService } from '../services/chatService';
 
 export default function ChatPage() {
@@ -26,7 +26,7 @@ export default function ChatPage() {
     handleStop,
     currentChatRef,
     EMPTY_CHAT
-  } = useChatLogic(user, navigate);
+  } = useChat();
 
   const [inputMsg, setInputMsg] = useState('');
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
@@ -113,7 +113,7 @@ export default function ChatPage() {
         .catch(err => logger.error('Failed to load session:', err));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search, user?.isGuest, navigate, setNormalizedCurrentChat, EMPTY_CHAT, executeChatStream]);
+  }, [location.search, user?.isGuest, navigate]);
 
 
 

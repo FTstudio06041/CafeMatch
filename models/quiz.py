@@ -1,5 +1,6 @@
 from database import db
 from datetime import datetime
+from config.settings import get_utc_now
 
 class QuizQuestion(db.Model):
     __tablename__ = 'quiz_questions'
@@ -46,4 +47,4 @@ class UserQuizResult(db.Model):
     score_taste = db.Column(db.Integer, default=0)
     score_cp = db.Column(db.Integer, default=0)
     filter_tags = db.Column(db.JSON, default=list)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_utc_now)

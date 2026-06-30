@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from config.settings import get_utc_now
 from sqlalchemy import func
 import logging
 from database import db
@@ -7,7 +8,7 @@ from models import User, CommunityNote, CommunityLike, CommunityComment
 class NoteService:
     @staticmethod
     def get_notes(current_user=None):
-        twenty_four_hours_ago = datetime.utcnow() - timedelta(hours=24)
+        twenty_four_hours_ago = get_utc_now() - timedelta(hours=24)
         notes = CommunityNote.query.filter(CommunityNote.created_at >= twenty_four_hours_ago).order_by(CommunityNote.created_at.desc()).all()
         result = []
         if not notes:
@@ -50,7 +51,7 @@ class NoteService:
         if existing_note:
             existing_note.content = content
             existing_note.color_index = color_index
-            existing_note.created_at = datetime.utcnow()
+            existing_note.created_at = get_utc_now()
             note = existing_note
         else:
             note = CommunityNote(
@@ -61,12 +62,7 @@ class NoteService:
             db.session.add(note)
         
         try:
-            try:
             db.session.commit()
-        except Exception as e:
-            db.session.rollback()
-            logging.error(f"Error toggling note like: {e}")
-            return False, '系統錯誤', None
         except Exception as e:
             db.session.rollback()
             logging.error(f"Error creating/updating note: {e}")
@@ -95,16 +91,11 @@ class NoteService:
         CommunityComment.query.filter_by(note_id=note_id).delete()
         db.session.delete(note)
         try:
-            try:
             db.session.commit()
         except Exception as e:
             db.session.rollback()
-            logging.error(f"Error toggling note like: {e}")
-            return False, '系統錯誤', None
-        except Exception as e:
-            db.session.rollback()
-            logging.error(f"Error creating/updating note: {e}")
-            return None
+            logging.error(f"Error deleting note: {e}")
+            return False, '系統錯誤'
         return True, ''
 
     @staticmethod
@@ -126,16 +117,11 @@ class NoteService:
             is_liked = True
 
         try:
-            try:
             db.session.commit()
         except Exception as e:
             db.session.rollback()
             logging.error(f"Error toggling note like: {e}")
             return False, '系統錯誤', None
-        except Exception as e:
-            db.session.rollback()
-            logging.error(f"Error creating/updating note: {e}")
-            return None
         like_count = CommunityLike.query.filter_by(note_id=note_id).count()
         return True, is_liked, like_count
 
@@ -173,16 +159,11 @@ class NoteService:
         )
         db.session.add(comment)
         try:
-            try:
             db.session.commit()
         except Exception as e:
             db.session.rollback()
-            logging.error(f"Error toggling note like: {e}")
+            logging.error(f"Error creating comment: {e}")
             return False, '系統錯誤', None
-        except Exception as e:
-            db.session.rollback()
-            logging.error(f"Error creating/updating note: {e}")
-            return None
 
         return True, '', {
             'id': comment.id,

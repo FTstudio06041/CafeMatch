@@ -2,6 +2,7 @@ import { useContext, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthContext, AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+import { ChatProvider } from './context/ChatContext';
 import './App.css';
 import GlobalAnnouncementModal from './components/GlobalAnnouncementModal';
 import MainLayout from './layouts/MainLayout';
@@ -32,6 +33,7 @@ function AppContent() {
 
   return (
     <Router>
+      <ChatProvider>
       <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--text-color)' }}>載入頁面中...</div>}>
         <Routes>
           <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/chat" />} />
@@ -49,6 +51,7 @@ function AppContent() {
         </Routes>
       </Suspense>
       <GlobalAnnouncementModal />
+      </ChatProvider>
     </Router>
   );
 }

@@ -1,6 +1,6 @@
-from .policy_system_prompt import SYSTEM_POLICY_PROMPT, FALLBACK_SYSTEM_PROMPT
-from .task_rules import TASK_INSTRUCTIONS, get_cafe_formatting_rules
-from .output_format import CHAT_OUTPUT_FORMAT, PREFERENCE_EXTRACTION_FORMAT
+from .policy_system_prompt import GLOBAL_POLICY
+from .task_rules import CAFE_TASK_RULES, GENERAL_TASK_RULES
+from .output_format import CAFE_RECOMMENDATION_FORMAT, PREFERENCE_EXTRACTION_FORMAT
 from .guide_instructions import (
     QUIZ_CONSENT_INSTRUCTION,
     QUIZ_INVITATION_INSTRUCTION,
@@ -11,11 +11,10 @@ from .guide_instructions import (
 )
 
 __all__ = [
-    "SYSTEM_POLICY_PROMPT",
-    "FALLBACK_SYSTEM_PROMPT",
-    "TASK_INSTRUCTIONS",
-    "get_cafe_formatting_rules",
-    "CHAT_OUTPUT_FORMAT",
+    "GLOBAL_POLICY",
+    "CAFE_TASK_RULES",
+    "GENERAL_TASK_RULES",
+    "CAFE_RECOMMENDATION_FORMAT",
     "PREFERENCE_EXTRACTION_FORMAT",
     "QUIZ_CONSENT_INSTRUCTION",
     "QUIZ_INVITATION_INSTRUCTION",
