@@ -1,5 +1,0 @@
-Traceback (most recent call last):
-  File "C:\Users\user\Desktop\CafeMatch_local\routes\chat.py", line 136, in generate_pipeline
-    yield json.dumps({"status": "analyzing_intent"}, ensure_ascii=False) + "\n"
-          ^^^^
-NameError: name 'json' is not defined. Did you forget to import 'json'
