@@ -26,3 +26,12 @@ backups/
 
 # 忽略 Vite 日誌
 vite-*.log
+
+# 忽略系統日誌
+*.log
+api_error.log
+
+# 忽略 AI 代理 / 開發過程暫存檔
+tool_calls.txt
+temp_*.txt
+opus_report.txt

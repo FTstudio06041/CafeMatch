@@ -1,0 +1,32 @@
+# Python 編譯檔
+__pycache__/
+*.pyc
+*.pyo
+
+# 環境變數與密鑰（切勿打包進映像檔）
+.env
+.env.*
+
+# 版控與編輯器設定
+.git/
+.gitignore
+.vscode/
+
+# 前端依賴與建置產物（後端映像檔不需要）
+frontend/node_modules/
+frontend/dist/
+
+# 日誌與暫存檔
+*.log
+api_error.log
+tool_calls.txt
+temp_*.txt
+opus_report.txt
+
+# 文件、備份、測試與素材
+backups/
+dev_log/
+docs/
+assets/
+tests/
+SYSTEM_HEALTHCHECK_FIX_PLAN.md

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
 import { logger } from '../../utils/logger';
@@ -7,11 +7,7 @@ export default function AdminFeedbacksTab() {
   const [feedbacks, setFeedbacks] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchFeedbacks();
-  }, []);
-
-  const fetchFeedbacks = async () => {
+  const fetchFeedbacks = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/feedbacks`, { credentials: 'include' });
@@ -21,7 +17,12 @@ export default function AdminFeedbacksTab() {
       }
     } catch (e) { logger.error(e); }
     setLoading(false);
-  };
+    }, [API_BASE_URL]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchFeedbacks();
+  }, [fetchFeedbacks]);
 
   return (
     <>

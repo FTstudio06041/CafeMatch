@@ -1,4 +1,4 @@
-import React from 'react';
+import { CHAT_UI_TEXTS } from '../../utils/constants';
 
 export default function ChatInputArea({
   user,
@@ -27,7 +27,7 @@ export default function ChatInputArea({
             {showOptionsMenu && (
               <div className="options-menu">
                 <button className="options-menu-item" onClick={() => { setIsDebugMode(!isDebugMode); setShowOptionsMenu(false); }}>
-                  {isDebugMode ? '關閉 Debug 模式' : '開啟 Debug 模式'}
+                  {isDebugMode ? CHAT_UI_TEXTS.disableDebug : CHAT_UI_TEXTS.enableDebug}
                 </button>
               </div>
             )}
@@ -36,7 +36,7 @@ export default function ChatInputArea({
         <input 
           type="text" 
           className="chat-input" 
-          placeholder={isTyping ? "AI 正在思考中..." : "輸入訊息..."} 
+          placeholder={isTyping ? CHAT_UI_TEXTS.typingPlaceholder : CHAT_UI_TEXTS.inputPlaceholder} 
           value={inputMsg}
           onChange={(e) => setInputMsg(e.target.value)}
           onKeyPress={(e) => e.key === 'Enter' && !isTyping && sendMessage()}
@@ -52,7 +52,7 @@ export default function ChatInputArea({
           </button>
         )}
       </div>
-      <div className="disclaimer-text">AI 生成內容可能含有錯誤，請斟酌採納生成內容。</div>
+      <div className="disclaimer-text">{CHAT_UI_TEXTS.disclaimer}</div>
     </div>
   );
 }

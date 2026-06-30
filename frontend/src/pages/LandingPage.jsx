@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import { useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import '../LandingPage.css'; // 引入剛才建立的 CSS
 import FloatingBackgroundIcons from '../components/FloatingBackgroundIcon';

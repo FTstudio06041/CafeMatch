@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
 import { toast } from '../../utils/toast';
@@ -8,18 +8,19 @@ export default function AdminModelTab() {
   const [modelInfo, setModelInfo] = useState({ current_model: '', ollama_status: 'offline', installed_models: [] });
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchModel();
-  }, []);
-
-  const fetchModel = async () => {
+  const fetchModel = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/model`, { credentials: 'include' });
       if (res.ok) setModelInfo(await res.json());
     } catch (e) { logger.error(e); }
     setLoading(false);
-  };
+  }, [API_BASE_URL]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchModel();
+  }, [fetchModel]);
 
   const switchModel = async (modelName) => {
     try {

@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ClipboardList, BarChart3, MapPin, Play, Store } from 'lucide-react';
 import RadarChart from '../components/RadarChart';
+import { quizService } from '../services/quizService';
 import '../QuizPage.css';
 
 import { toast } from '../utils/toast';
@@ -36,6 +37,7 @@ export default function QuizPage() {
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setQuizResult(parsed);
         setQuizState('result');
       } catch {
@@ -53,11 +55,7 @@ export default function QuizPage() {
     setQuizState('loading');
     setErrorMsg('');
     try {
-      const res = await fetch(`${API_BASE_URL}/api/quiz/questions`, {
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error(`伺服器回應錯誤 (${res.status})`);
-      const data = await res.json();
+      const data = await quizService.fetchQuestions();
       if (!data.questions || data.questions.length === 0) {
         throw new Error('未取得任何題目');
       }
@@ -95,15 +93,8 @@ export default function QuizPage() {
         }
       });
 
-      const res = await fetch(`${API_BASE_URL}/api/quiz/submit`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers, filters }),
-      });
+      const data = await quizService.submitQuiz({ answers, filters });
 
-      if (!res.ok) throw new Error(`提交失敗 (${res.status})`);
-      const data = await res.json();
       setQuizResult(data);
       setQuizState('result');
 

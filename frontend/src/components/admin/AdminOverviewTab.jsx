@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, AreaChart, Area
 } from 'recharts';
 import { AuthContext } from '../../context/AuthContext';
@@ -26,11 +26,7 @@ export default function AdminOverviewTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    fetchOverview();
-  }, []);
-
-  async function fetchOverview() {
+  const fetchOverview = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/overview`, { credentials: 'include' });
@@ -42,7 +38,13 @@ export default function AdminOverviewTab() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [API_BASE_URL]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchOverview();
+  }, [fetchOverview]);
+
 
   if (loading) return <div className="admin-loading">載入總覽數據中</div>;
   if (error) return <div className="admin-empty">{error}</div>;

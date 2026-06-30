@@ -1,8 +1,11 @@
 from flask import Blueprint, jsonify, request, session, current_app
 from database import db
-from models import User, Cafes, AdminLog, UserShopState, cafe_tags, OperatingHours, AiQueryLog, ChatSession
-from utils import admin_required, log_action, get_cafe_image_url, has_google_maps_key
-from services import ai_service, conversation_guide
+from models import User, Cafes, AdminLog, UserShopState, cafe_tags, OperatingHours, AiQueryLog, ChatSession, ChatFeedback
+from utils.auth import admin_required
+from services.admin_service import AdminService
+from services.google_maps_service import get_cafe_image_url, has_google_maps_key
+from services import conversation_guide
+from services.ollama_admin_service import get_default_model, list_models, delete_model
 from datetime import datetime
 
 admin_bp = Blueprint('admin', __name__)
@@ -28,7 +31,7 @@ def admin_toggle_admin(user_id):
         return jsonify({'error': '不能變更自己的管理員權限'}), 400
     target.is_admin = not target.is_admin
     db.session.commit()
-    log_action(current_email, '切換管理員權限', f'將 {target.email} 設為 {"管理員" if target.is_admin else "一般用戶"}')
+    AdminService.log_action(current_email, '切換管理員權限', f'將 {target.email} 設為 {"管理員" if target.is_admin else "一般用戶"}')
     return jsonify({'success': True, 'is_admin': target.is_admin})
 
 @admin_bp.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
@@ -39,10 +42,11 @@ def admin_delete_user(user_id):
     if target.email == current_email:
         return jsonify({'error': '不能刪除自己'}), 400
     email = target.email
-    UserShopState.query.filter_by(user_id=target.id).delete()
-    db.session.delete(target)
+    
+    from services.user_service import delete_user_data
+    delete_user_data(target.id)
     db.session.commit()
-    log_action(current_email, '刪除用戶', f'已刪除 {email}')
+    AdminService.log_action(current_email, '刪除用戶', f'已刪除 {email}')
     return jsonify({'success': True})
 
 @admin_bp.route('/api/admin/cafes', methods=['GET'])
@@ -84,7 +88,7 @@ def admin_update_cafe(cafe_id):
         cafe.google_photo_attribution = None
     db.session.commit()
     current_email = session.get('user_email')
-    log_action(current_email, '更新店家', f'更新 {cafe.name} (ID: {cafe_id})')
+    AdminService.log_action(current_email, '更新店家', f'更新 {cafe.name} (ID: {cafe_id})')
     return jsonify({'success': True})
 
 @admin_bp.route('/api/admin/cafes/<int:cafe_id>', methods=['DELETE'])
@@ -98,7 +102,7 @@ def admin_delete_cafe(cafe_id):
     db.session.delete(cafe)
     db.session.commit()
     current_email = session.get('user_email')
-    log_action(current_email, '刪除店家', f'已刪除 {name} (ID: {cafe_id})')
+    AdminService.log_action(current_email, '刪除店家', f'已刪除 {name} (ID: {cafe_id})')
     return jsonify({'success': True})
 
 @admin_bp.route('/api/admin/logs', methods=['GET'])
@@ -123,156 +127,33 @@ def admin_get_logs():
 @admin_bp.route('/api/admin/overview', methods=['GET'])
 @admin_required
 def admin_get_overview():
-    from sqlalchemy import func, cast, Date
-    from datetime import timedelta
-
-    now = datetime.utcnow()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    seven_days_ago = today_start - timedelta(days=6)
-
     try:
-        total_users = User.query.count()
-        total_cafes = Cafes.query.count()
-
-        today_queries = AiQueryLog.query.filter(
-            AiQueryLog.created_at >= today_start
-        ).count()
-
-        today_tokens_result = db.session.query(
-            func.coalesce(func.sum(AiQueryLog.prompt_tokens + AiQueryLog.completion_tokens), 0)
-        ).filter(AiQueryLog.created_at >= today_start).scalar()
-        today_tokens = int(today_tokens_result)
-
-        avg_time_result = db.session.query(
-            func.avg(AiQueryLog.total_time_ms)
-        ).filter(
-            AiQueryLog.created_at >= today_start,
-            AiQueryLog.total_time_ms > 0
-        ).scalar()
-        avg_response_sec = round(float(avg_time_result) / 1000, 1) if avg_time_result else 0
-
-        chart_rows = db.session.query(
-            cast(AiQueryLog.created_at, Date).label('date'),
-            func.count(AiQueryLog.id).label('query_count'),
-            func.coalesce(func.sum(AiQueryLog.prompt_tokens), 0).label('prompt_tokens'),
-            func.coalesce(func.sum(AiQueryLog.completion_tokens), 0).label('completion_tokens')
-        ).filter(
-            AiQueryLog.created_at >= seven_days_ago
-        ).group_by(
-            cast(AiQueryLog.created_at, Date)
-        ).order_by(
-            cast(AiQueryLog.created_at, Date)
-        ).all()
-
-        chart_data = []
-        for i in range(7):
-            target_date = (seven_days_ago + timedelta(days=i)).date()
-            found = False
-            for row in chart_rows:
-                if row.date == target_date:
-                    chart_data.append({
-                        'date': target_date.strftime('%m/%d'),
-                        'queries': row.query_count,
-                        'prompt_tokens': int(row.prompt_tokens),
-                        'completion_tokens': int(row.completion_tokens),
-                        'total_tokens': int(row.prompt_tokens) + int(row.completion_tokens)
-                    })
-                    found = True
-                    break
-            if not found:
-                chart_data.append({
-                    'date': target_date.strftime('%m/%d'),
-                    'queries': 0,
-                    'prompt_tokens': 0,
-                    'completion_tokens': 0,
-                    'total_tokens': 0
-                })
-
-        ANALYSIS_KEYWORDS = [
-            '安靜', '讀書', '工作', '約會', '聚會', '早午餐', '下午茶',
-            '便宜', '平價', '文青', '氛圍', '環境', '貓', '寵物', '座位',
-            'wifi', '插座', '不限時', '深夜', '拿鐵', '手沖', '甜點',
-            '蛋糕', '司康', '可頌', '鬆餅', '花蓮', '台北', '信義',
-            '中山', '大安', '松山', '中正', '萬華', '內湖'
-        ]
-
-        keyword_counts = {kw: 0 for kw in ANALYSIS_KEYWORDS}
-        recent_sessions = ChatSession.query.filter(
-            ChatSession.updated_at >= seven_days_ago
-        ).all()
-
-        for s in recent_sessions:
-            if s.messages:
-                for msg in s.messages:
-                    if msg.get('sender') == 'user' or msg.get('role') == 'user':
-                        text = (msg.get('text', '') + msg.get('content', '')).lower()
-                        for kw in ANALYSIS_KEYWORDS:
-                            if kw in text:
-                                keyword_counts[kw] += 1
-
-        top_keywords = sorted(
-            [{'keyword': k, 'count': v} for k, v in keyword_counts.items() if v > 0],
-            key=lambda x: x['count'],
-            reverse=True
-        )[:10]
-
-        top_users_rows = db.session.query(
-            AiQueryLog.user_id,
-            func.count(AiQueryLog.id).label('query_count'),
-            func.coalesce(func.sum(AiQueryLog.prompt_tokens + AiQueryLog.completion_tokens), 0).label('total_tokens')
-        ).filter(
-            AiQueryLog.user_id.isnot(None),
-            AiQueryLog.created_at >= seven_days_ago
-        ).group_by(
-            AiQueryLog.user_id
-        ).order_by(
-            func.count(AiQueryLog.id).desc()
-        ).limit(5).all()
-
-        top_users = []
-        for row in top_users_rows:
-            user = User.query.get(row.user_id)
-            if user:
-                top_users.append({
-                    'name': user.name,
-                    'email': user.email,
-                    'query_count': row.query_count,
-                    'total_tokens': int(row.total_tokens)
-                })
-
-        return jsonify({
-            'kpi': {
-                'total_users': total_users,
-                'total_cafes': total_cafes,
-                'today_queries': today_queries,
-                'today_tokens': today_tokens,
-                'avg_response_sec': avg_response_sec
-            },
-            'chart_data': chart_data,
-            'top_keywords': top_keywords,
-            'top_users': top_users
-        })
-
+        data = AdminService.get_overview_data()
+        return jsonify(data)
     except Exception as e:
         current_app.logger.error(f"Overview API Error: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": "系統發生錯誤，請稍後再試"}), 500
+
 
 def get_current_model():
-    if 'OLLAMA_MODEL' not in current_app.config or not current_app.config['OLLAMA_MODEL']:
-        current_app.config['OLLAMA_MODEL'] = ai_service.get_default_model()
-    return current_app.config['OLLAMA_MODEL']
+    from services.settings_service import get_selected_model
+    return get_selected_model() or get_default_model()
 
 @admin_bp.route('/api/admin/model', methods=['GET'])
 @admin_required
 def admin_get_model():
     current_model = get_current_model()
-    ollama_status, installed_models = ai_service.list_models()
+    ollama_status, installed_models = list_models()
+    if installed_models:
+        installed_models.sort(key=lambda x: x.get('name', ''))
+        
     return jsonify({
         'current_model': current_model,
         'ollama_status': ollama_status,
-        'installed_models': installed_models
+        'installed_models': installed_models,
+        'default_model': get_default_model()
     })
 
 @admin_bp.route('/api/admin/model/switch', methods=['POST'])
@@ -283,9 +164,10 @@ def admin_switch_model():
     if not new_model:
         return jsonify({'error': '請指定模型名稱'}), 400
     
-    current_app.config['OLLAMA_MODEL'] = new_model
+    from services.settings_service import set_selected_model
+    set_selected_model(new_model)
     current_email = session.get('user_email')
-    log_action(current_email, '切換模型', f'切換至 {new_model}')
+    AdminService.log_action(current_email, '切換模型', f'切換至 {new_model}')
     return jsonify({'success': True, 'current_model': new_model})
 
 @admin_bp.route('/api/admin/model/delete', methods=['POST'])
@@ -300,10 +182,10 @@ def admin_delete_model():
     if model_name == current_model:
         return jsonify({'error': '不能刪除目前正在使用的模型'}), 400
 
-    success, error = ai_service.delete_model(model_name)
+    success, error = delete_model(model_name)
     if success:
         current_email = session.get('user_email')
-        log_action(current_email, '刪除模型', f'刪除模型 {model_name}')
+        AdminService.log_action(current_email, '刪除模型', f'刪除模型 {model_name}')
         return jsonify({'success': True})
     else:
         return jsonify({'error': error}), 500
@@ -320,21 +202,21 @@ def admin_update_guide_strategy():
     data = request.json
     updated = conversation_guide.update_strategy(data)
     current_email = session.get('user_email')
-    log_action(current_email, '更新對話引導策略', f'更新為 {updated}')
+    AdminService.log_action(current_email, '更新對話引導策略', f'更新為 {updated}')
     return jsonify({'success': True, 'strategy': updated})
-
-from models import ChatFeedback
 
 @admin_bp.route('/api/admin/feedbacks', methods=['GET'])
 @admin_required
 def admin_get_feedbacks():
     try:
         feedbacks = ChatFeedback.query.order_by(ChatFeedback.created_at.desc()).all()
+        user_ids = {f.user_id for f in feedbacks if f.user_id}
+        users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()} if user_ids else {}
         result = []
         for f in feedbacks:
             user_info = "訪客"
             if f.user_id:
-                u = User.query.get(f.user_id)
+                u = users.get(f.user_id)
                 user_info = u.name if u else "未知使用者"
             result.append({
                 "id": f.id,
@@ -346,4 +228,4 @@ def admin_get_feedbacks():
             })
         return jsonify({"success": True, "feedbacks": result})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({"success": False, "error": "系統發生錯誤，請稍後再試"}), 500

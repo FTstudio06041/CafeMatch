@@ -1,5 +1,6 @@
 from database import db
 from datetime import datetime
+from config.settings import get_utc_now
 import uuid
 
 class ChatSession(db.Model):
@@ -8,7 +9,8 @@ class ChatSession(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     title = db.Column(db.String(100), nullable=False)
     messages = db.Column(db.JSON, nullable=False, default=list)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_utc_now)
+    updated_at = db.Column(db.DateTime, default=get_utc_now, onupdate=get_utc_now)
 
 class ChatFeedback(db.Model):
     __tablename__ = 'chat_feedbacks'
@@ -17,7 +19,7 @@ class ChatFeedback(db.Model):
     user_message = db.Column(db.Text, nullable=True)
     ai_response = db.Column(db.Text, nullable=True)
     feedback_type = db.Column(db.String(20), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_utc_now)
 
 class AiQueryLog(db.Model):
     __tablename__ = 'ai_query_logs'
@@ -27,4 +29,4 @@ class AiQueryLog(db.Model):
     prompt_tokens = db.Column(db.Integer, default=0)
     completion_tokens = db.Column(db.Integer, default=0)
     total_time_ms = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_utc_now)

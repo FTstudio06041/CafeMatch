@@ -1,6 +1,7 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../context/AuthContext';
 
+import { logger } from '../utils/logger';
 /**
  * 處理社群貼文（Posts）狀態與 API 交互的自定義 Hook
  */
@@ -9,12 +10,7 @@ export default function useCommunityPosts() {
 
   const [posts, setPosts] = useState([]);
 
-  // 初始化時自動載入貼文
-  useEffect(() => {
-    fetchPosts();
-  }, [API_BASE_URL]);
-
-  const fetchPosts = async () => {
+  const fetchPosts = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/community/posts`, {
         credentials: 'include',
@@ -25,9 +21,15 @@ export default function useCommunityPosts() {
         setPosts(data.posts || data || []);
       }
     } catch (err) {
-      console.error('載入貼文失敗:', err);
+      logger.error('載入貼文失敗:', err);
     }
-  };
+  }, [API_BASE_URL]);
+
+  // 初始化時自動載入貼文
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchPosts();
+  }, [fetchPosts]);
 
   const handleCreatePost = async ({ content, image, cafe_id }) => {
     try {
@@ -41,7 +43,7 @@ export default function useCommunityPosts() {
         await fetchPosts();
       }
     } catch (err) {
-      console.error('發布貼文失敗:', err);
+      logger.error('發布貼文失敗:', err);
     }
   };
 
@@ -56,7 +58,7 @@ export default function useCommunityPosts() {
         await fetchPosts();
       }
     } catch (err) {
-      console.error('刪除貼文失敗:', err);
+      logger.error('刪除貼文失敗:', err);
     }
   };
 
@@ -71,7 +73,7 @@ export default function useCommunityPosts() {
         await fetchPosts();
       }
     } catch (err) {
-      console.error('按讚失敗:', err);
+      logger.error('按讚失敗:', err);
     }
   };
 
@@ -88,7 +90,7 @@ export default function useCommunityPosts() {
         return true;
       }
     } catch (err) {
-      console.error('留言失敗:', err);
+      logger.error('留言失敗:', err);
     }
     return false;
   };
@@ -106,7 +108,7 @@ export default function useCommunityPosts() {
         return true;
       }
     } catch (err) {
-      console.error('轉發失敗:', err);
+      logger.error('轉發失敗:', err);
     }
     return false;
   };
@@ -121,7 +123,7 @@ export default function useCommunityPosts() {
         return data.comments || [];
       }
     } catch (err) {
-      console.error('取得留言失敗:', err);
+      logger.error('取得留言失敗:', err);
     }
     return [];
   };
@@ -136,7 +138,7 @@ export default function useCommunityPosts() {
         return data.post;
       }
     } catch (err) {
-      console.error('取得單一貼文失敗:', err);
+      logger.error('取得單一貼文失敗:', err);
     }
     return null;
   };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
 import { toast } from '../../utils/toast';
@@ -10,11 +10,7 @@ export default function AdminUsersTab() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/users`, { credentials: 'include' });
@@ -30,7 +26,12 @@ export default function AdminUsersTab() {
       }
     } catch (e) { logger.error(e); }
     setLoading(false);
-  };
+  }, [API_BASE_URL, selectedUser]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchUsers();
+  }, [fetchUsers]);
 
   const toggleAdmin = async (userId) => {
     try {

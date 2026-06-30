@@ -1,23 +1,19 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../context/AuthContext';
 
+import { logger } from '../utils/logger';
 /**
  * 處理社群便利貼（Notes）狀態與 API 交互的自定義 Hook
  */
 export default function useCommunityNotes() {
-  const { user, API_BASE_URL } = useContext(AuthContext);
+  const { API_BASE_URL } = useContext(AuthContext);
 
   const [notes, setNotes] = useState([]);
   const [selectedNote, setSelectedNote] = useState(null);  // 展開的便利貼
   const [showNoteComposer, setShowNoteComposer] = useState(false);
   const [editingNote, setEditingNote] = useState(null);    // 編輯中的自己的便利貼
 
-  // 初始化時自動載入便利貼
-  useEffect(() => {
-    fetchNotes();
-  }, [API_BASE_URL]);
-
-  const fetchNotes = async () => {
+  const fetchNotes = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/community/notes`, {
         credentials: 'include',
@@ -27,9 +23,15 @@ export default function useCommunityNotes() {
         setNotes(data.notes || []);
       }
     } catch (err) {
-      console.error('載入便利貼失敗:', err);
+      logger.error('載入便利貼失敗:', err);
     }
-  };
+  }, [API_BASE_URL]);
+
+  // 初始化時自動載入便利貼
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchNotes();
+  }, [fetchNotes]);
 
   const handleCreateNote = async ({ content, color_index }) => {
     try {
@@ -43,7 +45,7 @@ export default function useCommunityNotes() {
         await fetchNotes(); // 重新載入
       }
     } catch (err) {
-      console.error('發布便利貼失敗:', err);
+      logger.error('發布便利貼失敗:', err);
     }
   };
 
@@ -59,7 +61,7 @@ export default function useCommunityNotes() {
         await fetchNotes();
       }
     } catch (err) {
-      console.error('刪除便利貼失敗:', err);
+      logger.error('刪除便利貼失敗:', err);
     }
   };
 

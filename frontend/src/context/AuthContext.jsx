@@ -1,4 +1,5 @@
-import React, { createContext, useState, useEffect } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useState, useEffect, useCallback } from 'react';
 import { apiClient, API_BASE_URL as ApiUrl } from '../utils/apiClient';
 import { logger } from '../utils/logger';
 export const AuthContext = createContext();
@@ -10,11 +11,7 @@ export const AuthProvider = ({ children }) => {
   // 共用的 API 基礎路徑 (已移至 apiClient)
   const API_BASE_URL = ApiUrl;
 
-  useEffect(() => {
-    checkAuthStatus();
-  }, []);
-
-  const checkAuthStatus = async () => {
+  const checkAuthStatus = useCallback(async () => {
     const handleGuestFallback = () => {
       if (localStorage.getItem('guestMode') === 'true') {
         setUser({ isGuest: true, name: "訪客", email: "", picture: "", is_admin: false, is_logged_in: true });
@@ -37,7 +34,12 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    checkAuthStatus();
+  }, [checkAuthStatus]);
 
   const login = () => {
     // 導向 Flask 的登入路由

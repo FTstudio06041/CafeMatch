@@ -1,4 +1,5 @@
-import React, { createContext, useState, useCallback, useEffect } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useState, useCallback, useEffect } from 'react';
 import { toastEmitter } from '../utils/toast';
 import '../components/Toast.css';
 
@@ -9,24 +10,6 @@ let toastIdCounter = 0;
 export const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);
 
-  const addToast = useCallback((message, type = 'info', title = '') => {
-    const id = ++toastIdCounter;
-    setToasts(prev => [...prev, { id, message, type, title, hiding: false }]);
-
-    // 自動隱藏計時器
-    setTimeout(() => {
-      removeToast(id);
-    }, 4000);
-  }, []);
-
-  useEffect(() => {
-    const handleAddToast = (e) => {
-      addToast(e.detail.message, e.detail.type, e.detail.title);
-    };
-    toastEmitter.addEventListener('add_toast', handleAddToast);
-    return () => toastEmitter.removeEventListener('add_toast', handleAddToast);
-  }, [addToast]);
-
   const removeToast = useCallback((id) => {
     // 先標記為 hiding 以觸發退場動畫
     setToasts(prev => prev.map(t => t.id === id ? { ...t, hiding: true } : t));
@@ -36,6 +19,24 @@ export const ToastProvider = ({ children }) => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 300); // 對應 CSS 轉場時間
   }, []);
+
+  const addToast = useCallback((message, type = 'info', title = '') => {
+    const id = ++toastIdCounter;
+    setToasts(prev => [...prev, { id, message, type, title, hiding: false }]);
+
+    // 自動隱藏計時器
+    setTimeout(() => {
+      removeToast(id);
+    }, 4000);
+  }, [removeToast]);
+
+  useEffect(() => {
+    const handleAddToast = (e) => {
+      addToast(e.detail.message, e.detail.type, e.detail.title);
+    };
+    toastEmitter.addEventListener('add_toast', handleAddToast);
+    return () => toastEmitter.removeEventListener('add_toast', handleAddToast);
+  }, [addToast]);
 
   // 提供輔助函式
   const toast = {

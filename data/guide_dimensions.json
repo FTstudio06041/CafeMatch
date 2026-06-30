@@ -53,7 +53,8 @@
   ],
   "strategy": {
     "max_questions": 3,
-    "min_dimensions_to_recommend": 1,
+    "min_dimensions_to_recommend": 2,
     "recommend_after_rounds": 4
   }
 }
+

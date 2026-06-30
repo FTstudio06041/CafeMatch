@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../context/AuthContext';
 
 import { logger } from '../utils/logger';
@@ -7,16 +7,7 @@ export default function GlobalAnnouncementModal() {
   const [announcement, setAnnouncement] = useState(null);
   const [showAnnouncement, setShowAnnouncement] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      checkAnnouncement();
-    } else {
-      setShowAnnouncement(false);
-      setAnnouncement(null);
-    }
-  }, [user]);
-
-  const checkAnnouncement = async () => {
+  const checkAnnouncement = useCallback(async () => {
     // 防衝突機制：如果當前 URL 包含 welcome=true 參數（新用戶初次歡迎小卡），先不跳出系統公告
     const params = new URLSearchParams(window.location.search);
     if (params.get('welcome') === 'true') {
@@ -37,7 +28,17 @@ export default function GlobalAnnouncementModal() {
     } catch (e) {
       logger.error('檢查公告失敗:', e);
     }
-  };
+    }, [API_BASE_URL]);
+
+  useEffect(() => {
+    if (user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      checkAnnouncement();
+    } else {
+      setShowAnnouncement(false);
+      setAnnouncement(null);
+    }
+  }, [user, checkAnnouncement]);
 
   const handleCloseAnnouncement = async () => {
     setShowAnnouncement(false);

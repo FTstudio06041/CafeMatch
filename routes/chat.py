@@ -1,22 +1,20 @@
 import uuid
+import json
 from datetime import datetime
-from flask import Blueprint, jsonify, request, session, stream_with_context, current_app
+from config.settings import get_utc_now
+from flask import Blueprint, jsonify, request, session, stream_with_context, current_app, g
 from database import db
-from models import User, ChatSession, ChatFeedback, AiQueryLog, Cafes, Tags
-from services import ai_service, conversation_guide
+from models import User, ChatSession, ChatFeedback
+from services.chat_pipeline_service import ChatPipelineService
+from utils.auth import login_required
+from utils.response import error_response, success_response
+from extensions import limiter
 
 chat_bp = Blueprint('chat', __name__)
 
 @chat_bp.route('/api/chat/sessions', methods=['GET'])
-def get_chat_sessions():
-    user_email = session.get('user_email')
-    if not user_email:
-        return jsonify({"error": "請先登入"}), 401
-    
-    user = User.query.filter_by(email=user_email).first()
-    if not user:
-        return jsonify({"error": "使用者不存在"}), 404
-
+@login_required
+def get_chat_sessions(user):
     sessions = ChatSession.query.filter_by(user_id=user.id).order_by(ChatSession.updated_at.desc()).all()
     
     result = []
@@ -29,18 +27,11 @@ def get_chat_sessions():
     return jsonify(result)
 
 @chat_bp.route('/api/chat/sessions/<session_id>', methods=['GET'])
-def get_chat_session_detail(session_id):
-    user_email = session.get('user_email')
-    if not user_email:
-        return jsonify({"error": "請先登入"}), 401
-    
-    user = User.query.filter_by(email=user_email).first()
-    if not user:
-        return jsonify({"error": "使用者不存在"}), 404
-
+@login_required
+def get_chat_session_detail(user, session_id):
     chat_session = ChatSession.query.filter_by(id=session_id, user_id=user.id).first()
     if not chat_session:
-        return jsonify({"error": "找不到該對話"}), 404
+        return error_response("找不到該對話", 404)
 
     return jsonify({
         "id": chat_session.id,
@@ -50,31 +41,44 @@ def get_chat_session_detail(session_id):
     })
 
 @chat_bp.route('/api/chat/sessions', methods=['POST'])
-def save_chat_session():
-    user_email = session.get('user_email')
-    if not user_email:
-        return jsonify({"error": "請先登入"}), 401
-    
-    user = User.query.filter_by(email=user_email).first()
-    if not user:
-        return jsonify({"error": "使用者不存在"}), 404
-
+@login_required
+def save_chat_session(user):
     data = request.json
+    if len(json.dumps(data)) > 1024 * 1024:
+        return error_response("Payload 過大", 413)
+
     session_id = data.get('id')
     title = data.get('title', '新對話')
+    if len(title) > 100:
+        title = title[:100]
+
     messages = data.get('messages', [])
+    if len(messages) > 1000:
+        return error_response("訊息數量過多", 413)
+
+    allowed_roles = {'user', 'ai', 'system'}
+    allowed_keys = {'role', 'content', 'feedback', 'debug_info', 'status'}
+    cleaned_messages = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            return error_response("訊息格式錯誤", 400)
+        if msg.get('role') not in allowed_roles:
+            return error_response("包含不合法的角色", 400)
+        cleaned_msg = {k: v for k, v in msg.items() if k in allowed_keys}
+        cleaned_messages.append(cleaned_msg)
+    messages = cleaned_messages
 
     try:
-        chat_session = None
         if session_id:
             chat_session = ChatSession.query.filter_by(id=session_id, user_id=user.id).first()
-        
-        if chat_session:
+            if not chat_session:
+                return error_response("找不到該對話", 404)
+            
             chat_session.title = title
             chat_session.messages = messages
-            chat_session.updated_at = datetime.utcnow()
+            chat_session.updated_at = get_utc_now()
         else:
-            new_id = session_id if session_id else str(uuid.uuid4())
+            new_id = str(uuid.uuid4())
             chat_session = ChatSession(
                 id=new_id,
                 user_id=user.id,
@@ -84,90 +88,42 @@ def save_chat_session():
             db.session.add(chat_session)
         
         db.session.commit()
-        return jsonify({"success": True, "id": chat_session.id})
+        return success_response({"id": chat_session.id})
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
+        return error_response("系統發生錯誤，請稍後再試", 500)
 
 @chat_bp.route('/api/chat/sessions/<session_id>', methods=['DELETE'])
-def delete_chat_session(session_id):
-    user_email = session.get('user_email')
-    if not user_email:
-        return jsonify({"error": "請先登入"}), 401
-    
-    user = User.query.filter_by(email=user_email).first()
-    if not user:
-        return jsonify({"error": "使用者不存在"}), 404
-
+@login_required
+def delete_chat_session(user, session_id):
     try:
         chat_session = ChatSession.query.filter_by(id=session_id, user_id=user.id).first()
         if not chat_session:
-            return jsonify({"error": "找不到該對話"}), 404
+            return error_response("找不到該對話", 404)
         
         db.session.delete(chat_session)
         db.session.commit()
-        return jsonify({"success": True})
+        return success_response()
     except Exception as e:
         db.session.rollback()
-        return jsonify({"error": str(e)}), 500
-
-def get_current_model():
-    if 'OLLAMA_MODEL' not in current_app.config or not current_app.config['OLLAMA_MODEL']:
-        current_app.config['OLLAMA_MODEL'] = ai_service.get_default_model()
-    return current_app.config['OLLAMA_MODEL']
+        return error_response("系統發生錯誤，請稍後再試", 500)
 
 @chat_bp.route('/api/chat', methods=['POST'])
+@limiter.limit("20 per minute")
 def chat_with_ai():
-    try:
-        data = request.json
-        user_message = data.get('message', '')
-        history = data.get('history', [])
-
-        if not user_message:
-            return jsonify({"error": "未提供訊息"}), 400
-
-        if not ai_service.check_health():
-            return jsonify({"error": "Ollama 連線失敗，請確認是否已啟動 Ollama。"}), 503
-
-        is_cafe_related, matched_keywords = ai_service.classify_intent(user_message)
-        cafe_context = ""
-        if is_cafe_related:
-            cafe_context = ai_service.retrieve_cafe_context(matched_keywords, Cafes, Tags)
-
-        guide_instruction = None
-        if is_cafe_related:
-            guide_instruction = conversation_guide.analyze_and_guide(history)
-
-        model_name = get_current_model()
-        prompt_text = ai_service.build_prompt(user_message, history, is_cafe_related, cafe_context, guide_instruction)
-
-        user_id = None
-        user_email = session.get('user_email')
-        if user_email:
-            current_user = User.query.filter_by(email=user_email).first()
-            if current_user:
-                user_id = current_user.id
-
-        generator = ai_service.stream_generate(
-            model_name=model_name,
-            prompt_text=prompt_text,
-            is_cafe_related=is_cafe_related,
-            cafe_context=cafe_context,
-            db=db,
-            AiQueryLog=AiQueryLog,
-            user_id=user_id
-        )
-
-        resp = current_app.response_class(stream_with_context(generator), mimetype='application/x-ndjson')
-        resp.headers['Cache-Control'] = 'no-cache'
-        resp.headers['X-Accel-Buffering'] = 'no'
-        return resp
-
-    except Exception as e:
-        current_app.logger.error("Chat API Error:", e)
-        return jsonify({"error": "系統發生未知的錯誤"}), 500
+    data = request.json
+    is_debug_requested = data.get('debug', False)
+    
+    resp = current_app.response_class(
+        stream_with_context(ChatPipelineService.generate_pipeline(data, is_debug_requested)), 
+        mimetype='application/x-ndjson'
+    )
+    resp.headers['Cache-Control'] = 'no-cache'
+    resp.headers['X-Accel-Buffering'] = 'no'
+    return resp
 
 @chat_bp.route('/api/chat/feedback', methods=['POST'])
+@limiter.limit("30 per minute")
 def chat_feedback():
     data = request.json
     feedback_type = data.get('feedback_type')
@@ -182,7 +138,7 @@ def chat_feedback():
             user_id = user.id
 
     if not feedback_type:
-        return jsonify({"success": False, "error": "Missing feedback type"}), 400
+        return error_response("Missing feedback type", 400)
 
     try:
         feedback = ChatFeedback(
@@ -193,7 +149,7 @@ def chat_feedback():
         )
         db.session.add(feedback)
         db.session.commit()
-        return jsonify({"success": True})
+        return success_response()
     except Exception as e:
         db.session.rollback()
-        return jsonify({"success": False, "error": str(e)}), 500
+        return error_response("系統發生錯誤，請稍後再試", 500)

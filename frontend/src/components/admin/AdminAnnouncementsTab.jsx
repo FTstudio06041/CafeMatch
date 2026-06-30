@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
 import { toast } from '../../utils/toast';
@@ -9,11 +9,7 @@ export default function AdminAnnouncementsTab() {
   const [announcementText, setAnnouncementText] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetchAnnouncements();
-  }, []);
-
-  const fetchAnnouncements = async () => {
+  const fetchAnnouncements = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/announcements`, { credentials: 'include' });
@@ -25,7 +21,12 @@ export default function AdminAnnouncementsTab() {
       logger.error('載入公告失敗:', e);
     }
     setLoading(false);
-  };
+    }, [API_BASE_URL]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchAnnouncements();
+  }, [fetchAnnouncements]);
 
   const publishAnnouncement = async () => {
     if (!announcementText.trim()) return;

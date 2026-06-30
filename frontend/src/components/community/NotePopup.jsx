@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 
 import { toast } from '../../utils/toast';
@@ -15,12 +15,7 @@ export default function NotePopup({ note, onClose, onDelete, onLikeUpdate }) {
   const [commentText, setCommentText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 載入留言
-  useEffect(() => {
-    fetchComments();
-  }, []);
-
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/community/notes/${note.id}/comments`, {
         credentials: 'include',
@@ -32,7 +27,13 @@ export default function NotePopup({ note, onClose, onDelete, onLikeUpdate }) {
     } catch (err) {
       logger.error('載入留言失敗:', err);
     }
-  };
+  }, [API_BASE_URL, note.id]);
+
+  // 載入留言
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchComments();
+  }, [fetchComments]);
 
   // 按愛心 / 取消愛心
   const handleLike = async () => {

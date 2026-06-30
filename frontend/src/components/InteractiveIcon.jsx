@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { motion, useSpring } from 'framer-motion';
 
 const InteractiveIcon = ({ Component, size, top, left }) => {

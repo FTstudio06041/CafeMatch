@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 import { logger } from '../../utils/logger';
 const NOTE_COLORS = [
