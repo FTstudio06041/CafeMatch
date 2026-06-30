@@ -2,6 +2,7 @@ from database import db
 from models import AdminLog, User, Cafes, AiQueryLog, ChatSession
 from sqlalchemy import func, cast, Date
 from datetime import datetime, timedelta
+from config.settings import get_utc_now
 import logging
 from config.settings import ANALYSIS_KEYWORDS
 
@@ -18,7 +19,7 @@ class AdminService:
 
     @staticmethod
     def get_kpi_data():
-        now = datetime.utcnow()
+        now = get_utc_now()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         
         total_users = User.query.count()
@@ -51,7 +52,7 @@ class AdminService:
 
     @staticmethod
     def get_chart_data():
-        now = datetime.utcnow()
+        now = get_utc_now()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         seven_days_ago = today_start - timedelta(days=6)
         
@@ -95,7 +96,7 @@ class AdminService:
 
     @staticmethod
     def get_keyword_analysis():
-        now = datetime.utcnow()
+        now = get_utc_now()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         seven_days_ago = today_start - timedelta(days=6)
         
@@ -122,7 +123,7 @@ class AdminService:
 
     @staticmethod
     def get_top_users():
-        now = datetime.utcnow()
+        now = get_utc_now()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         seven_days_ago = today_start - timedelta(days=6)
         
@@ -139,9 +140,11 @@ class AdminService:
             func.count(AiQueryLog.id).desc()
         ).limit(5).all()
 
+        user_ids = [row.user_id for row in top_users_rows]
+        users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()} if user_ids else {}
         top_users = []
         for row in top_users_rows:
-            user = User.query.get(row.user_id)
+            user = users.get(row.user_id)
             if user:
                 top_users.append({
                     'name': user.name,

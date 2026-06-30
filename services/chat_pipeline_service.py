@@ -6,6 +6,8 @@ from services import ai_service, conversation_guide, preference_service
 from services.intent_classifier import classify_intent
 from services.cafe_retriever import retrieve_cafe_context
 from services.ollama_admin_service import check_health, get_default_model
+from services.settings_service import get_selected_model
+from config.ai_constants import CHAT_EXIT_KEYWORDS, QUIZ_CONSENT_KEYWORDS
 
 class ChatPipelineService:
     @staticmethod
@@ -27,8 +29,7 @@ class ChatPipelineService:
             is_cafe_related, matched_keywords = classify_intent(user_message)
             if not is_cafe_related and len(history) > 0:
                 lower_msg = user_message.lower()
-                exit_keywords = ['聊天', '笑話', '說故事', '別提咖啡', '不想找', '隨便聊', '其他事']
-                if not any(kw in lower_msg for kw in exit_keywords):
+                if not any(kw in lower_msg for kw in CHAT_EXIT_KEYWORDS):
                     is_cafe_related = True
 
             extracted_data = None
@@ -41,7 +42,7 @@ class ChatPipelineService:
                     guide_instruction = None
                 else:
                     yield json.dumps({"status": "extracting_preferences"}, ensure_ascii=False) + "\n"
-                    model_name = current_app.config.get('OLLAMA_MODEL') or get_default_model()
+                    model_name = get_selected_model() or get_default_model()
                     extracted_data = preference_service.extract_preferences(history, user_message, model_name)
                     
                     all_keywords = []
@@ -53,8 +54,17 @@ class ChatPipelineService:
                     temp_history = history.copy()
                     temp_history.append({"role": "user", "content": user_message})
                     guide_instruction = conversation_guide.analyze_and_guide(temp_history, extracted_data)
+                    quiz_consent = extracted_data.get("quiz_consent") if extracted_data else False
                     
-                    if extracted_data and extracted_data.get("quiz_consent") is True:
+                    # 容錯：如果 LLM 沒有抓到 consent，但歷史紀錄有問過測驗，且使用者回覆明顯是同意
+                    if not quiz_consent:
+                        quiz_has_been_asked = any("測驗" in m.get("content", "") for m in temp_history[:-1] if m.get("role") in ("ai", "assistant"))
+                        if quiz_has_been_asked:
+                            lower_msg = user_message.lower()
+                            if any(kw == lower_msg or lower_msg.startswith(kw) for kw in QUIZ_CONSENT_KEYWORDS) and len(user_message) < 15:
+                                quiz_consent = True
+
+                    if quiz_consent:
                         yield json.dumps({"status": "generating_response"}, ensure_ascii=False) + "\n"
                         # 修復：將 SHOW_QUIZ_CARD 的訊息放到回覆中，避免 hardcode 在路由裡
                         quiz_message = "太好了！那請點擊下方卡片，我們馬上開始囉～\n\n[SHOW_QUIZ_CARD]"
@@ -62,15 +72,18 @@ class ChatPipelineService:
                         yield json.dumps({"response": "", "done": True}, ensure_ascii=False) + "\n"
                         return
 
+            from config.prompts import ALREADY_RECOMMENDED_INSTRUCTION
+            should_recommend = (guide_instruction is None) or (guide_instruction == ALREADY_RECOMMENDED_INSTRUCTION)
+
             cafe_context = ""
-            if is_cafe_related:
+            if is_cafe_related and should_recommend:
                 yield json.dumps({"status": "retrieving_cafes"}, ensure_ascii=False) + "\n"
                 cafe_context = retrieve_cafe_context(matched_keywords, Cafes, Tags)
-            else:
+            elif not is_cafe_related:
                 yield json.dumps({"status": "general_chat"}, ensure_ascii=False) + "\n"
 
             extracted_prefs = extracted_data.get("preferences") if extracted_data else None
-            model_name = current_app.config.get('OLLAMA_MODEL') or get_default_model()
+            model_name = get_selected_model() or get_default_model()
             prompt_text = ai_service.build_prompt(
                 user_message=user_message, 
                 history=history, 

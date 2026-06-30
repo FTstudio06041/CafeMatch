@@ -1,6 +1,8 @@
 import requests
 from flask import current_app, url_for
 from database import db
+from services.cache_service import cached
+from config.settings import DEFAULT_PLACE_QUERY_REGION
 
 GOOGLE_PLACES_TEXT_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText'
 
@@ -19,7 +21,7 @@ def build_google_place_query(cafe):
     if cafe.address:
         parts.append(cafe.address)
     else:
-        parts.append('花蓮 咖啡廳')
+        parts.append(DEFAULT_PLACE_QUERY_REGION)
     return ' '.join(part for part in parts if part)
 
 def ensure_google_place_id(cafe):
@@ -51,12 +53,9 @@ def ensure_google_place_id(cafe):
     db.session.commit()
     return cafe.google_place_id
 
-def get_google_photo_uri(cafe, max_width=900):
-    api_key = current_app.config.get('GOOGLE_MAPS_API_KEY')
-    place_id = ensure_google_place_id(cafe)
-    if not api_key or not place_id:
-        return None
 
+@cached(prefix="google_photo", ttl=86400) # Cache for 24 hours
+def fetch_photo_uri_from_google(place_id, max_width, api_key):
     details_url = f'https://places.googleapis.com/v1/places/{place_id}'
     details_headers = {
         'Content-Type': 'application/json',
@@ -81,9 +80,6 @@ def get_google_photo_uri(cafe, max_width=900):
         for item in attributions
         if item.get('displayName')
     )
-    if attribution_text != (cafe.google_photo_attribution or ''):
-        cafe.google_photo_attribution = attribution_text
-        db.session.commit()
 
     photo_name = photo.get('name')
     if not photo_name:
@@ -99,4 +95,24 @@ def get_google_photo_uri(cafe, max_width=900):
         timeout=10
     )
     media_response.raise_for_status()
-    return media_response.json().get('photoUri')
+
+    photo_uri = media_response.json().get('photoUri')
+    return (photo_uri, attribution_text) if photo_uri else None
+
+def get_google_photo_uri(cafe, max_width=900):
+    api_key = current_app.config.get('GOOGLE_MAPS_API_KEY')
+    place_id = ensure_google_place_id(cafe)
+    if not api_key or not place_id:
+        return None
+        
+    result = fetch_photo_uri_from_google(place_id, max_width, api_key)
+    if not result:
+        return None
+        
+    photo_uri, attribution_text = result
+    
+    if attribution_text != (cafe.google_photo_attribution or ''):
+        cafe.google_photo_attribution = attribution_text
+        db.session.commit()
+        
+    return photo_uri

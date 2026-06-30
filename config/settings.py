@@ -17,3 +17,6 @@ ANALYSIS_KEYWORDS = [
     '蛋糕', '司康', '可頌', '鬆餅', '花蓮', '台北', '信義',
     '中山', '大安', '松山', '中正', '萬華', '內湖'
 ]
+
+# 店家無地址時，Google Places 查詢的預設地區字串
+DEFAULT_PLACE_QUERY_REGION = '花蓮 咖啡廳'

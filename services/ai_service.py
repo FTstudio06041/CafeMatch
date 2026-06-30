@@ -1,9 +1,11 @@
 import json
 import logging
 from datetime import datetime
+from config.settings import get_utc_now
 from config.prompts.policy_system_prompt import GLOBAL_POLICY
 from config.prompts.task_rules import CAFE_TASK_RULES, GENERAL_TASK_RULES
 from config.prompts.output_format import CAFE_RECOMMENDATION_FORMAT
+from config.ai_constants import AI_CHAT_HISTORY_LIMIT, OLLAMA_CLIENT_TIMEOUT
 from services.ollama_client import OllamaClient
 
 def build_prompt(user_message, history, is_cafe_related, cafe_context, guide_instruction=None, extracted_preferences=None):
@@ -26,8 +28,11 @@ def build_prompt(user_message, history, is_cafe_related, cafe_context, guide_ins
         prompt += f"\n\n【本輪具體任務】\n{guide_instruction.strip()}"
     prompt += "\n</TASK_RULES>\n\n"
     
+    from config.prompts import ALREADY_RECOMMENDED_INSTRUCTION
+    should_recommend = (guide_instruction is None) or (guide_instruction == ALREADY_RECOMMENDED_INSTRUCTION)
+    
     # 3. Output Format Layer
-    if is_cafe_related:
+    if is_cafe_related and should_recommend:
         prompt += f"<OUTPUT_FORMAT>\n{CAFE_RECOMMENDATION_FORMAT.strip()}\n</OUTPUT_FORMAT>\n\n"
         
     # 4. RAG Context (僅參考資訊)
@@ -103,8 +108,8 @@ def stream_generate(model_name, prompt_text, is_cafe_related, cafe_context, db, 
                             completion_tokens=chunk.get('eval_count', 0),
                             total_duration_ns=chunk.get('total_duration', 0),
                         )
-                except (json.JSONDecodeError, Exception):
-                    pass  # 非 JSON 或寫入失敗不影響串流
+                except json.JSONDecodeError:
+                    pass  # 非完整 JSON 行（串流中間片段），略過即可
 
     except Exception as e:
         error_msg = json.dumps(
@@ -126,7 +131,7 @@ def _save_query_log(db, AiQueryLog, user_id, model_name, prompt_tokens, completi
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_time_ms=total_ms,
-            created_at=datetime.utcnow()
+            created_at=get_utc_now()
         )
         db.session.add(log_entry)
         db.session.commit()
