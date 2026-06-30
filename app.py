@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from flask import Flask
 from flask_cors import CORS
 from database import db
-from extensions import oauth
+from extensions import oauth, limiter, migrate
 
 load_dotenv()
 if os.getenv('FLASK_ENV') == 'development' or os.getenv('ALLOW_INSECURE_OAUTH') == '1':
@@ -28,6 +28,15 @@ if not secret_key:
     else:
         raise RuntimeError("SECRET_KEY must be set in production")
 app.secret_key = secret_key
+
+# Cookie 安全屬性：HttpOnly 防止 XSS 竊取、SameSite 緩解 CSRF、Secure 僅在正式環境啟用（需 HTTPS）
+# 注意：若正式環境前後端分屬不同網域，需改為 SAMESITE='None' 且 SESSION_COOKIE_SECURE=True
+is_production = os.getenv('FLASK_ENV') == 'production'
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=is_production,
+)
 app.config['GOOGLE_CLIENT_ID'] = os.getenv('GOOGLE_CLIENT_ID')
 app.config['GOOGLE_CLIENT_SECRET'] = os.getenv('GOOGLE_CLIENT_SECRET')
 app.config['GOOGLE_MAPS_API_KEY'] = os.getenv('GOOGLE_MAPS_API_KEY')
@@ -43,6 +52,14 @@ CORS(app, supports_credentials=True, origins=cors_origins)
 # 綁定 Extensions
 db.init_app(app)
 oauth.init_app(app)
+limiter.init_app(app)
+migrate.init_app(app, db)
+
+
+@app.errorhandler(429)
+def handle_rate_limit(e):
+    from flask import jsonify
+    return jsonify({"error": "請求過於頻繁，請稍候片刻再試", "done": True}), 429
 
 oauth.register(
     name='google',

@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { chatService } from '../services/chatService';
+import { API_BASE_URL } from '../utils/apiClient';
 import { logger } from '../utils/logger';
 import { toast } from '../utils/toast';
 
@@ -32,7 +33,7 @@ export function useChatLogic(user, navigate) {
   const abortControllerRef = useRef(null);
   const currentChatRef = useRef(currentChat);
 
-  const setNormalizedCurrentChat = (updater) => {
+  const setNormalizedCurrentChat = useCallback((updater) => {
     if (typeof updater !== 'function') {
       const normalized = normalizeChatSession(updater);
       currentChatRef.current = normalized;
@@ -45,7 +46,7 @@ export function useChatLogic(user, navigate) {
       currentChatRef.current = normalized;
       return normalized;
     });
-  };
+  }, []);
 
   const saveSessionToBackend = useCallback(async (chatState) => {
     if (user?.isGuest) return;
@@ -59,7 +60,7 @@ export function useChatLogic(user, navigate) {
         payload.id = normalizedChat.id;
       }
       
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/chat/sessions`, {
+      const response = await fetch(`${API_BASE_URL}/api/chat/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -155,6 +156,12 @@ export function useChatLogic(user, navigate) {
         is_quiz_result: isQuizResult
       }, abortControllerRef.current.signal);
 
+      if (response.status === 429) {
+        const rateLimitMsg = '請求過於頻繁，請稍候片刻再試 🙏';
+        toast.error(rateLimitMsg);
+        await syncStreamState(rateLimitMsg, currentDebugInfo, '', true, currentStatus);
+        return;
+      }
       if (!response.ok) throw new Error('Network response was not ok');
 
       const reader = response.body.getReader();
@@ -219,24 +226,28 @@ export function useChatLogic(user, navigate) {
     } finally {
       setIsTyping(false);
     }
-  }, [isTyping, saveSessionToBackend]);
+  }, [isTyping, saveSessionToBackend, setNormalizedCurrentChat]);
 
-  const handleFeedback = async (msgIdx, type) => {
-    if (user?.isGuest) {
-      toast.info("訪客模式無法提供回饋，登入後就能完整體驗喔！");
-      return;
-    }
-    const msg = currentChatRef.current.messages[msgIdx];
-    const userMsg = currentChatRef.current.messages[msgIdx - 1]?.content || '';
-    if (!msg) return;
-    
+  const handleFeedback = useCallback(async (msgIdx, type) => {
     try {
-      await chatService.submitFeedback({
-        feedback_type: type,
-        user_message: userMsg,
-        ai_response: msg.content
-      });
       const newMsgs = [...currentChatRef.current.messages];
+      if (!newMsgs[msgIdx]) return;
+      
+      const payload = {
+        session_id: currentChatRef.current.id,
+        message_idx: msgIdx,
+        user_message: newMsgs[msgIdx - 1]?.content || '',
+        ai_response: newMsgs[msgIdx].content,
+        feedback_type: type
+      };
+      
+      await fetch(`${API_BASE_URL}/api/chat/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload)
+      });
+      
       newMsgs[msgIdx] = { ...newMsgs[msgIdx], feedback: type };
       const updatedChat = { ...currentChatRef.current, messages: newMsgs };
 
@@ -245,12 +256,12 @@ export function useChatLogic(user, navigate) {
     } catch (e) {
       logger.error("Feedback failed:", e);
     }
-  };
+  }, [saveSessionToBackend, setNormalizedCurrentChat]);
 
-  const handleStop = () => {
+  const handleStop = useCallback(() => {
     if (abortControllerRef.current) abortControllerRef.current.abort();
     setIsTyping(false);
-  };
+  }, []);
 
   return {
     currentChat,

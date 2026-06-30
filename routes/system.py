@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, current_app
 from database import db
-from models import SystemAnnouncement, BugReport
+from models import SystemAnnouncement, BugReport, User
 from utils.auth import admin_required, login_required, get_current_user
 from services.admin_service import AdminService
 from utils.response import error_response, success_response
@@ -149,11 +149,11 @@ def create_bug_report():
 def admin_get_bug_reports():
     try:
         reports = BugReport.query.order_by(BugReport.id.desc()).all()
+        user_ids = {r.user_id for r in reports if r.user_id}
+        authors = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()} if user_ids else {}
         result = []
         for r in reports:
-            # Need to import User inside to avoid circular deps if not imported, but wait I can import it at top
-            from models import User
-            author = User.query.get(r.user_id) if r.user_id else None
+            author = authors.get(r.user_id) if r.user_id else None
             result.append({
                 'id': r.id,
                 'report_type': r.report_type,

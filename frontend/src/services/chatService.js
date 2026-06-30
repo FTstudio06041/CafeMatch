@@ -19,7 +19,7 @@ export const chatService = {
   streamChat: async (payload, signal) => {
     // API_BASE_URL is inside apiClient, but we can export it or just use fetch here
     // Let's import API_BASE_URL from apiClient
-    return await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/chat`, {
+    return await fetch(`${API_BASE_URL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',

@@ -1,12 +1,14 @@
 import uuid
 import json
 from datetime import datetime
+from config.settings import get_utc_now
 from flask import Blueprint, jsonify, request, session, stream_with_context, current_app, g
 from database import db
 from models import User, ChatSession, ChatFeedback
 from services.chat_pipeline_service import ChatPipelineService
 from utils.auth import login_required
 from utils.response import error_response, success_response
+from extensions import limiter
 
 chat_bp = Blueprint('chat', __name__)
 
@@ -74,7 +76,7 @@ def save_chat_session(user):
             
             chat_session.title = title
             chat_session.messages = messages
-            chat_session.updated_at = datetime.utcnow()
+            chat_session.updated_at = get_utc_now()
         else:
             new_id = str(uuid.uuid4())
             chat_session = ChatSession(
@@ -107,6 +109,7 @@ def delete_chat_session(user, session_id):
         return error_response("系統發生錯誤，請稍後再試", 500)
 
 @chat_bp.route('/api/chat', methods=['POST'])
+@limiter.limit("20 per minute")
 def chat_with_ai():
     data = request.json
     is_debug_requested = data.get('debug', False)
@@ -120,6 +123,7 @@ def chat_with_ai():
     return resp
 
 @chat_bp.route('/api/chat/feedback', methods=['POST'])
+@limiter.limit("30 per minute")
 def chat_feedback():
     data = request.json
     feedback_type = data.get('feedback_type')

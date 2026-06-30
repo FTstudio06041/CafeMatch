@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, session, current_app
 from database import db
-from models import User, Cafes, AdminLog, UserShopState, cafe_tags, OperatingHours, AiQueryLog, ChatSession
+from models import User, Cafes, AdminLog, UserShopState, cafe_tags, OperatingHours, AiQueryLog, ChatSession, ChatFeedback
 from utils.auth import admin_required
 from services.admin_service import AdminService
 from services.google_maps_service import get_cafe_image_url, has_google_maps_key
@@ -138,9 +138,8 @@ def admin_get_overview():
 
 
 def get_current_model():
-    if 'OLLAMA_MODEL' not in current_app.config or not current_app.config['OLLAMA_MODEL']:
-        current_app.config['OLLAMA_MODEL'] = get_default_model()
-    return current_app.config['OLLAMA_MODEL']
+    from services.settings_service import get_selected_model
+    return get_selected_model() or get_default_model()
 
 @admin_bp.route('/api/admin/model', methods=['GET'])
 @admin_required
@@ -165,7 +164,8 @@ def admin_switch_model():
     if not new_model:
         return jsonify({'error': '請指定模型名稱'}), 400
     
-    current_app.config['OLLAMA_MODEL'] = new_model
+    from services.settings_service import set_selected_model
+    set_selected_model(new_model)
     current_email = session.get('user_email')
     AdminService.log_action(current_email, '切換模型', f'切換至 {new_model}')
     return jsonify({'success': True, 'current_model': new_model})
@@ -182,7 +182,7 @@ def admin_delete_model():
     if model_name == current_model:
         return jsonify({'error': '不能刪除目前正在使用的模型'}), 400
 
-    success, error = ai_service.delete_model(model_name)
+    success, error = delete_model(model_name)
     if success:
         current_email = session.get('user_email')
         AdminService.log_action(current_email, '刪除模型', f'刪除模型 {model_name}')
@@ -205,18 +205,18 @@ def admin_update_guide_strategy():
     AdminService.log_action(current_email, '更新對話引導策略', f'更新為 {updated}')
     return jsonify({'success': True, 'strategy': updated})
 
-from models import ChatFeedback
-
 @admin_bp.route('/api/admin/feedbacks', methods=['GET'])
 @admin_required
 def admin_get_feedbacks():
     try:
         feedbacks = ChatFeedback.query.order_by(ChatFeedback.created_at.desc()).all()
+        user_ids = {f.user_id for f in feedbacks if f.user_id}
+        users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()} if user_ids else {}
         result = []
         for f in feedbacks:
             user_info = "訪客"
             if f.user_id:
-                u = User.query.get(f.user_id)
+                u = users.get(f.user_id)
                 user_info = u.name if u else "未知使用者"
             result.append({
                 "id": f.id,
