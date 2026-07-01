@@ -1,10 +1,11 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
-import InlineQuiz from './chat/InlineQuiz';
+import SituationalPicker from './chat/SituationalPicker';
+import CafeCard from './chat/CafeCard';
 import { THINKING_TEXTS } from '../utils/thinkingTexts';
 import { CHAT_UI_TEXTS } from '../utils/constants';
 
-export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handleRetry, handleFeedback, isDebugMode, onQuizComplete }) {
+export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handleRetry, handleFeedback, isDebugMode, onSituationalComplete }) {
   const role = msg?.role === 'user' ? 'user' : 'ai';
   let content = msg?.content ?? msg?.text ?? '';
   let safeContent = typeof content === 'string' ? content : String(content ?? '');
@@ -58,6 +59,11 @@ export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handl
             {!safeContent && role === 'ai' && !hasQuizCard && (
                <div className="message-text" style={{ color: '#aaa', fontStyle: 'italic' }}>生成中斷或無回應</div>
             )}
+            {role === 'ai' && Array.isArray(msg?.cafes) && msg.cafes.length > 0 && (
+              <div className="cafe-card-list">
+                {msg.cafes.map((c) => <CafeCard key={c.id} cafe={c} />)}
+              </div>
+            )}
             {hasQuizCard && !isTyping && (
               <div className="quiz-container" style={{ marginTop: '10px' }}>
                 {!isQuizActive ? (
@@ -72,11 +78,11 @@ export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handl
                     </button>
                   </div>
                 ) : (
-                  <InlineQuiz 
-                    onComplete={(data) => {
+                  <SituationalPicker
+                    onComplete={(situationalContext) => {
                       setIsQuizActive(false);
-                      if(onQuizComplete) onQuizComplete(data, idx);
-                    }} 
+                      if(onSituationalComplete) onSituationalComplete(situationalContext, idx);
+                    }}
                     onCancel={() => setIsQuizActive(false)}
                   />
                 )}

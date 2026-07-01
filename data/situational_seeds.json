@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "_description": "Chat page 情境式偏好收集元件的題目定義。此元件獨立於 quiz page 的人格測驗，唯一任務是產出結構化偏好餵給推薦系統（帶權重檢索器）。標籤已對齊真實 tags 表；對不到 tag 的以 soft_hint 降級為 LLM 提示。時間走 OperatingHours 硬過濾、預算走 cost 欄位。文字採口語友善口吻。",
+  "questions": [
+    {
+      "id": "time",
+      "axis": "time",
+      "type": "single_select",
+      "title": "什麼時候",
+      "prompt": "先聊聊～你大概想在什麼時候去坐坐呢？",
+      "options": [
+        { "value": "early_morning", "label": "一早起床，想吃頓悠閒的早餐", "hours_window": { "start": "05:00", "end": "09:00" }, "tags": [] },
+        { "value": "brunch", "label": "上午到中午，剛好是早午餐時段", "hours_window": { "start": "09:00", "end": "12:00" }, "tags": ["早午餐"] },
+        { "value": "afternoon", "label": "就想找個舒服的午後待著", "hours_window": { "start": "12:00", "end": "17:00" }, "tags": ["下午茶"] },
+        { "value": "evening", "label": "傍晚時分，想慢慢放鬆一下", "hours_window": { "start": "17:00", "end": "19:00" }, "tags": [] },
+        { "value": "night", "label": "入夜之後，甚至想待到深夜", "hours_window": { "start": "19:00", "end": "23:59" }, "tags": [] },
+        { "value": "any", "label": "還沒決定耶，其實隨時都可以！", "hours_window": null, "tags": [] }
+      ]
+    },
+    {
+      "id": "activity",
+      "axis": "purpose",
+      "type": "single_select_with_followup",
+      "title": "想做什麼",
+      "prompt": "這趟咖啡時光，你最想拿來做什麼呀？",
+      "options": [
+        { "value": "work", "label": "專心工作，或讀點書", "tags": ["數位遊民", "讀書"], "soft_hint": ["工作"], "followup": "companion" },
+        { "value": "relax", "label": "什麼都不做，好好放空一下", "tags": ["放鬆", "放空", "悠閒"], "followup": "companion" },
+        { "value": "chat", "label": "找人聊聊天、敘敘舊", "tags": ["聚餐"], "soft_hint": ["聚會"], "followup": "companion" },
+        { "value": "photo", "label": "拍拍照、記錄一下美好", "tags": ["攝影"], "soft_hint": ["拍照", "打卡"], "followup": "companion" },
+        { "value": "takeaway", "label": "單純想喝一杯，外帶也行", "tags": ["外帶"], "followup": "companion" }
+      ],
+      "followups": {
+        "companion": {
+          "prompt": "那這次是自己來，還是有人陪你呢？",
+          "options": [
+            { "value": "alone", "label": "想享受一個人的時光", "tags": ["寧靜", "輕聲"], "soft_hint": ["一個人", "單人"] },
+            { "value": "pet", "label": "帶著我的毛孩一起", "tags": ["寵物友善", "寵物"] },
+            { "value": "date", "label": "和另一半來場約會", "tags": ["浪漫"], "soft_hint": ["約會"] },
+            { "value": "small_group", "label": "找三兩好友小聚", "tags": ["聚餐"], "soft_hint": ["朋友"] },
+            { "value": "big_group", "label": "一大群人熱鬧一下", "tags": ["聚餐", "家庭"], "soft_hint": ["大桌", "包廂"] },
+            { "value": "any", "label": "都可以，還沒決定", "tags": [] }
+          ]
+        }
+      }
+    },
+    {
+      "id": "vibe",
+      "axis": "vibe",
+      "type": "scale_with_flavor",
+      "title": "空間氛圍",
+      "prompt": "說到空間氛圍，這次你有多在意呢？",
+      "weight_from": "scale",
+      "scale": [
+        { "value": 0, "label": "還好耶，乾淨有位子坐就很滿足" },
+        { "value": 1, "label": "坐起來順眼、舒服就好" },
+        { "value": 2, "label": "希望空間能讓我想多待一會兒" },
+        { "value": 3, "label": "蠻在意的，空間對不對很影響心情" },
+        { "value": 4, "label": "超重要！我根本是為了空間而來的" }
+      ],
+      "flavor_trigger_min": 2,
+      "flavor": {
+        "prompt": "太好了～那你最喜歡哪一種空間感覺呢？",
+        "options": [
+          { "value": "old_house", "label": "街角老宅，樸實又懷舊", "tags": ["懷舊", "復古", "古董", "日式建築"] },
+          { "value": "greenery", "label": "有綠意和自然採光，好療癒", "tags": ["植物", "庭院", "採光", "落地窗"] },
+          { "value": "industrial", "label": "粗獷質感的工業復古風", "tags": ["復古", "木作", "裝潢", "黑膠唱片"] },
+          { "value": "japandi", "label": "簡約清爽的日系氛圍", "tags": ["日式建築", "榻榻米", "檜木", "木質"] },
+          { "value": "instagram", "label": "美得像畫，超好拍照打卡", "tags": ["攝影", "落地窗", "玻璃", "花藝"], "soft_hint": ["網美"] },
+          { "value": "any", "label": "其實我都蠻喜歡的", "tags": [] }
+        ]
+      },
+      "base_tags": ["文青", "空間", "環境"]
+    },
+    {
+      "id": "taste",
+      "axis": "taste",
+      "type": "scale_with_flavor",
+      "title": "餐點與咖啡",
+      "prompt": "那餐點和咖啡呢，這次想多講究一點嗎？",
+      "weight_from": "scale",
+      "scale": [
+        { "value": 0, "label": "有咖啡因、喝得順口就好" },
+        { "value": 1, "label": "點杯經典款不踩雷最安心" },
+        { "value": 2, "label": "願意為好味道多花點心思挑" },
+        { "value": 3, "label": "蠻講究的，味道是我選店的重點" },
+        { "value": 4, "label": "很講究！為了對的味道，等再久都甘願" }
+      ],
+      "flavor_trigger_min": 2,
+      "flavor": {
+        "prompt": "了解～那你的講究，主要放在哪一味呢？",
+        "options": [
+          { "value": "coffee", "label": "咖啡本身，豆子與烘焙", "tags": ["職人", "烘焙", "豆子", "拉花"], "soft_hint": ["手沖", "單品"] },
+          { "value": "dessert", "label": "精緻的手作甜點", "tags": ["甜點", "蛋糕"] },
+          { "value": "savory", "label": "紮實的鹹食、早午餐", "tags": ["早午餐", "帕尼尼", "燉飯", "咖哩"] },
+          { "value": "special_drink", "label": "特調和非咖啡的創意飲品", "tags": ["抹茶", "奶茶", "花茶"], "soft_hint": ["特調"] },
+          { "value": "local", "label": "有花蓮在地食材更加分", "tags": [], "soft_hint": ["在地食材", "在地小農"] },
+          { "value": "any", "label": "都想試試看！", "tags": [] }
+        ]
+      },
+      "base_tags": ["拿鐵"]
+    },
+    {
+      "id": "budget",
+      "axis": "budget",
+      "type": "budget",
+      "title": "預算",
+      "prompt": "預算的部分，這次抓在哪個範圍會比較安心呢？",
+      "options": [
+        { "value": "cheap", "label": "銅板價，越划算越好", "cost_min": 0, "cost_max": 150, "tags": ["cp值", "價格"] },
+        { "value": "mid", "label": "中價位就好，剛剛好", "cost_min": 150, "cost_max": 300, "tags": [] },
+        { "value": "any", "label": "喜歡最重要，不太看價格", "cost_min": null, "cost_max": null, "tags": [] }
+      ],
+      "custom_input": {
+        "enabled": true,
+        "label": "想更精準的話，也可以直接告訴我每人預算～",
+        "field": "budget_per_person",
+        "unit": "NT$",
+        "_note": "填入後以此數字比對 cost 欄位（cost 為 '60-150' 這類字串區間，後端需解析）"
+      }
+    },
+    {
+      "id": "special",
+      "axis": "special",
+      "type": "multi_select",
+      "title": "特殊需求",
+      "prompt": "最後～還有沒有什麼是你這次特別需要的呢？（可以複選喔）",
+      "options": [
+        { "value": "outlet", "label": "要有插座", "tags": ["插座"] },
+        { "value": "quiet", "label": "希望安靜一點", "tags": ["寧靜", "輕聲"] },
+        { "value": "sofa", "label": "想要舒適的沙發座", "tags": ["沙發", "舒適", "舒服"] },
+        { "value": "outdoor", "label": "有戶外或庭院空間", "tags": ["庭院", "露天", "陽台", "後院"] },
+        { "value": "pet", "label": "需要寵物友善", "tags": ["寵物友善", "寵物"] },
+        { "value": "long_stay", "label": "適合久坐、慢慢待", "tags": ["數位遊民"], "soft_hint": ["不限時", "wifi"] },
+        { "value": "parking", "label": "需要停車位", "tags": [], "soft_hint": ["停車"], "_note": "資料無對應 tag／欄位，僅作 LLM 軟提示，無法真過濾" },
+        { "value": "none", "label": "沒有特別需求，跳過就好", "tags": [] }
+      ]
+    }
+  ]
+}

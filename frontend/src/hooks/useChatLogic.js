@@ -82,8 +82,11 @@ export function useChatLogic(user, navigate) {
   }, [user?.isGuest, navigate]);
 
   const executeChatStream = useCallback(async (messageText, options = {}) => {
-    const { customTitle = null, hiddenPrompt = false, isQuizResult = false, replaceMsgIdx = null } = options;
-    if (!messageText.trim() || isTyping) return;
+    const { customTitle = null, hiddenPrompt = false, isQuizResult = false, replaceMsgIdx = null, situationalContext = null } = options;
+    if (isTyping) return;
+    if (!situationalContext && !messageText.trim()) return;
+    // 情境提交沒有使用者輸入文字，也視為隱藏 prompt（不顯示 user 泡泡）
+    const isHidden = hiddenPrompt || !!situationalContext;
     
     setIsTyping(true);
     
@@ -97,7 +100,7 @@ export function useChatLogic(user, navigate) {
       nextMessages = nextMessages.slice(0, replaceMsgIdx);
     }
 
-    if (!hiddenPrompt) {
+    if (!isHidden) {
       nextMessages.push({ role: 'user', content: messageText });
     }
     nextMessages.push({ role: 'ai', content: '', debug_info: null, status: null });
@@ -113,6 +116,7 @@ export function useChatLogic(user, navigate) {
     let currentAiContent = "";
     let currentDebugInfo = null;
     let currentStatus = null;
+    let currentCafes = null;
 
     const syncStreamState = async (content, debugInfo, appendText = '', isFinal = false, status = null) => {
       if (status) currentStatus = status;
@@ -126,7 +130,8 @@ export function useChatLogic(user, navigate) {
           ...last,
           content: finalContent,
           debug_info: debugInfo ? { ...debugInfo } : last.debug_info,
-          status: currentStatus || last.status
+          status: currentStatus || last.status,
+          cafes: currentCafes || last.cafes
         };
       }
 
@@ -139,7 +144,7 @@ export function useChatLogic(user, navigate) {
     };
 
     let historyToSend = [];
-    const excludeCount = hiddenPrompt ? 1 : 2;
+    const excludeCount = isHidden ? 1 : 2;
     if (nextMessages.length >= excludeCount) {
       const prevMsgs = nextMessages.slice(0, -excludeCount);
       historyToSend = prevMsgs.slice(-6).map(m => ({
@@ -153,7 +158,8 @@ export function useChatLogic(user, navigate) {
         message: messageText,
         history: historyToSend,
         use_rag: true,
-        is_quiz_result: isQuizResult
+        is_quiz_result: isQuizResult,
+        situational_context: situationalContext || undefined
       }, abortControllerRef.current.signal);
 
       if (response.status === 429) {
@@ -173,6 +179,9 @@ export function useChatLogic(user, navigate) {
           await syncStreamState(currentAiContent, currentDebugInfo, '', false, parsed.status);
         } else if (parsed.debug_info || parsed.type === 'debug_info') {
           currentDebugInfo = parsed.debug_info || parsed;
+          await syncStreamState(currentAiContent, currentDebugInfo, '', false, currentStatus);
+        } else if (parsed.cafes) {
+          currentCafes = parsed.cafes;
           await syncStreamState(currentAiContent, currentDebugInfo, '', false, currentStatus);
         } else if (parsed.content || parsed.response) {
           currentAiContent += (parsed.content || parsed.response);

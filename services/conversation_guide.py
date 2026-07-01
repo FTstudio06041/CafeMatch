@@ -84,8 +84,11 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
     if quiz_consent is True:
         return QUIZ_CONSENT_INSTRUCTION
     
-    # 檢查 AI 歷史紀錄中是否已經邀請過做測驗
-    quiz_has_been_asked = any("測驗" in m.get("content", "") for m in history if m.get("role") in ("ai", "assistant"))
+    # 檢查 AI 歷史紀錄中是否已經邀請過情境配對（相容舊 session 的「測驗」字樣）
+    quiz_has_been_asked = any(
+        ("配對" in m.get("content", "")) or ("測驗" in m.get("content", ""))
+        for m in history if m.get("role") in ("ai", "assistant")
+    )
 
     # 如果尚未問過測驗、尚未做過測驗、也沒有拒絕，且收集到的偏好還不足以推薦
     # (如果第一句話就把條件給滿了，就直接推薦，不一定要強迫做測驗)

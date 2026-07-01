@@ -140,23 +140,15 @@ export default function ChatPage() {
     executeChatStream(inputMsg);
   };
 
-  const handleQuizComplete = useCallback((quizData, msgIdx) => {
-    const scoreParts = [];
-    const scoreLabels = { work: '工作讀書', env: '空間氛圍', social: '社交舒適', taste: '餐飲口味', cp: 'CP值' };
-    if (quizData.scores) {
-      for (const [key, val] of Object.entries(quizData.scores)) {
-        scoreParts.push(`${scoreLabels[key] || key}：${val}`);
-      }
-    }
-    const promptText = `我剛完成了心理測驗，以下是我的結果：\n`
-      + `\n【咖啡人格】${quizData.title}`
-      + (quizData.profile ? `\n【特質側寫】${quizData.profile}` : '')
-      + (scoreParts.length > 0 ? `\n【五維分數】${scoreParts.join('、')}` : '')
-      + (quizData.cafe_match ? `\n【氛圍對應】${quizData.cafe_match}` : '')
-      + `\n\n【任務】請用親切自然的語氣，先為我公佈並稍微分析一下我的咖啡人格與特質，接著再無縫地為我推薦適合的花蓮咖啡廳。`;
-    
+  const handleSituationalComplete = useCallback((situationalContext, msgIdx) => {
+    // 情境元件不算分、不產生人格結果；直接把結構化情境偏好送進推薦管線
     setTimeout(() => {
-      executeChatStream(promptText, { customTitle: '分析結果與推薦', hiddenPrompt: true, isQuizResult: true, replaceMsgIdx: msgIdx });
+      executeChatStream('', {
+        customTitle: '情境推薦',
+        hiddenPrompt: true,
+        situationalContext,
+        replaceMsgIdx: msgIdx,
+      });
     }, 300);
   }, [executeChatStream]);
 
@@ -187,7 +179,7 @@ export default function ChatPage() {
                 handleRetry={handleRetry}
                 handleFeedback={handleFeedback}
                 isDebugMode={isDebugMode}
-                onQuizComplete={handleQuizComplete}
+                onSituationalComplete={handleSituationalComplete}
               />
             ))
           )}
