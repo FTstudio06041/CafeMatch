@@ -107,9 +107,9 @@
       "title": "預算",
       "prompt": "預算的部分，這次抓在哪個範圍會比較安心呢？",
       "options": [
-        { "value": "cheap", "label": "銅板價，越划算越好", "cost_min": 0, "cost_max": 150, "tags": ["cp值", "價格"] },
-        { "value": "mid", "label": "中價位就好，剛剛好", "cost_min": 150, "cost_max": 300, "tags": [] },
-        { "value": "any", "label": "喜歡最重要，不太看價格", "cost_min": null, "cost_max": null, "tags": [] }
+        { "value": "cheap", "label": "平價就好，每人約 $1–200", "cost_min": 1, "cost_max": 200, "tags": ["cp值", "價格"] },
+        { "value": "mid", "label": "中價位，每人約 $200–400", "cost_min": 200, "cost_max": 400, "tags": [] },
+        { "value": "any", "label": "價格不是重點，喜歡最重要", "cost_min": null, "cost_max": null, "tags": [] }
       ],
       "custom_input": {
         "enabled": true,

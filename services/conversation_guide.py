@@ -20,6 +20,7 @@ from config.prompts import (
     ALREADY_RECOMMENDED_INSTRUCTION,
     get_clarification_instruction
 )
+from config.ai_constants import VAGUE_REQUEST_MAX_LEN
 
 
 # ==========================================
@@ -76,30 +77,37 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
                 has_recommended = True
                 break
 
-    # === 心理測驗邏輯 ===
+    # === 情境配對 / 推薦決策 ===
     quiz_consent = extracted_data.get("quiz_consent")
     quiz_refused = extracted_data.get("quiz_refused", False)
-    
-    # 如果使用者剛剛同意做測驗
+
+    # 使用者剛剛同意做情境配對
     if quiz_consent is True:
         return QUIZ_CONSENT_INSTRUCTION
-    
-    # 檢查 AI 歷史紀錄中是否已經邀請過情境配對（相容舊 session 的「測驗」字樣）
+
+    # 已經推薦過 → 進入推薦後階段
+    if has_recommended:
+        return ALREADY_RECOMMENDED_INSTRUCTION
+
+    # 判斷這則訊息是否「很籠統」（沒給具體需求）
+    latest_user_msg = next(
+        (m.get("content", "") for m in reversed(history) if m.get("role") == "user"), ""
+    )
+    is_vague = _is_vague_request(latest_user_msg, collected_count, dimensions)
+
+    # 使用者已給具體需求（不籠統）→ 直接推薦，不邀請、也不追問
+    if not is_vague:
+        return None
+
+    # 到這裡代表訊息很籠統：若還沒問過情境配對、也沒拒絕 → 邀請小卡
     quiz_has_been_asked = any(
         ("配對" in m.get("content", "")) or ("測驗" in m.get("content", ""))
         for m in history if m.get("role") in ("ai", "assistant")
     )
-
-    # 如果尚未問過測驗、尚未做過測驗、也沒有拒絕，且收集到的偏好還不足以推薦
-    # (如果第一句話就把條件給滿了，就直接推薦，不一定要強迫做測驗)
-    if not quiz_has_been_asked and not quiz_refused and collected_count < strategy["min_dimensions_to_recommend"]:
+    if not quiz_has_been_asked and not quiz_refused:
         return QUIZ_INVITATION_INSTRUCTION
 
     # === 停止條件（硬性，不靠 AI 判斷） ===
-
-    # 若已經推薦過，進入推薦後階段
-    if has_recommended:
-        return ALREADY_RECOMMENDED_INSTRUCTION
 
     # 條件 1：AI 已問太多次 → 直接推薦
     if question_count >= strategy["max_questions"]:
@@ -110,7 +118,6 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
         return None
 
     # 條件 3：已蒐集到足夠維度 → 直接推薦 (短路條件)
-    # 取消了必須 question_count >= 1 的限制
     if collected_count >= strategy["min_dimensions_to_recommend"]:
         return None
 
@@ -220,6 +227,28 @@ def _load_config() -> dict:
 
 
 
+
+
+def _is_vague_request(user_message: str, collected_count: int, dimensions: list) -> bool:
+    """
+    判斷使用者這則訊息是否「很籠統」（沒有給出可據以推薦的具體需求）。
+    只有很籠統時才邀請情境配對小卡；只要有任何具體訊號就直接推薦。
+
+    以下任一成立即視為「有具體需求」（回傳 False）：
+      1. LLM 已萃取到至少一個偏好維度
+      2. 訊息長度超過門檻（長訊息通常帶有需求，即使關鍵字/LLM 沒抓到）
+      3. 訊息含任何維度關鍵字（安靜、手沖、平價…）
+    """
+    if collected_count >= 1:
+        return False
+    text = (user_message or "").strip()
+    if len(text) > VAGUE_REQUEST_MAX_LEN:
+        return False
+    for d in dimensions or []:
+        for kw in d.get("detect_keywords", []):
+            if kw and kw in text:
+                return False
+    return True
 
 
 def _count_ai_questions(history: list) -> int:

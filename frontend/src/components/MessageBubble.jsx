@@ -1,9 +1,10 @@
 import React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import SituationalPicker from './chat/SituationalPicker';
 import CafeCard from './chat/CafeCard';
 import { THINKING_TEXTS } from '../utils/thinkingTexts';
 import { CHAT_UI_TEXTS } from '../utils/constants';
+import { Flip } from '../utils/gsap';
 
 export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handleRetry, handleFeedback, isDebugMode, onSituationalComplete }) {
   const role = msg?.role === 'user' ? 'user' : 'ai';
@@ -13,6 +14,8 @@ export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handl
   const [isQuizActive, setIsQuizActive] = useState(false);
   const [textIndex, setTextIndex] = useState(0);
   const [fade, setFade] = useState(true);
+  const inviteCardRef = useRef(null);
+  const flipStateRef = useRef(null);
 
   const statusKey = msg?.status || 'default';
   const currentTexts = THINKING_TEXTS[statusKey] || THINKING_TEXTS.default;
@@ -67,18 +70,22 @@ export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handl
             {hasQuizCard && !isTyping && (
               <div className="quiz-container" style={{ marginTop: '10px' }}>
                 {!isQuizActive ? (
-                  <div className="quiz-invite-card">
+                  <div className="quiz-invite-card" ref={inviteCardRef}>
                     <div className="quiz-invite-title">{CHAT_UI_TEXTS.quizTitle}</div>
                     <div className="quiz-invite-desc">{CHAT_UI_TEXTS.quizDesc}</div>
-                    <button 
+                    <button
                       className="quiz-start-btn"
-                      onClick={() => setIsQuizActive(true)} 
+                      onClick={() => {
+                        if (inviteCardRef.current) flipStateRef.current = Flip.getState(inviteCardRef.current);
+                        setIsQuizActive(true);
+                      }}
                     >
                       {CHAT_UI_TEXTS.startQuiz}
                     </button>
                   </div>
                 ) : (
                   <SituationalPicker
+                    flipFromRef={flipStateRef}
                     onComplete={(situationalContext) => {
                       setIsQuizActive(false);
                       if(onSituationalComplete) onSituationalComplete(situationalContext, idx);

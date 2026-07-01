@@ -8,8 +8,13 @@ import './CafeCard.css';
  */
 export default function CafeCard({ cafe }) {
   const [imgError, setImgError] = useState(false);
-  const link = cafe.url || cafe.website;
   const showImg = cafe.image && !imgError;
+
+  // cafe.url 存的是 Google Maps 短碼（非完整網址），不能直接當連結（會導向空白頁）。
+  // 改用 name+address 組 Google Maps 搜尋，和 ExplorePage 的地圖來源一致，永遠有效。
+  const mapQuery = encodeURIComponent([cafe.name, cafe.address].filter(Boolean).join(' '));
+  const mapLink = mapQuery ? `https://www.google.com/maps/search/?api=1&query=${mapQuery}` : null;
+  const siteLink = cafe.website && /^https?:\/\//i.test(cafe.website) ? cafe.website : null;
 
   return (
     <div className="cafe-card">
@@ -42,11 +47,18 @@ export default function CafeCard({ cafe }) {
           </div>
         )}
 
-        {link && (
-          <a className="cafe-card-link" href={link} target="_blank" rel="noopener noreferrer">
-            查看地圖 / 更多 <ExternalLink size={13} />
-          </a>
-        )}
+        <div className="cafe-card-links">
+          {mapLink && (
+            <a className="cafe-card-link" href={mapLink} target="_blank" rel="noopener noreferrer">
+              在地圖上查看 <ExternalLink size={13} />
+            </a>
+          )}
+          {siteLink && (
+            <a className="cafe-card-link" href={siteLink} target="_blank" rel="noopener noreferrer">
+              官網 / 粉專 <ExternalLink size={13} />
+            </a>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -160,7 +160,8 @@ def _cost_matches(cost_str, cost_range):
         return True
     cmin, _cmax = parsed
     dmax = cost_range.get("max")
-    if dmax is not None and cmin > dmax:
+    # 用 >= 讓級距切得乾淨：預算上限 200 時，最低消費恰為 200 的 $200-400 店不算「平價」
+    if dmax is not None and cmin >= dmax:
         return False
     return True
 

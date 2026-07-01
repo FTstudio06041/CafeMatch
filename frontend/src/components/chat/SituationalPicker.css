@@ -1,26 +1,29 @@
-@keyframes sp-expand {
-  from { opacity: 0; transform: scale(0.15); }
-  to   { opacity: 1; transform: scale(1); }
+@keyframes sp-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .sp-container {
   width: 100%;
   background-color: transparent;
-  padding: 10px 0;
+  padding: 15px;
   position: relative;
   font-family: inherit;
   min-height: 200px;
   display: flex;
   flex-direction: column;
-  /* 卡片從左上角向右下角展開，動畫結束後固定於原尺寸 */
-  transform-origin: top left;
-  animation: sp-expand 0.35s ease-out;
+  /* 沿用邀請小卡的邊框，讓題目卡看起來像同一張卡 */
+  border: 1px solid var(--text-main);
+  border-radius: 8px;
+  /* 由邀請小卡「長成」題目卡的幾何轉場交給 GSAP Flip（SituationalPicker.jsx），
+     這裡只做進場淡入，避免和 Flip 的 transform 動畫互相干擾 */
+  animation: sp-fade-in 0.2s ease-out;
 }
 
 .sp-close-btn {
   position: absolute;
-  top: 0;
-  right: 0;
+  top: 10px;
+  right: 10px;
   background: transparent;
   border: none;
   cursor: pointer;

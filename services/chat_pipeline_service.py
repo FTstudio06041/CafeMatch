@@ -87,6 +87,7 @@ class ChatPipelineService:
             should_recommend = (guide_instruction is None) or (guide_instruction == ALREADY_RECOMMENDED_INSTRUCTION)
 
             cafe_context = ""
+            cafes = []
             if is_cafe_related and should_recommend:
                 yield json.dumps({"status": "retrieving_cafes"}, ensure_ascii=False) + "\n"
                 cafes = retrieve_cafe_data(matched_keywords, Cafes, Tags)
@@ -96,15 +97,18 @@ class ChatPipelineService:
             elif not is_cafe_related:
                 yield json.dumps({"status": "general_chat"}, ensure_ascii=False) + "\n"
 
+            # 有卡片時：店名交給卡片呈現，不把知識庫店名餵給 LLM，並改用「卡片模式」格式（不准講店名）
+            has_cards = bool(cafes)
             extracted_prefs = extracted_data.get("preferences") if extracted_data else None
             model_name = get_selected_model() or get_default_model()
             prompt_text = ai_service.build_prompt(
-                user_message=user_message, 
-                history=history, 
-                is_cafe_related=is_cafe_related, 
-                cafe_context=cafe_context, 
+                user_message=user_message,
+                history=history,
+                is_cafe_related=is_cafe_related,
+                cafe_context=("" if has_cards else cafe_context),
                 guide_instruction=guide_instruction,
-                extracted_preferences=extracted_prefs
+                extracted_preferences=extracted_prefs,
+                cards_mode=has_cards
             )
 
             user_id = None
@@ -160,7 +164,8 @@ class ChatPipelineService:
             cost_range=rec["cost_range"],
         )
         cafe_context = format_cafe_context(cafes)
-        if cafes:
+        has_cards = bool(cafes)
+        if has_cards:
             yield json.dumps({"cafes": [serialize_cafe(c) for c in cafes]}, ensure_ascii=False) + "\n"
 
         model_name = get_selected_model() or get_default_model()
@@ -168,9 +173,10 @@ class ChatPipelineService:
             user_message=rec["summary_text"],
             history=history,
             is_cafe_related=True,
-            cafe_context=cafe_context,
+            cafe_context=("" if has_cards else cafe_context),
             guide_instruction=None,
             extracted_preferences=None,
+            cards_mode=has_cards,
         )
 
         user_id = None

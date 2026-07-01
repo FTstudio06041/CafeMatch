@@ -95,8 +95,14 @@
   color: var(--text-main);
 }
 
-.cafe-card-link {
+.cafe-card-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
   margin-top: 6px;
+}
+
+.cafe-card-link {
   display: inline-flex;
   align-items: center;
   gap: 4px;

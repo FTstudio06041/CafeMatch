@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useContext, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useContext, useCallback } from 'react';
 import { AuthContext } from '../../context/AuthContext';
 import { X, ArrowLeft, Check } from 'lucide-react';
 import { logger } from '../../utils/logger';
+import { Flip } from '../../utils/gsap';
 import './SituationalPicker.css';
 
 /**
@@ -21,7 +22,7 @@ import './SituationalPicker.css';
  *     special: ['outlet', 'quiet']
  *   }
  */
-export default function SituationalPicker({ onComplete, onCancel }) {
+export default function SituationalPicker({ onComplete, onCancel, flipFromRef }) {
   const { API_BASE_URL } = useContext(AuthContext);
 
   const [state, setState] = useState('loading'); // 'loading' | 'question' | 'error'
@@ -37,6 +38,7 @@ export default function SituationalPicker({ onComplete, onCancel }) {
   const [, forceRerender] = useState(0);
   const advancingRef = useRef(false);
   const containerRef = useRef(null);
+  const hasFlippedRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -66,12 +68,30 @@ export default function SituationalPicker({ onComplete, onCancel }) {
     return () => { mounted = false; };
   }, [API_BASE_URL]);
 
+  // 由邀請小卡的實際位置/尺寸「長成」完整題目卡（GSAP Flip），只在第一次進入
+  // question 狀態（題目真正就緒）時執行一次；loading 骨架不參與這段幾何轉場。
+  useLayoutEffect(() => {
+    if (state !== 'question') return;
+    if (hasFlippedRef.current) return;
+    hasFlippedRef.current = true;
+    const flipFrom = flipFromRef?.current;
+    if (flipFrom && containerRef.current) {
+      Flip.from(flipFrom, {
+        targets: containerRef.current,
+        duration: 0.45,
+        ease: 'power2.out',
+        absolute: true,
+      });
+    }
+  }, [state, flipFromRef]);
+
   // 卡片產生（展開）後，自動把它捲進視野；若卡片太長，頁面會往下捲到底
+  // 延遲略長於上面的 Flip 動畫（0.45s），避免捲動與幾何轉場同時發生互相干擾
   useEffect(() => {
     if (state !== 'question') return;
     const t = setTimeout(() => {
       containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }, 400);
+    }, 480);
     return () => clearTimeout(t);
   }, [state]);
 
