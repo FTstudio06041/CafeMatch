@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useContext, useCallback }
 import { AuthContext } from '../../context/AuthContext';
 import { X, ArrowLeft, Check } from 'lucide-react';
 import { logger } from '../../utils/logger';
-import { Flip } from '../../utils/gsap';
+import { gsap, Flip } from '../../utils/gsap';
 import './SituationalPicker.css';
 
 /**
@@ -40,19 +40,15 @@ export default function SituationalPicker({ onComplete, onCancel, flipFromRef, q
   const containerRef = useRef(null);
   const hasFlippedRef = useRef(false);
 
-  // 找最近的可捲動祖先（聊天區塊），捲到底
-  const scrollChatToBottom = (smooth) => {
-    const el = containerRef.current;
-    if (!el) return;
-    let p = el.parentElement;
+  // 找最近的可捲動祖先（聊天區塊）
+  const getScrollParent = () => {
+    let p = containerRef.current?.parentElement;
     while (p) {
       const oy = getComputedStyle(p).overflowY;
-      if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight) break;
+      if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight) return p;
       p = p.parentElement;
     }
-    if (!p) { el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'end' }); return; }
-    if (smooth) p.scrollTo({ top: p.scrollHeight, behavior: 'smooth' });
-    else p.scrollTop = p.scrollHeight;
+    return null;
   };
 
   useEffect(() => {
@@ -84,22 +80,34 @@ export default function SituationalPicker({ onComplete, onCancel, flipFromRef, q
     return () => { mounted = false; };
   }, [API_BASE_URL, prefetched]);
 
-  // 由邀請小卡「長成」完整題目卡（GSAP Flip）。因 Flip 以 transform 縮放，版面高度一開始
-  // 就是最終值，故可「同時」啟動一次原生平滑捲動到底——與卡片放大並行、且保有滑順感
+  // 由邀請小卡「長成」完整題目卡（GSAP Flip），並用 GSAP 以「相同的 duration 與 ease」、
+  // 同一 tick 驅動聊天區塊捲到底 → 捲動速度與卡片放大完全同步
   useLayoutEffect(() => {
     if (state !== 'question') return;
     if (hasFlippedRef.current) return;
     hasFlippedRef.current = true;
+    const FLIP_DURATION = 0.45;
+    const FLIP_EASE = 'power2.out';
     const flipFrom = flipFromRef?.current;
     if (flipFrom && containerRef.current) {
       Flip.from(flipFrom, {
         targets: containerRef.current,
-        duration: 0.45,
-        ease: 'power2.out',
+        duration: FLIP_DURATION,
+        ease: FLIP_EASE,
         absolute: false,
       });
     }
-    requestAnimationFrame(() => scrollChatToBottom(true));
+    const p = getScrollParent();
+    if (p) {
+      gsap.to(p, {
+        scrollTop: p.scrollHeight - p.clientHeight,
+        duration: FLIP_DURATION,
+        ease: FLIP_EASE,
+        overwrite: 'auto',
+      });
+    } else {
+      containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
   }, [state, flipFromRef]);
 
   const updateAnswers = useCallback((updater) => {
