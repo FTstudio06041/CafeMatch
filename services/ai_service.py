@@ -4,11 +4,11 @@ from datetime import datetime
 from config.settings import get_utc_now
 from config.prompts.policy_system_prompt import GLOBAL_POLICY
 from config.prompts.task_rules import CAFE_TASK_RULES, GENERAL_TASK_RULES
-from config.prompts.output_format import CAFE_RECOMMENDATION_FORMAT
+from config.prompts.output_format import CAFE_RECOMMENDATION_FORMAT, CAFE_RECOMMENDATION_FORMAT_CARDS
 from config.ai_constants import AI_CHAT_HISTORY_LIMIT, OLLAMA_CLIENT_TIMEOUT
 from services.ollama_client import OllamaClient
 
-def build_prompt(user_message, history, is_cafe_related, cafe_context, guide_instruction=None, extracted_preferences=None):
+def build_prompt(user_message, history, is_cafe_related, cafe_context, guide_instruction=None, extracted_preferences=None, cards_mode=False):
     """
     按照強制順序與 XML 標籤組裝完整的 Prompt：
     1. Policy Layer
@@ -33,7 +33,8 @@ def build_prompt(user_message, history, is_cafe_related, cafe_context, guide_ins
     
     # 3. Output Format Layer
     if is_cafe_related and should_recommend:
-        prompt += f"<OUTPUT_FORMAT>\n{CAFE_RECOMMENDATION_FORMAT.strip()}\n</OUTPUT_FORMAT>\n\n"
+        fmt = CAFE_RECOMMENDATION_FORMAT_CARDS if cards_mode else CAFE_RECOMMENDATION_FORMAT
+        prompt += f"<OUTPUT_FORMAT>\n{fmt.strip()}\n</OUTPUT_FORMAT>\n\n"
         
     # 4. RAG Context (僅參考資訊)
     if cafe_context:

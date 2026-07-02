@@ -1,0 +1,245 @@
+@keyframes sp-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.sp-container {
+  /* 固定寬高：每題卡片大小完全一致、不隨內容變動。寬度填滿訊息、高度固定 500 */
+  width: 100%;
+  max-width: 100%;
+  height: 500px;
+  box-sizing: border-box;
+  background-color: transparent;
+  padding: 15px;
+  position: relative;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  /* 沿用邀請小卡的邊框，讓題目卡看起來像同一張卡 */
+  border: 1px solid var(--text-main);
+  border-radius: 8px;
+  /* 由邀請小卡「長成」題目卡的幾何轉場交給 GSAP Flip（SituationalPicker.jsx），
+     這裡只做進場淡入，避免和 Flip 的 transform 動畫互相干擾 */
+  animation: sp-fade-in 0.2s ease-out;
+}
+
+.sp-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-light);
+}
+
+.sp-status {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: var(--text-main);
+  font-size: 1rem;
+  min-height: 160px;
+}
+
+.sp-error-msg {
+  font-size: 1rem;
+  margin-bottom: 15px;
+}
+
+.sp-cancel-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--text-main);
+  background: transparent;
+  color: var(--text-main);
+  border-radius: 20px;
+  cursor: pointer;
+}
+
+.sp-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.sp-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--text-main);
+  font-weight: bold;
+  margin-bottom: 10px;
+}
+
+.sp-progress-total {
+  font-weight: normal;
+  opacity: 0.7;
+}
+
+.sp-back-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  padding: 0;
+  opacity: 0.8;
+}
+
+.sp-back-btn:hover {
+  opacity: 1;
+}
+
+.sp-title {
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  color: var(--text-light);
+  margin-bottom: 4px;
+}
+
+.sp-prompt {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: var(--text-main);
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+
+.sp-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sp-option {
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--text-main);
+  background-color: transparent;
+  color: var(--text-main);
+  cursor: pointer;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s ease-in-out;
+}
+
+.sp-option:hover {
+  background-color: color-mix(in srgb, var(--text-main) 10%, transparent);
+}
+
+.sp-option.selected {
+  background-color: var(--text-main);
+  color: var(--bg-main);
+}
+
+.sp-option-text {
+  flex: 1;
+}
+
+/* 追問 / 風味子題：以左側細線與縮排暗示是延伸問題 */
+.sp-sub {
+  border-left: 2px solid color-mix(in srgb, var(--text-main) 35%, transparent);
+  padding-left: 12px;
+}
+
+.sp-sub-prompt {
+  font-size: 0.95rem;
+  font-weight: bold;
+  color: var(--text-main);
+  margin-bottom: 12px;
+}
+
+/* 預算自訂輸入 */
+.sp-custom {
+  margin-top: 6px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px dashed color-mix(in srgb, var(--text-main) 50%, transparent);
+}
+
+.sp-custom-label {
+  font-size: 0.85rem;
+  color: var(--text-light);
+}
+
+.sp-custom-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.sp-custom-unit {
+  color: var(--text-main);
+  font-size: 0.95rem;
+}
+
+.sp-custom-row input {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--text-main);
+  background: transparent;
+  color: var(--text-main);
+  font-size: 0.95rem;
+  min-width: 0;
+}
+
+.sp-custom-btn {
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--text-main);
+  background: var(--text-main);
+  color: var(--bg-main);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.sp-custom-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 多選 chips */
+.sp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sp-chip {
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--text-main);
+  background: transparent;
+  color: var(--text-main);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s ease-in-out;
+}
+
+.sp-chip.selected {
+  background: var(--text-main);
+  color: var(--bg-main);
+}
+
+.sp-confirm-btn {
+  margin-top: 20px;
+  width: 100%;
+  padding: 12px;
+  background-color: var(--text-main);
+  color: var(--bg-main);
+  border: 1px solid var(--text-main);
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: 0.2s;
+}

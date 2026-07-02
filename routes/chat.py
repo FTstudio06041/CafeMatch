@@ -57,7 +57,7 @@ def save_chat_session(user):
         return error_response("訊息數量過多", 413)
 
     allowed_roles = {'user', 'ai', 'system'}
-    allowed_keys = {'role', 'content', 'feedback', 'debug_info', 'status'}
+    allowed_keys = {'role', 'content', 'feedback', 'debug_info', 'status', 'cafes'}
     cleaned_messages = []
     for msg in messages:
         if not isinstance(msg, dict):

@@ -29,6 +29,11 @@ export const THINKING_TEXTS = {
     '正在解析您的隱藏喜好',
     '正在產生個人化報告'
   ],
+  processing_situational: [
+    '正在整理你的情境偏好',
+    '正在依你的條件篩選',
+    '正在為你配對合適的店家'
+  ],
   generating_response: [
     '正在撰寫回覆',
     '即將完成',
