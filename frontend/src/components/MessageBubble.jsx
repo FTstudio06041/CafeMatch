@@ -1,5 +1,6 @@
 import React from 'react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
 import SituationalPicker from './chat/SituationalPicker';
 import CafeCard from './chat/CafeCard';
 import { THINKING_TEXTS } from '../utils/thinkingTexts';
@@ -11,9 +12,11 @@ export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handl
   let content = msg?.content ?? msg?.text ?? '';
   let safeContent = typeof content === 'string' ? content : String(content ?? '');
 
+  const { API_BASE_URL } = useContext(AuthContext);
   const [isQuizActive, setIsQuizActive] = useState(false);
   const [textIndex, setTextIndex] = useState(0);
   const [fade, setFade] = useState(true);
+  const [situationalQuestions, setSituationalQuestions] = useState(null);
   const inviteCardRef = useRef(null);
   const flipStateRef = useRef(null);
 
@@ -45,11 +48,23 @@ export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handl
     safeContent = safeContent.replace('[SHOW_QUIZ_CARD]', '').trim();
   }
 
+  // 預抓情境題目：卡片一出現就先載入，等使用者點「開始配對」時已就緒，
+  // 讓 SituationalPicker 直接以 question 狀態開場、避免 loading 閃爍破壞展開動畫
+  useEffect(() => {
+    if (!hasQuizCard || situationalQuestions) return;
+    let mounted = true;
+    fetch(`${API_BASE_URL}/api/situational/questions`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (mounted && d?.questions?.length) setSituationalQuestions(d.questions); })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, [hasQuizCard, situationalQuestions, API_BASE_URL]);
+
   const isGenerating = isTyping && isLastMessage && role === 'ai' && safeContent === '' && !hasQuizCard;
 
   return (
     <React.Fragment>
-      <div className={`message ${role}`}>
+      <div className={`message ${role}${hasQuizCard ? ' has-quiz' : ''}`}>
         {isGenerating ? (
           <div className="typing-indicator" style={{ margin: 0, padding: 0, background: 'transparent', display: 'flex', alignItems: 'center' }}>
             <span className={`thinking-text ${fade ? 'fade-in' : 'fade-out'}`}>
@@ -86,6 +101,7 @@ export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handl
                 ) : (
                   <SituationalPicker
                     flipFromRef={flipStateRef}
+                    questions={situationalQuestions}
                     onComplete={(situationalContext) => {
                       setIsQuizActive(false);
                       if(onSituationalComplete) onSituationalComplete(situationalContext, idx);

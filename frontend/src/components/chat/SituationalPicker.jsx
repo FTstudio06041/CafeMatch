@@ -22,11 +22,11 @@ import './SituationalPicker.css';
  *     special: ['outlet', 'quiet']
  *   }
  */
-export default function SituationalPicker({ onComplete, onCancel, flipFromRef }) {
+export default function SituationalPicker({ onComplete, onCancel, flipFromRef, questions: prefetched }) {
   const { API_BASE_URL } = useContext(AuthContext);
 
-  const [state, setState] = useState('loading'); // 'loading' | 'question' | 'error'
-  const [questions, setQuestions] = useState([]);
+  const [state, setState] = useState(prefetched?.length ? 'question' : 'loading'); // 'loading' | 'question' | 'error'
+  const [questions, setQuestions] = useState(prefetched || []);
   const [stepIndex, setStepIndex] = useState(0);
   const [subPhase, setSubPhase] = useState(null); // null | 'followup' | 'flavor'
   const [activeFollowupKey, setActiveFollowupKey] = useState(null);
@@ -40,7 +40,23 @@ export default function SituationalPicker({ onComplete, onCancel, flipFromRef })
   const containerRef = useRef(null);
   const hasFlippedRef = useRef(false);
 
+  // 找最近的可捲動祖先（聊天區塊），捲到底
+  const scrollChatToBottom = (smooth) => {
+    const el = containerRef.current;
+    if (!el) return;
+    let p = el.parentElement;
+    while (p) {
+      const oy = getComputedStyle(p).overflowY;
+      if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight) break;
+      p = p.parentElement;
+    }
+    if (!p) { el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'end' }); return; }
+    if (smooth) p.scrollTo({ top: p.scrollHeight, behavior: 'smooth' });
+    else p.scrollTop = p.scrollHeight;
+  };
+
   useEffect(() => {
+    if (prefetched?.length) return; // 題目已由外層預抓，直接以 question 狀態開場，避免 loading 閃爍
     let mounted = true;
     (async () => {
       setState('loading');
@@ -66,10 +82,10 @@ export default function SituationalPicker({ onComplete, onCancel, flipFromRef })
       }
     })();
     return () => { mounted = false; };
-  }, [API_BASE_URL]);
+  }, [API_BASE_URL, prefetched]);
 
-  // 由邀請小卡的實際位置/尺寸「長成」完整題目卡（GSAP Flip），只在第一次進入
-  // question 狀態（題目真正就緒）時執行一次；loading 骨架不參與這段幾何轉場。
+  // 由邀請小卡「長成」完整題目卡（GSAP Flip）。因 Flip 以 transform 縮放，版面高度一開始
+  // 就是最終值，故可「同時」啟動一次原生平滑捲動到底——與卡片放大並行、且保有滑順感
   useLayoutEffect(() => {
     if (state !== 'question') return;
     if (hasFlippedRef.current) return;
@@ -80,20 +96,11 @@ export default function SituationalPicker({ onComplete, onCancel, flipFromRef })
         targets: containerRef.current,
         duration: 0.45,
         ease: 'power2.out',
-        absolute: true,
+        absolute: false,
       });
     }
+    requestAnimationFrame(() => scrollChatToBottom(true));
   }, [state, flipFromRef]);
-
-  // 卡片產生（展開）後，自動把它捲進視野；若卡片太長，頁面會往下捲到底
-  // 延遲略長於上面的 Flip 動畫（0.45s），避免捲動與幾何轉場同時發生互相干擾
-  useEffect(() => {
-    if (state !== 'question') return;
-    const t = setTimeout(() => {
-      containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }, 480);
-    return () => clearTimeout(t);
-  }, [state]);
 
   const updateAnswers = useCallback((updater) => {
     const next = typeof updater === 'function' ? updater(answersRef.current) : updater;

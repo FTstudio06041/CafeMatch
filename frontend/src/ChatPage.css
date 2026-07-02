@@ -79,6 +79,12 @@
     box-shadow: none;              /* 確保沒有任何陰影效果 */
 }
 
+/* 含情境配對卡片的訊息：放寬到接近聊天區寬度（兩側稍微留白），讓卡片有固定的大尺寸 */
+.message.ai.has-quiz {
+    width: 96%;
+    max-width: 96%;
+}
+
 /* --- 訊息下方的操作按鈕區 (Retry, Like, Dislike) --- */
 .message-actions {
     display: flex;
@@ -559,6 +565,10 @@ button:focus {
     border-radius: 8px;
     border: 1px solid var(--text-main);
     text-align: center;
+    /* 與題目卡同寬（填滿訊息），讓寬度固定不變、且進場 Flip 只做垂直展開 */
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
     /* 卡片從左上角向右下角展開，動畫結束後固定 */
     transform-origin: top left;
     animation: quiz-card-expand 0.35s ease-out;
