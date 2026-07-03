@@ -1,16 +1,69 @@
 /* =========================================
-   Global CSS Variables
+   Global CSS Variables / Design Tokens
+   —— 全域設計 token 單一來源。新程式碼一律引用這裡的
+      語意變數，不要再手寫魔術數字或重複的 hex。
    ========================================= */
 :root {
+    /* ---- 表面 / 背景 ---- */
     --bg-main: #ddccb9;
     --bg-sidebar: #d6c2a5;
     --bg-card: #FFFFFF;
     --bg-white: #FFFFFF;
+    --card: var(--bg-card);      /* 中性卡片/浮層表面（Toast、彈窗內容） */
+
+    /* ---- 文字 / 品牌色 ---- */
     --accent-color: #432a00;
-    --text-main: #4E342E;
-    --text-light: #795548;
+    --text-main: #4E342E;        /* 主要文字（最深） */
+    /* 對比修正：舊值 #795548 疊在 --bg-main / --bg-sidebar 上僅約 4.0:1，
+       未達 WCAG AA 內文標準；改為 #6b4736 後兩種底色皆 ≥ 4.5:1。 */
+    --text-light: #6b4736;       /* 次要/輔助文字（保留舊名以相容既有引用） */
+    --text-muted: var(--text-light); /* 語意別名：更弱的說明文字 */
     --hover-color: #b5a191;
-    --border-radius: 24px;
+
+    /* ---- 狀態語意色（皆為淺底可讀）---- */
+    --color-success: #2e7d32;
+    --color-warning: #b26a00;
+    --color-error:   #c62828;
+    --color-info:    #0277bd;
+
+    /* ---- 間距級距（4 / 8pt 節奏）---- */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+
+    /* ---- 圓角級距 ---- */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-2xl: 24px;
+    --radius-full: 9999px;
+    --border-radius: 24px;       /* 既有大圓角別名（= --radius-2xl） */
+
+    /* ---- 字級 / 行高級距 ---- */
+    --text-xs: 0.75rem;          /* 12px */
+    --text-sm: 0.875rem;         /* 14px */
+    --text-base: 1rem;           /* 16px */
+    --text-lg: 1.125rem;         /* 18px */
+    --text-xl: 1.25rem;          /* 20px */
+    --text-2xl: 1.5rem;          /* 24px */
+    --text-3xl: 2rem;            /* 32px */
+    --leading-tight: 1.25;
+    --leading-normal: 1.5;
+    --leading-relaxed: 1.7;
+
+    /* ---- 陰影級距（品牌棕調）---- */
+    --shadow-sm: 0 1px 3px rgba(43, 27, 8, 0.08);
+    --shadow-md: 0 4px 12px rgba(43, 27, 8, 0.12);
+    --shadow-lg: 0 20px 40px rgba(43, 27, 8, 0.15);
+
+    /* ---- 版面尺寸 ---- */
     --sidebar-width: 280px;
     --sidebar-width-collapsed: 88px;
     --transition-speed: 0.3s;

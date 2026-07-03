@@ -32,11 +32,11 @@ body {
     background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-    background-color: #d6c2a5;
-    border-radius: 4px;
+    background-color: var(--bg-sidebar);
+    border-radius: var(--radius-sm);
 }
 ::-webkit-scrollbar-thumb:hover {
-    background-color: #b5a191;
+    background-color: var(--hover-color);
 }
 
 /* =========================================
