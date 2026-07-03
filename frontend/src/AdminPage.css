@@ -1,12 +1,14 @@
 :root {
-    --admin-bg: #f5f0eb;
-    --admin-card: #ffffff;
-    --admin-border: #e0d6cc;
-    --admin-accent: #432a00;
-    --admin-text: #4E342E;
-    --admin-text-light: #795548;
-    --admin-danger: #d32f2f;
-    --admin-success: #2e7d32;
+    /* 管理頁色票：品牌色一律別名全域 token（單一來源，見 variables.css），
+       只保留 admin 專屬的淺色頁底與邊框。 */
+    --admin-bg: #f5f0eb;                    /* admin 專屬淺色頁底 */
+    --admin-border: #e0d6cc;                /* admin 專屬邊框 */
+    --admin-card: var(--card);              /* = #FFFFFF */
+    --admin-accent: var(--accent-color);
+    --admin-text: var(--text-main);
+    --admin-text-light: var(--text-light);  /* 對比修正後的次要文字色 */
+    --admin-danger: var(--color-error);
+    --admin-success: var(--color-success);
 }
 
 /* --- 管理頁面主容器 --- */
