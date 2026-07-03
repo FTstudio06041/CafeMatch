@@ -88,8 +88,10 @@ export default function SituationalPicker({ onComplete, onCancel, flipFromRef, q
     hasFlippedRef.current = true;
     const FLIP_DURATION = 0.45;
     const FLIP_EASE = 'power2.out';
+    // 尊重系統「減少動態效果」偏好：跳過 Flip 放大動畫、捲動改為瞬間定位
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const flipFrom = flipFromRef?.current;
-    if (flipFrom && containerRef.current) {
+    if (flipFrom && containerRef.current && !reduceMotion) {
       Flip.from(flipFrom, {
         targets: containerRef.current,
         duration: FLIP_DURATION,
@@ -99,14 +101,18 @@ export default function SituationalPicker({ onComplete, onCancel, flipFromRef, q
     }
     const p = getScrollParent();
     if (p) {
-      gsap.to(p, {
-        scrollTop: p.scrollHeight - p.clientHeight,
-        duration: FLIP_DURATION,
-        ease: FLIP_EASE,
-        overwrite: 'auto',
-      });
+      if (reduceMotion) {
+        p.scrollTop = p.scrollHeight - p.clientHeight;
+      } else {
+        gsap.to(p, {
+          scrollTop: p.scrollHeight - p.clientHeight,
+          duration: FLIP_DURATION,
+          ease: FLIP_EASE,
+          overwrite: 'auto',
+        });
+      }
     } else {
-      containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      containerRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'end' });
     }
   }, [state, flipFromRef]);
 
@@ -146,7 +152,7 @@ export default function SituationalPicker({ onComplete, onCancel, flipFromRef, q
   if (state === 'loading') {
     return (
       <div className="sp-container">
-        {onCancel && <button className="sp-close-btn" onClick={onCancel}><X size={18} /></button>}
+        {onCancel && <button className="sp-close-btn" onClick={onCancel} aria-label="關閉"><X size={18} /></button>}
         <div className="sp-status">準備題目中...</div>
       </div>
     );
@@ -155,7 +161,7 @@ export default function SituationalPicker({ onComplete, onCancel, flipFromRef, q
   if (state === 'error') {
     return (
       <div className="sp-container">
-        {onCancel && <button className="sp-close-btn" onClick={onCancel}><X size={18} /></button>}
+        {onCancel && <button className="sp-close-btn" onClick={onCancel} aria-label="關閉"><X size={18} /></button>}
         <div className="sp-status">
           <p className="sp-error-msg">{errorMsg}</p>
           <button className="sp-cancel-btn" onClick={onCancel}>關閉</button>
@@ -367,7 +373,7 @@ export default function SituationalPicker({ onComplete, onCancel, flipFromRef, q
 
   return (
     <div className="sp-container" ref={containerRef}>
-      {onCancel && <button className="sp-close-btn" onClick={onCancel}><X size={18} /></button>}
+      {onCancel && <button className="sp-close-btn" onClick={onCancel} aria-label="關閉"><X size={18} /></button>}
 
       <div className="sp-content">
         <div className="sp-progress">

@@ -144,6 +144,7 @@ export default function PostCard({
             className="post-card-delete"
             onClick={() => onDelete(post.id)}
             title="刪除貼文"
+            aria-label="刪除貼文"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <polyline points="3 6 5 6 21 6"></polyline>

@@ -126,7 +126,7 @@ export default function NotePopup({ note, onClose, onDelete, onLikeUpdate }) {
               <span className="note-popup-time">{formatTime(note.created_at)}</span>
             </div>
           </div>
-          <button className="note-popup-close" onClick={onClose}>
+          <button className="note-popup-close" onClick={onClose} aria-label="關閉">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -144,6 +144,8 @@ export default function NotePopup({ note, onClose, onDelete, onLikeUpdate }) {
           <button
             className={`note-popup-like-btn ${isLiked ? 'liked' : ''}`}
             onClick={handleLike}
+            aria-pressed={isLiked}
+            aria-label={`${isLiked ? '取消讚' : '按讚'}，目前 ${likeCount} 個讚`}
           >
             <svg className="like-icon" width="18" height="18" viewBox="0 0 24 24"
               fill={isLiked ? '#e74c6f' : 'none'}
@@ -159,6 +161,7 @@ export default function NotePopup({ note, onClose, onDelete, onLikeUpdate }) {
               className="note-popup-delete-btn"
               onClick={() => onDelete(note.id)}
               title="刪除便利貼"
+              aria-label="刪除便利貼"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <polyline points="3 6 5 6 21 6"></polyline>
@@ -211,6 +214,7 @@ export default function NotePopup({ note, onClose, onDelete, onLikeUpdate }) {
               className="note-popup-comment-send"
               onClick={handleSubmitComment}
               disabled={!commentText.trim() || isSubmitting}
+              aria-label="送出留言"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                 <line x1="22" y1="2" x2="11" y2="13"></line>
