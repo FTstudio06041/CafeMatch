@@ -34,7 +34,7 @@ function AppContent() {
   return (
     <Router>
       <ChatProvider>
-      <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: 'var(--text-color)' }}>載入頁面中...</div>}>
+      <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100dvh', color: 'var(--text-color)' }}>載入頁面中...</div>}>
         <Routes>
           <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/chat" />} />
           

@@ -19,6 +19,10 @@
     --text-light: #6b4736;       /* 次要/輔助文字（保留舊名以相容既有引用） */
     --text-muted: var(--text-light); /* 語意別名：更弱的說明文字 */
     --hover-color: #b5a191;
+    /* 品牌次色（焦糖棕，用於公告 / bug 回報 / 社群強調） */
+    --brand-secondary: #8b5a2b;
+    --brand-secondary-dark: #6f421e;
+    --brand-secondary-text: #5c4033;
 
     /* ---- 狀態語意色（皆為淺底可讀）---- */
     --color-success: #2e7d32;
@@ -62,6 +66,9 @@
     --shadow-sm: 0 1px 3px rgba(43, 27, 8, 0.08);
     --shadow-md: 0 4px 12px rgba(43, 27, 8, 0.12);
     --shadow-lg: 0 20px 40px rgba(43, 27, 8, 0.15);
+
+    /* ---- 字型 ---- */
+    --font-sans: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
 
     /* ---- 版面尺寸 ---- */
     --sidebar-width: 280px;

@@ -37,6 +37,7 @@
   left: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: rgba(43, 27, 8, 0.4);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -64,7 +65,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #8b5a2b;
+  color: var(--brand-secondary);
 }
 .bug-report-header h3 {
   margin: 0;
@@ -92,14 +93,14 @@
   border: 1.5px solid rgba(139, 90, 43, 0.15);
   border-radius: 12px;
   font-size: 0.92rem;
-  color: #5c4033;
+  color: var(--brand-secondary-text);
   background: #fffdfa;
   outline: none;
   cursor: pointer;
   transition: all 0.2s;
 }
 .bug-report-select:focus {
-  border-color: #8b5a2b;
+  border-color: var(--brand-secondary);
 }
 .bug-report-textarea {
   padding: 12px 14px;
@@ -107,7 +108,7 @@
   border-radius: 12px;
   font-size: 0.92rem;
   line-height: 1.5;
-  color: #5c4033;
+  color: var(--brand-secondary-text);
   background: #fffdfa;
   outline: none;
   resize: vertical;
@@ -115,7 +116,7 @@
   transition: all 0.25s ease;
 }
 .bug-report-textarea:focus {
-  border-color: #8b5a2b;
+  border-color: var(--brand-secondary);
   box-shadow: 0 0 8px rgba(139, 90, 43, 0.05);
 }
 .bug-report-actions {
@@ -135,18 +136,18 @@
 }
 .bug-report-btn.cancel {
   background: rgba(139, 90, 43, 0.08);
-  color: #5c4033;
+  color: var(--brand-secondary-text);
 }
 .bug-report-btn.cancel:hover {
   background: rgba(139, 90, 43, 0.14);
 }
 .bug-report-btn.submit {
-  background: #8b5a2b;
+  background: var(--brand-secondary);
   color: #fffdfa;
   box-shadow: 0 4px 12px rgba(139, 90, 43, 0.25);
 }
 .bug-report-btn.submit:hover:not(:disabled) {
-  background: #6f421e;
+  background: var(--brand-secondary-dark);
   transform: translateY(-1.5px);
   box-shadow: 0 6px 16px rgba(139, 90, 43, 0.35);
 }

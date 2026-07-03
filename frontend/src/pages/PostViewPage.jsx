@@ -73,7 +73,7 @@ export default function PostViewPage() {
       maxWidth: '600px', 
       margin: '0 auto', 
       padding: '20px',
-      minHeight: '100vh',
+      minHeight: '100dvh',
       backgroundColor: 'transparent'
     }}>
       <div 
