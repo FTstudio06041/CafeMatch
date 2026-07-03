@@ -51,7 +51,7 @@ body {
     flex-shrink: 0;
     transition: width var(--transition-speed) ease;
     position: relative;
-    z-index: 100;
+    z-index: var(--z-sticky);
 }
 
 .sidebar.collapsed {
@@ -352,7 +352,7 @@ body {
         width: 100vw;
         height: 60px;
         background-color: var(--bg-main);
-        z-index: 990; /* 剛好在 sidebar (1000) 下方 */
+        z-index: var(--z-header); /* 在側欄抽屜 (--z-drawer) 下方 */
         box-shadow: 0 2px 10px rgba(0,0,0,0.05);
     }
     .mobile-topbar-title {
@@ -381,7 +381,7 @@ body {
         left: 0;
         top: 0;
         bottom: 0;
-        z-index: 1000;
+        z-index: var(--z-drawer);
         transform: translateX(0);
         box-shadow: 4px 0 15px rgba(0,0,0,0.2);
     }
@@ -452,7 +452,7 @@ body {
         padding: 10px 0;
         margin-left: 0;
         justify-content: space-around;
-        z-index: 999;
+        z-index: var(--z-header);
     }
     
     .nav-marker {
@@ -485,7 +485,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 999999;
+    z-index: var(--z-announcement);
     animation: annFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 

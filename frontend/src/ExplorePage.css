@@ -381,7 +381,7 @@
     height: 100%;
     background: rgba(78, 52, 46, 0.4);
     backdrop-filter: blur(4px);
-    z-index: 100;
+    z-index: var(--z-modal);
     display: none;
     align-items: center;
     justify-content: center;
