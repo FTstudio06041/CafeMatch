@@ -18,9 +18,11 @@ export default function ChatInputArea({
         {user?.is_admin && (
           <div style={{ position: 'relative' }}>
             <button 
-              className="options-btn" 
+              className="options-btn"
               onClick={() => setShowOptionsMenu(!showOptionsMenu)}
               title="選項"
+              aria-label="選項"
+              aria-expanded={showOptionsMenu}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
             </button>
@@ -43,11 +45,11 @@ export default function ChatInputArea({
           disabled={isTyping}
         />
         {isTyping ? (
-          <button className="send-btn" onClick={handleStop} style={{ backgroundColor: '#D32F2F' }} title="停止生成">
+          <button className="send-btn" onClick={handleStop} style={{ backgroundColor: '#D32F2F' }} title="停止生成" aria-label="停止生成">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="6" width="12" height="12"></rect></svg>
           </button>
         ) : (
-          <button className="send-btn" onClick={sendMessage} disabled={!inputMsg.trim()}>
+          <button className="send-btn" onClick={sendMessage} disabled={!inputMsg.trim()} aria-label="送出訊息">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
           </button>
         )}

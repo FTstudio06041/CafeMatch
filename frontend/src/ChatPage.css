@@ -258,7 +258,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 2000;
+    z-index: var(--z-modal);
     opacity: 0;
     pointer-events: none;
     /* 預設隱藏 */
@@ -425,7 +425,7 @@ button:focus {
     border-radius: 12px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     overflow: hidden;
-    z-index: 100;
+    z-index: var(--z-sticky);
     min-width: 150px;
 }
 
@@ -521,7 +521,7 @@ button:focus {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 900;
+    z-index: var(--z-overlay);
 }
 
 .maintenance-card {

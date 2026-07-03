@@ -125,7 +125,7 @@ export default function Sidebar() {
     <>
       {/* 行動版專屬的頂部標題列 */}
       <div className="mobile-topbar">
-        <button className="mobile-toggle-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
+        <button className="mobile-toggle-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} aria-label="開啟或關閉側邊欄" aria-expanded={!isSidebarCollapsed}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
             <line x1="9" y1="3" x2="9" y2="21"></line>
@@ -135,7 +135,7 @@ export default function Sidebar() {
       </div>
 
       <aside className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}>
-      <button className="toggle-sidebar-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}>
+      <button className="toggle-sidebar-btn" onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} aria-label="收合或展開側邊欄" aria-expanded={!isSidebarCollapsed}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
           <line x1="9" y1="3" x2="9" y2="21"></line>
@@ -172,7 +172,7 @@ export default function Sidebar() {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
               </div>
               <span className="chat-title text-label" title={chat.title}>{chat.title}</span>
-              <button className="delete-btn" onClick={(e) => handleDelete(e, chat.id)}>
+              <button className="delete-btn" onClick={(e) => handleDelete(e, chat.id)} aria-label="刪除這則對話">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
               </button>
             </div>

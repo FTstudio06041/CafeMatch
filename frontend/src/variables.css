@@ -1,17 +1,91 @@
 /* =========================================
-   Global CSS Variables
+   Global CSS Variables / Design Tokens
+   —— 全域設計 token 單一來源。新程式碼一律引用這裡的
+      語意變數，不要再手寫魔術數字或重複的 hex。
    ========================================= */
 :root {
+    /* ---- 表面 / 背景 ---- */
     --bg-main: #ddccb9;
     --bg-sidebar: #d6c2a5;
     --bg-card: #FFFFFF;
     --bg-white: #FFFFFF;
+    --card: var(--bg-card);      /* 中性卡片/浮層表面（Toast、彈窗內容） */
+
+    /* ---- 文字 / 品牌色 ---- */
     --accent-color: #432a00;
-    --text-main: #4E342E;
-    --text-light: #795548;
+    --text-main: #4E342E;        /* 主要文字（最深） */
+    /* 對比修正：舊值 #795548 疊在 --bg-main / --bg-sidebar 上僅約 4.0:1，
+       未達 WCAG AA 內文標準；改為 #6b4736 後兩種底色皆 ≥ 4.5:1。 */
+    --text-light: #6b4736;       /* 次要/輔助文字（保留舊名以相容既有引用） */
+    --text-muted: var(--text-light); /* 語意別名：更弱的說明文字 */
     --hover-color: #b5a191;
-    --border-radius: 24px;
+    /* 品牌次色（焦糖棕，用於公告 / bug 回報 / 社群強調） */
+    --brand-secondary: #8b5a2b;
+    --brand-secondary-dark: #6f421e;
+    --brand-secondary-text: #5c4033;
+
+    /* ---- 狀態語意色（皆為淺底可讀）---- */
+    --color-success: #2e7d32;
+    --color-warning: #b26a00;
+    --color-error:   #d32f2f;
+    --color-info:    #0277bd;
+
+    /* ---- 間距級距（4 / 8pt 節奏）---- */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+
+    /* ---- 圓角級距 ---- */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-2xl: 24px;
+    --radius-full: 9999px;
+    --border-radius: 24px;       /* 既有大圓角別名（= --radius-2xl） */
+
+    /* ---- 字級 / 行高級距 ---- */
+    --text-xs: 0.75rem;          /* 12px */
+    --text-sm: 0.875rem;         /* 14px */
+    --text-base: 1rem;           /* 16px */
+    --text-lg: 1.125rem;         /* 18px */
+    --text-xl: 1.25rem;          /* 20px */
+    --text-2xl: 1.5rem;          /* 24px */
+    --text-3xl: 2rem;            /* 32px */
+    --leading-tight: 1.25;
+    --leading-normal: 1.5;
+    --leading-relaxed: 1.7;
+
+    /* ---- 陰影級距（品牌棕調）---- */
+    --shadow-sm: 0 1px 3px rgba(43, 27, 8, 0.08);
+    --shadow-md: 0 4px 12px rgba(43, 27, 8, 0.12);
+    --shadow-lg: 0 20px 40px rgba(43, 27, 8, 0.15);
+
+    /* ---- 字型 ---- */
+    --font-sans: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+
+    /* ---- 版面尺寸 ---- */
     --sidebar-width: 280px;
     --sidebar-width-collapsed: 88px;
     --transition-speed: 0.3s;
+
+    /* =========================================
+       z-index 層級（由低到高）
+       跨元件的覆蓋層一律使用這組語意變數，
+       不要再手寫 999 / 9999 / 999999 之類的魔術數字。
+       元件內部的區域堆疊（0/1/2 等相對於自身父層）不受此規範。
+       ========================================= */
+    --z-sticky: 100;        /* 頁面內浮層：下拉選單、桌面側欄、sticky 列 */
+    --z-header: 900;        /* 行動版頂部列 / 底部導覽列 */
+    --z-drawer: 1000;       /* 行動版側欄抽屜、浮動聊天視窗 */
+    --z-overlay: 1100;      /* 全螢幕遮罩底（維護中等阻斷層） */
+    --z-modal: 1200;        /* 對話框 / Modal */
+    --z-toast: 1300;        /* Toast 通知 */
+    --z-announcement: 1400; /* 全域公告（最上層阻斷） */
 }
