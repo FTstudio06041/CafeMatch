@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>啡你莫屬 CafeMatch — 開發交接</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}img{max-width:100%}body{background:var(--bg,#ddccb9)}</style>
+</head>
+<body>
+<style>
+  /* ============================================================
+     啡你莫屬 CafeMatch — 交接計劃 + 空白 UI 樣板
+     色票沿用專案 variables.css（拿鐵暖色系），另補一套咖啡深色主題。
+     字型走系統 CJK stack（CSP 禁外部字型），與產品 --font-sans 對齊。
+     ============================================================ */
+  :root {
+    --bg:        #ddccb9;
+    --surface:   #fbf6ee;
+    --card:      #ffffff;
+    --ink:       #4E342E;
+    --ink-soft:  #6b4736;
+    --espresso:  #432a00;
+    --caramel:   #8b5a2b;
+    --caramel-d: #6f421e;
+    --line:      #c9b79a;
+    --line-soft: #d9cab2;
+    --skeleton:  #e7ddcc;
+    --skeleton-2:#ded2bd;
+    --pin:       #8b5a2b;
+    --ok:   #2e7d32;
+    --warn: #b26a00;
+    --err:  #d32f2f;
+    --info: #0277bd;
+    --shadow-sm: 0 1px 3px rgba(43,27,8,.08);
+    --shadow-md: 0 6px 18px rgba(43,27,8,.12);
+    --shadow-lg: 0 24px 48px rgba(43,27,8,.16);
+    --font: "Noto Sans TC","PingFang TC","Microsoft JhengHei","Hiragino Sans GB",sans-serif;
+    --maxw: 1080px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:        #211710;
+      --surface:   #2c2015;
+      --card:      #362818;
+      --ink:       #f1e7d7;
+      --ink-soft:  #cbb89b;
+      --espresso:  #e9cb9f;
+      --caramel:   #d59a5e;
+      --caramel-d: #b97f45;
+      --line:      #4a3826;
+      --line-soft: #3c2c1c;
+      --skeleton:  #3d2d1c;
+      --skeleton-2:#332618;
+      --pin:       #d59a5e;
+      --ok:   #7bc47f; --warn: #e0a552; --err: #ef7a7a; --info: #63b7e0;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.4);
+      --shadow-md: 0 6px 18px rgba(0,0,0,.45);
+      --shadow-lg: 0 24px 48px rgba(0,0,0,.55);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:#ddccb9; --surface:#fbf6ee; --card:#ffffff; --ink:#4E342E; --ink-soft:#6b4736;
+    --espresso:#432a00; --caramel:#8b5a2b; --caramel-d:#6f421e; --line:#c9b79a;
+    --line-soft:#d9cab2; --skeleton:#e7ddcc; --skeleton-2:#ded2bd; --pin:#8b5a2b;
+    --ok:#2e7d32; --warn:#b26a00; --err:#d32f2f; --info:#0277bd;
+  }
+  :root[data-theme="dark"] {
+    --bg:#211710; --surface:#2c2015; --card:#362818; --ink:#f1e7d7; --ink-soft:#cbb89b;
+    --espresso:#e9cb9f; --caramel:#d59a5e; --caramel-d:#b97f45; --line:#4a3826;
+    --line-soft:#3c2c1c; --skeleton:#3d2d1c; --skeleton-2:#332618; --pin:#d59a5e;
+    --ok:#7bc47f; --warn:#e0a552; --err:#ef7a7a; --info:#63b7e0;
+  }
+
+  * { box-sizing: border-box; }
+  .page {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    padding: 0 20px 96px;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; }
+
+  .eyebrow {
+    font-size: .72rem; letter-spacing: .18em; text-transform: uppercase;
+    font-weight: 700; color: var(--caramel);
+  }
+
+  /* ---------- 頁首 ---------- */
+  header.hero { padding: 64px 0 40px; border-bottom: 1px solid var(--line); }
+  .hero h1 {
+    font-size: clamp(2rem, 4.5vw, 3.1rem); line-height: 1.12; margin: 14px 0 0;
+    color: var(--espresso); font-weight: 800; text-wrap: balance; letter-spacing: -.01em;
+  }
+  .hero .sub { font-size: 1.05rem; color: var(--ink-soft); margin-top: 16px; max-width: 60ch; }
+  .hero .meta {
+    display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 24px;
+    font-size: .86rem; color: var(--ink-soft);
+  }
+  .hero .meta b { color: var(--ink); font-weight: 700; }
+
+  /* ---------- 區塊標題 ---------- */
+  section { padding-top: 52px; }
+  .sec-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 22px; }
+  .sec-head h2 { font-size: 1.5rem; color: var(--espresso); font-weight: 800; margin: 6px 0 0; }
+  .sec-head p { color: var(--ink-soft); font-size: .95rem; margin: 0; flex: 1 1 280px; }
+
+  /* ---------- 已拍板 chips ---------- */
+  .chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap: 12px; }
+  .chip {
+    background: var(--card); border: 1px solid var(--line-soft); border-radius: 12px;
+    padding: 14px 16px; box-shadow: var(--shadow-sm);
+  }
+  .chip .k { font-size: .74rem; letter-spacing: .05em; color: var(--caramel); font-weight: 700; }
+  .chip .v { margin-top: 4px; font-weight: 700; color: var(--ink); }
+  .chip .n { margin-top: 3px; font-size: .82rem; color: var(--ink-soft); }
+
+  /* ---------- 依賴/順序 ---------- */
+  .flow {
+    background: var(--surface); border: 1px solid var(--line-soft); border-radius: 16px;
+    padding: 22px; display: grid; gap: 14px;
+  }
+  .flow .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .node {
+    background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+    padding: 7px 14px; font-size: .86rem; font-weight: 600; color: var(--ink); white-space: nowrap;
+  }
+  .node.start { border-style: dashed; color: var(--ink-soft); font-weight: 500; }
+  .node.gate { border-color: var(--caramel); color: var(--caramel-d); background: color-mix(in srgb, var(--caramel) 10%, var(--card)); }
+  .arrow { color: var(--caramel); font-weight: 800; }
+  .flow .lbl { font-size: .78rem; color: var(--ink-soft); letter-spacing: .04em; }
+
+  /* ---------- workstream 卡 ---------- */
+  .ws { border: 1px solid var(--line-soft); border-radius: 18px; overflow: hidden; margin-top: 26px; background: var(--card); box-shadow: var(--shadow-sm); }
+  .ws-head { padding: 22px 24px 4px; }
+  .ws-tag { display: inline-flex; align-items: center; gap: 8px; font-size: .74rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #fff; background: var(--espresso); padding: 5px 11px; border-radius: 999px; }
+  :root[data-theme="dark"] .ws-tag, :root:not([data-theme="light"]) .ws-tag { color: var(--bg); }
+  @media (prefers-color-scheme: dark) { .ws-tag { color: var(--bg); } }
+  .ws-head h3 { font-size: 1.35rem; color: var(--espresso); margin: 14px 0 6px; font-weight: 800; }
+  .ws-goal { color: var(--ink-soft); margin: 0 0 4px; }
+  .ws-body { padding: 8px 24px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 26px; }
+  @media (max-width: 760px) { .ws-body { grid-template-columns: 1fr; } }
+  .ws-col h4 { font-size: .74rem; letter-spacing: .14em; text-transform: uppercase; color: var(--caramel); margin: 18px 0 10px; font-weight: 700; }
+  .ws-col h4:first-child { margin-top: 6px; }
+
+  ul.dod { list-style: none; padding: 0; margin: 0; display: grid; gap: 9px; }
+  ul.dod li { position: relative; padding-left: 26px; font-size: .92rem; }
+  ul.dod li::before { content: "✓"; position: absolute; left: 0; top: 0; color: var(--ok); font-weight: 800; }
+  ul.scope { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  ul.scope li { position: relative; padding-left: 20px; font-size: .9rem; color: var(--ink); }
+  ul.scope li::before { content: "›"; position: absolute; left: 4px; color: var(--caramel); font-weight: 800; }
+
+  .owner { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .badge { font-size: .78rem; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-soft); font-weight: 600; }
+  .badge.lead { border-color: var(--caramel); color: var(--caramel-d); }
+  .note-inline { margin-top: 14px; font-size: .84rem; color: var(--ink-soft); border-left: 3px solid var(--warn); padding: 6px 0 6px 12px; background: color-mix(in srgb, var(--warn) 8%, transparent); border-radius: 0 6px 6px 0; }
+
+  /* ---------- wireframe ---------- */
+  .wire { border: 1.5px dashed var(--line); border-radius: 14px; background: var(--surface); padding: 14px; grid-column: 1 / -1; }
+  .wire-cap { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .wire-cap::before { content: "▨"; color: var(--caramel); }
+  .mock { background: var(--card); border: 1px solid var(--line-soft); border-radius: 12px; overflow: hidden; }
+  .mock-bar { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--skeleton-2); }
+  .sk { background: linear-gradient(90deg, var(--skeleton), var(--skeleton-2), var(--skeleton)); border-radius: 6px; height: 12px; display: block; }
+  .sk.big { height: 20px; }
+  .sk.tall { height: 40px; }
+  .grow { flex: 1; }
+
+  .stars { display: inline-flex; gap: 5px; }
+  .star { width: 20px; height: 20px; color: var(--line); font-size: 18px; line-height: 1; }
+  .star.on { color: var(--caramel); }
+
+  .pill { display: inline-block; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); font-size: .8rem; color: var(--ink-soft); background: var(--surface); }
+  .pill.solid { background: var(--espresso); color: #fff; border-color: var(--espresso); }
+  @media (prefers-color-scheme: dark){ .pill.solid { color: var(--bg);} }
+  :root[data-theme="dark"] .pill.solid{ color: var(--bg);} :root[data-theme="light"] .pill.solid{ color:#fff;}
+
+  /* 地圖樣板 */
+  .map { position: relative; height: 260px; border-radius: 10px; overflow: hidden;
+    background:
+      radial-gradient(circle at 20% 30%, color-mix(in srgb, var(--caramel) 14%, transparent), transparent 40%),
+      repeating-linear-gradient(35deg, transparent 0 26px, color-mix(in srgb, var(--line) 40%, transparent) 26px 27px),
+      repeating-linear-gradient(-42deg, transparent 0 34px, color-mix(in srgb, var(--line) 30%, transparent) 34px 35px),
+      var(--surface);
+    border: 1px solid var(--line-soft); }
+  .map .road { position:absolute; background: color-mix(in srgb, var(--bg) 70%, var(--card)); }
+  .marker { position: absolute; transform: translate(-50%,-100%); }
+  .marker .head { width: 20px; height: 20px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--pin); border: 2px solid var(--card); box-shadow: var(--shadow-sm); }
+  .cluster { position:absolute; transform: translate(-50%,-50%); width: 40px; height: 40px; border-radius: 50%; background: color-mix(in srgb, var(--espresso) 82%, transparent); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; border: 3px solid var(--card); font-size: .85rem;}
+  @media (prefers-color-scheme: dark){ .cluster{ color: var(--bg);} }
+  .map-card { position:absolute; left: 12px; bottom: 12px; width: 210px; background: var(--card); border:1px solid var(--line-soft); border-radius: 10px; padding: 10px; box-shadow: var(--shadow-md); display:grid; gap:8px; }
+  .map-chips { position:absolute; top: 12px; left: 12px; display:flex; gap:6px; }
+
+  .thumb { width: 56px; height: 56px; border-radius: 8px; background: var(--skeleton); flex: 0 0 auto; }
+  .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--skeleton); flex: 0 0 auto; }
+  .row-item { display: flex; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); }
+  .row-item:last-child { border-bottom: 0; }
+  .stack { display: grid; gap: 7px; flex: 1; min-width: 0; }
+  .inputbar { display:flex; gap:10px; align-items:center; padding: 12px 14px; }
+  .fakeinput { flex:1; height: 38px; border-radius: 999px; border:1px solid var(--line); background: var(--surface); }
+  .btn { padding: 9px 16px; border-radius: 999px; background: var(--espresso); color:#fff; font-weight:700; font-size:.85rem; border:0; }
+  @media (prefers-color-scheme: dark){ .btn{ color: var(--bg);} }
+  :root[data-theme="dark"] .btn{color:var(--bg);} :root[data-theme="light"] .btn{color:#fff;}
+
+  .rail { display:flex; gap: 12px; overflow-x: auto; padding: 4px 2px 8px; }
+  .rail-card { flex: 0 0 168px; border:1px solid var(--line-soft); border-radius: 12px; overflow:hidden; background: var(--card); }
+  .rail-card .ph { height: 96px; background: var(--skeleton); }
+  .rail-card .body { padding: 10px; display:grid; gap:7px; }
+  .reason { font-size:.72rem; color: var(--caramel-d); border:1px solid var(--caramel); border-radius:999px; padding:2px 8px; display:inline-block; background: color-mix(in srgb, var(--caramel) 10%, transparent); }
+
+  .metric { display:grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+  .metric .cell { border:1px solid var(--line-soft); border-radius:10px; padding:12px; background: var(--surface); }
+  .metric .cell .lab { font-size:.72rem; letter-spacing:.06em; color:var(--ink-soft); text-transform:uppercase; }
+  .metric .cell .big { font-size:1.4rem; font-weight:800; color:var(--espresso); margin-top:6px; font-variant-numeric: tabular-nums;}
+  .spark { height: 34px; margin-top:8px; border-radius:6px; background:
+      linear-gradient(180deg, color-mix(in srgb, var(--caramel) 22%, transparent), transparent),
+      var(--card); border:1px solid var(--line-soft); }
+
+  /* ---------- 探索頁版面 ---------- */
+  .layout-note { background: var(--surface); border:1px solid var(--line-soft); border-radius:14px; padding:16px 18px; margin-top:18px; }
+  .layout-note h4 { font-size:.74rem; letter-spacing:.12em; text-transform:uppercase; color:var(--caramel); margin:0 0 10px; }
+  .layout-note ul { margin:0; padding-left:20px; display:grid; gap:7px; }
+  .layout-note li { font-size:.9rem; }
+  .layout-note li b { color: var(--ink); }
+
+  .flowline { display:flex; align-items:center; gap:10px; margin:22px 0 12px; font-size:.82rem; color:var(--ink-soft); flex-wrap:wrap; }
+  .flowline .node { font-size:.82rem; }
+
+  .viewport { background: var(--card); border:1px solid var(--line-soft); border-radius:16px; overflow:hidden; box-shadow: var(--shadow-md); }
+  .vp-topbar { display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line-soft); background: var(--surface); }
+  .vp-topbar .brand { font-weight:800; color:var(--espresso); font-size:.95rem; }
+  .vp-map { height:190px; position:relative; }
+  .vp-body { padding:16px; display:grid; gap:20px; }
+  .vp-label { display:flex; align-items:center; justify-content:space-between; }
+  .vp-label .t { font-weight:800; color:var(--espresso); font-size:1rem; display:flex; align-items:center; gap:8px; }
+  .vp-label .more { font-size:.8rem; color:var(--ink-soft); }
+  .vp-grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(148px,1fr)); gap:14px; }
+  .gcard { border:1px solid var(--line-soft); border-radius:12px; overflow:hidden; background:var(--card); position:relative; }
+  .gcard .ph { height:82px; background:var(--skeleton); }
+  .gcard .cbody { padding:10px; display:grid; gap:7px; }
+  .gcard.click::after { content:"點此看詳情"; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background: color-mix(in srgb, var(--espresso) 78%, transparent); color:#fff; font-weight:700; font-size:.8rem; opacity:0; transition:opacity .2s; }
+  @media (prefers-color-scheme: dark){ .gcard.click::after{ color: var(--bg);} }
+  :root[data-theme="dark"] .gcard.click::after{color:var(--bg);} :root[data-theme="light"] .gcard.click::after{color:#fff;}
+  .gcard.click:hover::after { opacity:1; }
+
+  .detail { border:1px solid var(--line-soft); border-radius:16px; overflow:hidden; background:var(--card); box-shadow: var(--shadow-md); }
+  .detail .dhead { padding:16px; display:flex; gap:14px; border-bottom:1px solid var(--line-soft); align-items:flex-start; }
+  .detail .dclose { margin-left:auto; width:28px; height:28px; border-radius:50%; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; color:var(--ink-soft); flex:0 0 auto; }
+  .tabs { display:flex; gap:8px; padding:12px 16px; border-bottom:1px solid var(--line-soft); }
+  .dcontent { padding:16px; }
+
+  /* ---------- 附錄：名詞 / 程式導覽 ---------- */
+  .mono { font-family: "SF Mono","Menlo","Consolas","Roboto Mono",monospace; }
+  .glossary { display:grid; grid-template-columns: repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
+  .gloss { background:var(--card); border:1px solid var(--line-soft); border-radius:12px; padding:14px 16px; }
+  .gloss .term { font-weight:800; color:var(--espresso); font-size:.96rem; }
+  .gloss .term .en { color:var(--caramel-d); font-weight:600; font-size:.8rem; margin-left:4px; }
+  .gloss .def { margin-top:6px; font-size:.87rem; color:var(--ink); line-height:1.55; }
+
+  .tour { display:grid; gap:24px; }
+  .tour-group h4 { font-size:.74rem; letter-spacing:.14em; text-transform:uppercase; color:var(--caramel); margin:0 0 12px; }
+  .tour-list { border:1px solid var(--line-soft); border-radius:12px; overflow:hidden; background:var(--card); }
+  .tour-row { display:grid; grid-template-columns: 260px 1fr; gap:16px; padding:11px 14px; border-bottom:1px solid var(--line-soft); align-items:baseline; }
+  .tour-row:last-child { border-bottom:0; }
+  .tour-row .p { font-family:"SF Mono","Menlo","Consolas","Roboto Mono",monospace; font-size:.8rem; color:var(--caramel-d); word-break:break-all; }
+  .tour-row .d { font-size:.88rem; color:var(--ink); line-height:1.5; }
+  .tour-row.core { background: color-mix(in srgb, var(--caramel) 7%, var(--card)); }
+  @media (max-width:640px){ .tour-row{ grid-template-columns:1fr; gap:3px; } }
+
+  /* ---------- 尾註 ---------- */
+  .foot { margin-top: 60px; padding: 24px; border: 1px solid var(--line-soft); border-radius: 16px; background: var(--surface); color: var(--ink-soft); font-size: .9rem; }
+  .foot b { color: var(--ink); }
+  .draft { display:inline-block; margin-left: 10px; font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; color: var(--warn); border:1px solid var(--warn); padding:2px 8px; border-radius:999px; vertical-align:middle; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .sk { background-size: 200% 100%; animation: shimmer 1.8s ease-in-out infinite; }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  }
+</style>
+
+<div class="page">
+<div class="wrap">
+
+  <header class="hero">
+    <div class="eyebrow">交接文件 · Handoff Plan</div>
+    <h1>啡你莫屬 CafeMatch — 開發交接</h1>
+    <p class="sub">這份文件把 CafeMatch 的後續開發交接給你。原負責人接下來兩個月無法參與，
+      以下將工作拆成四條可獨立推進的工作線，每條都附上「做到什麼程度才算完」與職責邊界，
+      並穿插無資料的 UI 空白樣板作為視覺基準。</p>
+    <div class="meta">
+      <span>交接對象：<b>你（接手成員）</b></span>
+      <span>原負責人：<b>接下來兩個月不在</b></span>
+      <span>技術現況：<b>Flask · MySQL · Ollama · React 19</b></span>
+      <span>樣板色票：<b>沿用 variables.css 拿鐵暖色系</b></span>
+    </div>
+  </header>
+
+  <!-- ========== 已拍板決定 ========== -->
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">Decisions Locked</div>
+        <h2>已經決定的方向</h2>
+      </div>
+      <p>這些是原負責人已經決定的方向，可以直接照著走；如果有疑問，趁交接期間跟他聊一下就好。</p>
+    </div>
+    <div class="chips">
+      <div class="chip"><div class="k">地圖路線</div><div class="v">路線 B — 向量地圖 + 自訂樣式</div><div class="n">店家分散，用可縮放地圖套自訂皮膚，不嵌 Google 地圖。</div></div>
+      <div class="chip"><div class="k">圖磚來源</div><div class="v">Protomaps / PMTiles 起步</div><div class="n">自 host 單檔、免 API key、樣式全自控；MapTiler 為備案。</div></div>
+      <div class="chip"><div class="k">評分 → 推薦</div><div class="v">評分當作 user–cafe 邊權重</div><div class="n">直接餵進 GNN 圖結構的邊權。</div></div>
+      <div class="chip"><div class="k">評論 → 推薦</div><div class="v">評論過 NLP 抽標籤 → 節點特徵</div><div class="n">由 NLP 專人負責，接手者對接介面即可。</div></div>
+      <div class="chip"><div class="k">GNN</div><div class="v">核心項目，模型已有</div><div class="n">重點在整合與冷啟動 fallback，非重新研究。</div></div>
+      <div class="chip"><div class="k">社群頁</div><div class="v">整併進店家頁，非整頁搬移</div><div class="n">每家店頁內交流，功能經篩選簡化；舊社群頁暫時下線。</div></div>
+    </div>
+  </section>
+
+  <!-- ========== 依賴順序 ========== -->
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">Dependencies</div>
+        <h2>先後依賴與開工順序</h2>
+      </div>
+      <p>兩條主線各有一個最好先處理的前置（虛線＝前置、棕框＝建議先對齊）。</p>
+    </div>
+    <div class="flow">
+      <div class="lbl">地圖線</div>
+      <div class="row">
+        <span class="node start">google_place_id</span>
+        <span class="arrow">→</span>
+        <span class="node gate">批次回填經緯度（前置）</span>
+        <span class="arrow">→</span>
+        <span class="node">MapLibre + Protomaps 自訂樣式</span>
+        <span class="arrow">→</span>
+        <span class="node">圖釘 · 聚合 · 店家卡</span>
+      </div>
+      <div class="lbl">推薦線</div>
+      <div class="row">
+        <span class="node gate">review schema 三方對齊</span>
+        <span class="arrow">→</span>
+        <span class="node">評分/評論 UI + API</span>
+        <span class="arrow">→</span>
+        <span class="node">NLP 抽標籤（專人）</span>
+        <span class="arrow">→</span>
+        <span class="node">GNN 特徵 + 邊權整合</span>
+        <span class="arrow">→</span>
+        <span class="node">冷啟動 fallback</span>
+      </div>
+      <div class="lbl">社群線（大致獨立，可平行）</div>
+      <div class="row">
+        <span class="node">決定保留哪些功能</span>
+        <span class="arrow">→</span>
+        <span class="node">綁定單一店家討論串</span>
+        <span class="arrow">→</span>
+        <span class="node">舊社群頁下線（資料保留）</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== 探索頁版面初版 ========== -->
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">Explore Layout · 版面初版</div>
+        <h2>探索頁怎麼把地圖、推薦、店家縫在一起</h2>
+      </div>
+      <p>依原負責人構想畫的初版：上方一大塊地圖，下方是店家區塊；評分/評論與交流都在<b>點開店家卡之後</b>的詳情裡，不出現在列表。</p>
+    </div>
+
+    <div class="flowline">
+      <span class="node">探索頁（地圖 + 店家列）</span>
+      <span class="arrow">→</span>
+      <span class="node gate">點任一店家卡</span>
+      <span class="arrow">→</span>
+      <span class="node">店家詳情（資訊 · 評論 · 交流）</span>
+    </div>
+
+    <div class="wire" style="border-style:solid">
+      <div class="wire-cap">空白樣板 · 探索頁整頁版面</div>
+      <div class="viewport">
+        <div class="vp-topbar"><span class="brand">探索</span><span class="grow"></span><span class="pill">篩選</span><span class="pill">搜尋</span></div>
+        <div class="vp-map map">
+          <div class="road" style="left:0;right:0;top:46%;height:10px"></div>
+          <div class="road" style="top:0;bottom:0;left:34%;width:9px"></div>
+          <div class="road" style="top:0;bottom:0;left:70%;width:7px"></div>
+          <div class="map-chips"><span class="pill solid">全部</span><span class="pill">營業中</span><span class="pill">評分高</span></div>
+          <div class="marker" style="left:48%;top:36%"><div class="head"></div></div>
+          <div class="marker" style="left:62%;top:62%"><div class="head"></div></div>
+          <div class="marker" style="left:40%;top:70%"><div class="head"></div></div>
+          <div class="cluster" style="left:82%;top:32%">6</div>
+        </div>
+        <div class="vp-body">
+          <div>
+            <div class="vp-label"><span class="t">為你推薦 <span class="reason">GNN</span></span><span class="more">更多 ›</span></div>
+            <div class="rail" style="margin-top:12px">
+              <div class="rail-card"><div class="ph"></div><div class="body"><span class="sk" style="width:78%"></span><span class="sk" style="width:50%"></span><span class="reason">安靜 · 好拍</span></div></div>
+              <div class="rail-card"><div class="ph"></div><div class="body"><span class="sk" style="width:70%"></span><span class="sk" style="width:55%"></span><span class="reason">咖啡好喝</span></div></div>
+              <div class="rail-card"><div class="ph"></div><div class="body"><span class="sk" style="width:74%"></span><span class="sk" style="width:46%"></span><span class="reason">近你收藏</span></div></div>
+            </div>
+          </div>
+          <div>
+            <div class="vp-label"><span class="t">全部店家</span><span class="more">依距離 ›</span></div>
+            <div class="vp-grid" style="margin-top:12px">
+              <div class="gcard click"><div class="ph"></div><div class="cbody"><span class="sk" style="width:80%"></span><span class="stars" style="transform:scale(.8);transform-origin:left"><i class="star on">★</i><i class="star on">★</i><i class="star on">★</i><i class="star on">★</i><i class="star">★</i></span><span class="sk" style="width:60%"></span></div></div>
+              <div class="gcard click"><div class="ph"></div><div class="cbody"><span class="sk" style="width:70%"></span><span class="stars" style="transform:scale(.8);transform-origin:left"><i class="star on">★</i><i class="star on">★</i><i class="star on">★</i><i class="star">★</i><i class="star">★</i></span><span class="sk" style="width:55%"></span></div></div>
+              <div class="gcard click"><div class="ph"></div><div class="cbody"><span class="sk" style="width:75%"></span><span class="stars" style="transform:scale(.8);transform-origin:left"><i class="star on">★</i><i class="star on">★</i><i class="star on">★</i><i class="star on">★</i><i class="star on">★</i></span><span class="sk" style="width:50%"></span></div></div>
+              <div class="gcard click"><div class="ph"></div><div class="cbody"><span class="sk" style="width:65%"></span><span class="stars" style="transform:scale(.8);transform-origin:left"><i class="star on">★</i><i class="star on">★</i><i class="star on">★</i><i class="star">★</i><i class="star">★</i></span><span class="sk" style="width:58%"></span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="wire-cap" style="margin-top:18px">空白樣板 · 點開店家卡後的詳情（評分/評論/交流都在這裡）</div>
+      <div class="detail">
+        <div class="dhead">
+          <span class="thumb" style="width:64px;height:64px"></span>
+          <div class="stack">
+            <span class="sk big" style="width:48%"></span>
+            <div style="display:flex;align-items:center;gap:10px"><span class="stars"><i class="star on">★</i><i class="star on">★</i><i class="star on">★</i><i class="star on">★</i><i class="star">★</i></span><span class="sk" style="width:70px"></span></div>
+            <div style="display:flex;gap:6px;margin-top:2px"><span class="pill">收藏</span><span class="pill">去過</span></div>
+          </div>
+          <span class="dclose">✕</span>
+        </div>
+        <div class="tabs"><span class="pill solid">資訊</span><span class="pill">評論</span><span class="pill">交流</span></div>
+        <div class="dcontent">
+          <div class="inputbar" style="padding:0 0 12px;border-bottom:1px solid var(--line-soft)">
+            <span class="stars"><i class="star">★</i><i class="star">★</i><i class="star">★</i><i class="star">★</i><i class="star">★</i></span>
+            <span class="fakeinput"></span><button class="btn">送出</button>
+          </div>
+          <div class="row-item" style="padding-left:0;padding-right:0"><span class="avatar"></span><div class="stack"><span class="sk" style="width:30%"></span><span class="sk" style="width:88%"></span><span class="sk" style="width:64%"></span></div></div>
+          <div class="row-item" style="padding-left:0;padding-right:0;border-bottom:0"><span class="avatar"></span><div class="stack"><span class="sk" style="width:26%"></span><span class="sk" style="width:76%"></span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="layout-note">
+      <h4>版面規格（已決定）</h4>
+      <ul>
+        <li><b>地圖 ↔ 店家列連動：</b>hover 店家卡時高亮對應圖釘；點圖釘時捲到 / 開啟該店家卡。</li>
+        <li><b>桌機：</b>地圖固定（sticky）於上方，下方店家列<b>獨立捲動</b>，捲動店家列時地圖不動。</li>
+        <li><b>行動版：</b>地圖佔一屏上緣、可收合成頂部細條，店家列在下方捲動。</li>
+        <li><b>詳情呈現：</b>桌機用右側面板、行動版用由下滑出的全螢幕 sheet，兩者共用同一份詳情內容。</li>
+        <li><b>「為你推薦」冷啟動：</b>未登入或資料不足時，這一列改 show 熱門 / 新店，不留空。</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ========== W1 評分/評論 ========== -->
+  <div class="ws">
+    <div class="ws-head">
+      <span class="ws-tag">Workstream 01 · 資料地基</span>
+      <h3>探索頁 — 評分與評論系統</h3>
+      <p class="ws-goal">使用者能在探索頁對店家評分、留言，並成為推薦系統的訊號來源。</p>
+    </div>
+    <div class="ws-body">
+      <div class="ws-col">
+        <h4>範圍</h4>
+        <ul class="scope">
+          <li><b>入口：</b>點開店家卡後的詳情內才出現，不在探索列表上</li>
+          <li>review 資料表（原始文字、預留標籤/情緒欄位、關聯 user + cafe + 時間）</li>
+          <li>評分/評論 CRUD API</li>
+          <li>店家詳情的評分輸入、評論列表、平均星等顯示</li>
+          <li>基本濫用防護：需登入、送出 rate limit、後台可移除</li>
+        </ul>
+        <h4>職責</h4>
+        <div class="owner"><span class="badge lead">你主責</span><span class="badge">schema 需三方對齊</span></div>
+        <div class="note-inline">review 資料表是與 NLP pipeline 的<b>共用介面</b>，建議在交接期間跟原負責人、NLP 負責人三方先把欄位敲定；不然之後改 schema 會連帶要改 pipeline。</div>
+      </div>
+      <div class="ws-col">
+        <h4>Definition of Done</h4>
+        <ul class="dod">
+          <li>從探索頁點開店家卡 → 詳情內可給 1–5 星並留文字評論</li>
+          <li>同一使用者對同店只保留最新一則，可編輯/刪除</li>
+          <li>店家詳情顯示平均星等、評論則數、分頁列表</li>
+          <li>schema 經三方確認後才建立</li>
+          <li>具基本濫用防護且後台可刪違規內容</li>
+        </ul>
+      </div>
+
+      <div class="wire">
+        <div class="wire-cap">空白樣板 · 點開店家卡後 · 店家詳情：評分與評論</div>
+        <div class="mock">
+          <div class="mock-bar"><span class="thumb"></span>
+            <div class="stack"><span class="sk big" style="width:52%"></span>
+              <div style="display:flex;align-items:center;gap:10px"><span class="stars"><i class="star on">★</i><i class="star on">★</i><i class="star on">★</i><i class="star on">★</i><i class="star">★</i></span><span class="sk" style="width:60px"></span></div>
+            </div>
+            <span class="pill">收藏</span><span class="pill">去過</span>
+          </div>
+          <div class="inputbar" style="border-bottom:1px solid var(--line-soft)">
+            <span class="stars"><i class="star">★</i><i class="star">★</i><i class="star">★</i><i class="star">★</i><i class="star">★</i></span>
+            <span class="fakeinput"></span><button class="btn">送出評論</button>
+          </div>
+          <div class="row-item"><span class="avatar"></span><div class="stack"><span class="sk" style="width:30%"></span><span class="sk" style="width:90%"></span><span class="sk" style="width:70%"></span></div></div>
+          <div class="row-item"><span class="avatar"></span><div class="stack"><span class="sk" style="width:26%"></span><span class="sk" style="width:80%"></span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== W2 地圖 ========== -->
+  <div class="ws">
+    <div class="ws-head">
+      <span class="ws-tag">Workstream 02 · 探索體驗</span>
+      <h3>探索頁 — 座標回填 + 自訂地圖</h3>
+      <p class="ws-goal">探索頁新增貼合站風的地圖，顯示店家位置；不嵌 Google 地圖。</p>
+    </div>
+    <div class="ws-body">
+      <div class="ws-col">
+        <h4>範圍</h4>
+        <ul class="scope">
+          <li><b>前置：</b>用 google_place_id 批次 geocode 回填 lat/lng（新欄位 + migration + 一次性 script）</li>
+          <li>MapLibre GL + Protomaps（PMTiles 自 host）</li>
+          <li>自訂 style JSON，色票對齊 --bg-main / --accent-color</li>
+          <li>圖釘、hover、點擊→店家卡、縮放聚合 clustering、行動版效能</li>
+          <li>地圖 ↔ 店家列連動：hover 卡片高亮圖釘、點圖釘定位/開卡</li>
+          <li>桌機地圖 sticky、店家列獨立捲動；行動版地圖佔上緣可收合</li>
+        </ul>
+        <h4>職責</h4>
+        <div class="owner"><span class="badge lead">你主責</span></div>
+        <div class="note-inline">目前資料庫<b>還沒有經緯度</b>，只有地址與 place_id。回填是地圖能標點的根，所以會需要先做，再進地圖。</div>
+      </div>
+      <div class="ws-col">
+        <h4>Definition of Done</h4>
+        <ul class="dod">
+          <li>每家有效店家都有經緯度（附回填涵蓋率報告）</li>
+          <li>地圖為自訂樣式，非預設 OSM 配色</li>
+          <li>點圖釘可開店家卡；縮小時圖釘聚合</li>
+          <li>hover 店家卡高亮對應圖釘（地圖 ↔ 列表連動）</li>
+          <li>桌機地圖固定、店家列可獨立捲動；行動版地圖可收合</li>
+          <li>1000+ 圖釘不卡頓；行動版可用</li>
+          <li>圖磚自 host，無外部 API key 依賴</li>
+        </ul>
+      </div>
+
+      <div class="wire">
+        <div class="wire-cap">空白樣板 · 自訂地圖（Protomaps 皮膚示意）</div>
+        <div class="map">
+          <div class="road" style="left:0;right:0;top:44%;height:10px"></div>
+          <div class="road" style="top:0;bottom:0;left:38%;width:9px"></div>
+          <div class="road" style="top:0;bottom:0;left:72%;width:7px"></div>
+          <div class="map-chips"><span class="pill solid">全部</span><span class="pill">營業中</span><span class="pill">評分高</span></div>
+          <div class="marker" style="left:52%;top:38%"><div class="head"></div></div>
+          <div class="marker" style="left:66%;top:60%"><div class="head"></div></div>
+          <div class="marker" style="left:44%;top:70%"><div class="head"></div></div>
+          <div class="cluster" style="left:80%;top:30%">8</div>
+          <div class="map-card">
+            <div style="display:flex;gap:10px"><span class="thumb" style="width:44px;height:44px"></span>
+              <div class="stack"><span class="sk" style="width:70%"></span><span class="sk" style="width:45%"></span></div></div>
+            <span class="sk" style="width:100%"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== W3 社群整併 ========== -->
+  <div class="ws">
+    <div class="ws-head">
+      <span class="ws-tag">Workstream 03 · 社群整併</span>
+      <h3>店家頁 — 社群交流（篩選簡化版）</h3>
+      <p class="ws-goal">在每家店的頁面內讓使用者交流，而非把整頁社群搬過來；功能經取捨與簡化。</p>
+    </div>
+    <div class="ws-body">
+      <div class="ws-col">
+        <h4>範圍</h4>
+        <ul class="scope">
+          <li>決定保留哪些現有社群功能（貼文 / 留言 / 按讚 / 便利貼 四選幾）</li>
+          <li>把交流綁定到單一 cafe，形成 per-cafe 討論串</li>
+          <li>沿用既有 community_service / community models</li>
+          <li>舊社群頁暫時下線（路由隱藏，資料保留可回復）</li>
+          <li>基本檢舉與後台移除</li>
+        </ul>
+        <h4>職責</h4>
+        <div class="owner"><span class="badge lead">你主責</span><span class="badge">保留清單由原負責人定案</span></div>
+        <div class="note-inline">這一項核心是<b>取捨題</b>不是搬運題：留什麼、砍什麼、為什麼，記得寫下來。保留/移除清單原負責人還沒定，開工前跟他確認一下想法就好。</div>
+      </div>
+      <div class="ws-col">
+        <h4>Definition of Done</h4>
+        <ul class="dod">
+          <li>每家店頁有一個「交流/討論」區，登入者可發言、按讚</li>
+          <li>明確文件化保留/移除了哪些功能與原因</li>
+          <li>舊社群頁入口移除、但資料保留可回復</li>
+          <li>具基本檢舉/後台移除</li>
+        </ul>
+      </div>
+
+      <div class="wire">
+        <div class="wire-cap">空白樣板 · 店家頁內的交流區</div>
+        <div class="mock">
+          <div class="mock-bar"><span class="pill solid">交流</span><span class="pill">評論</span><span class="pill">資訊</span><span class="grow"></span><span class="sk" style="width:80px"></span></div>
+          <div class="inputbar" style="border-bottom:1px solid var(--line-soft)"><span class="avatar"></span><span class="fakeinput"></span><button class="btn">發表</button></div>
+          <div class="row-item"><span class="avatar"></span><div class="stack"><span class="sk" style="width:28%"></span><span class="sk" style="width:85%"></span><div style="display:flex;gap:14px;margin-top:2px"><span class="pill">♡ 讚</span><span class="pill">留言</span></div></div></div>
+          <div class="row-item"><span class="avatar"></span><div class="stack"><span class="sk" style="width:32%"></span><span class="sk" style="width:65%"></span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== W4 GNN ========== -->
+  <div class="ws">
+    <div class="ws-head">
+      <span class="ws-tag">Workstream 04 · 推薦核心</span>
+      <h3>推薦系統 — GNN 整合</h3>
+      <p class="ws-goal">把既有 GNN 模型接進推薦流程，吃評分（權重）與評論標籤（NLP）作為訊號。</p>
+    </div>
+    <div class="ws-body">
+      <div class="ws-col">
+        <h4>範圍</h4>
+        <ul class="scope">
+          <li>評分 → user–cafe 邊權重</li>
+          <li>評論 → NLP 抽標籤/情緒 → 節點特徵（NLP 專人負責，接手者對接介面）</li>
+          <li>服務化：模型輸出如何存取（embedding 表 / 線上推論）、更新與重訓節奏</li>
+          <li>冷啟動 fallback：資料不足時退回現有 cafe_retriever.py 的規則式檢索（依關鍵字/標籤比對挑店，不做個人化，簡單但穩定，一定撈得到店）</li>
+          <li><b>建議加值：</b>前後評估看板，比較 GNN vs 舊 retriever</li>
+        </ul>
+        <h4>職責</h4>
+        <div class="owner"><span class="badge lead">你負責整合</span><span class="badge">模型 / NLP 有專人</span></div>
+        <div class="note-inline">模型與 NLP 有專人；你負責<b>整合、冷啟動 fallback、與效果評估</b>。評估看板現在完全沒有，加上去既實用又是紮實的一塊工作。</div>
+      </div>
+      <div class="ws-col">
+        <h4>Definition of Done</h4>
+        <ul class="dod">
+          <li>探索頁/推薦區能顯示 GNN 產出的個人化推薦</li>
+          <li>新使用者/新店家有明確 fallback，不空白不報錯</li>
+          <li>有可量化「新推薦是否優於舊 retriever」的指標或看板</li>
+        </ul>
+      </div>
+
+      <div class="wire">
+        <div class="wire-cap">空白樣板 · 「為你推薦」推薦列</div>
+        <div class="mock" style="padding:14px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span class="sk big" style="width:120px"></span><span class="reason">為你推薦的理由</span></div>
+          <div class="rail">
+            <div class="rail-card"><div class="ph"></div><div class="body"><span class="sk" style="width:80%"></span><span class="sk" style="width:50%"></span><span class="reason">安靜 · 好拍</span></div></div>
+            <div class="rail-card"><div class="ph"></div><div class="body"><span class="sk" style="width:70%"></span><span class="sk" style="width:55%"></span><span class="reason">咖啡好喝</span></div></div>
+            <div class="rail-card"><div class="ph"></div><div class="body"><span class="sk" style="width:75%"></span><span class="sk" style="width:45%"></span><span class="reason">近你收藏</span></div></div>
+            <div class="rail-card"><div class="ph"></div><div class="body"><span class="sk" style="width:65%"></span><span class="sk" style="width:50%"></span></div></div>
+          </div>
+        </div>
+        <div class="wire-cap" style="margin-top:14px">空白樣板 · 後台：GNN vs 舊 retriever 評估看板</div>
+        <div class="mock" style="padding:14px">
+          <div class="metric">
+            <div class="cell"><div class="lab">Recall@10 · GNN</div><div class="big">—</div><div class="spark"></div></div>
+            <div class="cell"><div class="lab">Recall@10 · 舊 retriever</div><div class="big">—</div><div class="spark"></div></div>
+            <div class="cell"><div class="lab">點擊率提升</div><div class="big">—</div><div class="spark"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 附錄 A：名詞說明 ========== -->
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">Appendix A · 附錄</div>
+        <h2>名詞說明</h2>
+      </div>
+      <p>文件裡出現、但不一定人人熟的詞，用一兩句話講清楚。</p>
+    </div>
+    <div class="glossary">
+      <div class="gloss"><div class="term">推薦系統</div><div class="def">依使用者過去的行為與偏好，主動挑出他可能喜歡的店，而不是等他自己搜尋。</div></div>
+      <div class="gloss"><div class="term">GNN<span class="en">圖神經網路</span></div><div class="def">一種在「圖」（節點 + 邊）上學習的模型。這裡把使用者、店家、標籤當節點，互動當邊，學出個人化推薦。本專案的核心。</div></div>
+      <div class="gloss"><div class="term">retriever<span class="en">檢索器</span></div><div class="def">從資料庫撈出候選店家的那段程式（見 <span class="mono">cafe_retriever.py</span>）。規則比對、不學習，是 GNN 冷啟動時的墊底方案。</div></div>
+      <div class="gloss"><div class="term">RAG<span class="en">檢索增強生成</span></div><div class="def">先「檢索」出相關資料，再交給 LLM「生成」回答。聊天推薦走的就是這個流程。</div></div>
+      <div class="gloss"><div class="term">LLM<span class="en">大型語言模型</span></div><div class="def">本專案用 Ollama 在自家機器跑的語言模型，負責把撈到的店講成自然語言回覆。</div></div>
+      <div class="gloss"><div class="term">Ollama</div><div class="def">在自己的機器上跑開源 LLM 的工具。專案裡所有 AI 呼叫都經由它（<span class="mono">ollama_client.py</span>）。</div></div>
+      <div class="gloss"><div class="term">embedding<span class="en">嵌入向量</span></div><div class="def">把使用者或店家壓成一串數字向量，向量越接近代表越相似。GNN 的輸出通常就是這種向量。</div></div>
+      <div class="gloss"><div class="term">邊權重<span class="en">edge weight</span></div><div class="def">圖上「使用者—店家」這條連線的強度。本專案用<b>評分</b>當作邊權重餵給 GNN。</div></div>
+      <div class="gloss"><div class="term">節點特徵<span class="en">node feature</span></div><div class="def">掛在節點上的屬性向量。評論經 NLP 抽出的<b>標籤/情緒</b>會變成店家節點的特徵。</div></div>
+      <div class="gloss"><div class="term">冷啟動<span class="en">cold start</span></div><div class="def">新使用者或新店家還沒有互動資料、模型算不準的情況。此時退回 retriever，避免推薦開天窗。</div></div>
+      <div class="gloss"><div class="term">NLP<span class="en">自然語言處理</span></div><div class="def">讓程式理解文字。這裡用來從使用者留下的評論裡抽出標籤與情緒。</div></div>
+      <div class="gloss"><div class="term">MapLibre GL</div><div class="def">開源的向量地圖渲染引擎，不綁 Google。本專案地圖（路線 B）用它來畫。</div></div>
+      <div class="gloss"><div class="term">向量圖磚<span class="en">vector tiles</span></div><div class="def">地圖資料以「可縮放的向量」而非圖片提供，因此能自由改顏色與樣式。</div></div>
+      <div class="gloss"><div class="term">Protomaps / PMTiles</div><div class="def">把某地區的向量圖磚打包成「單一檔案」自己 host，免 API key、樣式全自控。本專案地圖圖磚的起步方案。</div></div>
+      <div class="gloss"><div class="term">style JSON</div><div class="def">描述地圖長相（顏色、線寬、字體）的設定檔。改它就能把地圖換成符合站風的皮膚。</div></div>
+      <div class="gloss"><div class="term">圖釘聚合<span class="en">clustering</span></div><div class="def">地圖縮小時，把靠得很近的圖釘合併成一個帶數字的圈，避免擠成一團。</div></div>
+      <div class="gloss"><div class="term">geocoding<span class="en">地理編碼</span></div><div class="def">把地址或 Google place_id 換算成經緯度（lat/lng）。地圖標點前的必要一步。</div></div>
+      <div class="gloss"><div class="term">migration / Alembic</div><div class="def">資料庫結構變更的版本管理（<span class="mono">migrations/</span> 資料夾）。加欄位、建新表都走它。</div></div>
+      <div class="gloss"><div class="term">Definition of Done</div><div class="def">「做到什麼程度算完成」的驗收參考線。每條工作線都附了一份。</div></div>
+    </div>
+  </section>
+
+  <!-- ========== 附錄 B：現有程式導覽 ========== -->
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">Appendix B · 附錄</div>
+        <h2>現有程式導覽</h2>
+      </div>
+      <p>後端是 Flask + SQLAlchemy + MySQL，AI 走 Ollama；前端 React 19 + Vite。下面是接手會碰到的主要檔案，<span class="mono" style="color:var(--caramel-d)">底色標示</span>為推薦流程的核心。</p>
+    </div>
+    <div class="tour">
+
+      <div class="tour-group">
+        <h4>入口 / 基礎</h4>
+        <div class="tour-list">
+          <div class="tour-row"><div class="p">app.py</div><div class="d">Flask 進入點，註冊各路由與擴充套件。</div></div>
+          <div class="tour-row"><div class="p">database.py · extensions.py</div><div class="d">SQLAlchemy 實例，以及 OAuth 登入、限流、migrate 等擴充。</div></div>
+          <div class="tour-row"><div class="p">config/</div><div class="d">常數與設定：<span class="mono">ai_constants</span>、<span class="mono">prompts/</span>（Prompt 模板）、<span class="mono">settings</span>。</div></div>
+          <div class="tour-row"><div class="p">migrations/</div><div class="d">資料庫 schema 版本（Alembic）。W1 的 review 表、W2 的經緯度欄位都會在這裡加。</div></div>
+        </div>
+      </div>
+
+      <div class="tour-group">
+        <h4>推薦 / 聊天 Pipeline（核心）</h4>
+        <div class="tour-list">
+          <div class="tour-row core"><div class="p">services/chat_pipeline_service.py</div><div class="d">聊天推薦的總指揮，把下面各步驟串成一條流水線。</div></div>
+          <div class="tour-row core"><div class="p">services/intent_classifier.py</div><div class="d">用關鍵字表判斷訊息是否跟咖啡有關。</div></div>
+          <div class="tour-row core"><div class="p">services/preference_service.py</div><div class="d">呼叫 LLM 從對話裡抽出結構化偏好（純萃取，不做推薦）。</div></div>
+          <div class="tour-row core"><div class="p">services/conversation_guide.py</div><div class="d">對話引導狀態機，決定「這一輪 AI 該做什麼」、防止鬼打牆。</div></div>
+          <div class="tour-row core"><div class="p">services/cafe_retriever.py</div><div class="d">規則式檢索器，撈候選店。兩模式：關鍵字比對 / 加權情境。<b>GNN 上線後這裡是 fallback。</b></div></div>
+          <div class="tour-row core"><div class="p">services/ai_service.py</div><div class="d">組裝 Prompt（政策 / 任務 / 輸出格式三層），交給 LLM。</div></div>
+          <div class="tour-row core"><div class="p">services/ollama_client.py</div><div class="d">呼叫 Ollama LLM 的底層 client。</div></div>
+          <div class="tour-row"><div class="p">services/situational_service.py</div><div class="d">把情境選項解析成 tag_weights / 時間窗 / 價位，餵給加權檢索器。</div></div>
+          <div class="tour-row"><div class="p">routes/chat.py · routes/situational.py</div><div class="d">聊天與情境元件的 API 端點。</div></div>
+        </div>
+      </div>
+
+      <div class="tour-group">
+        <h4>探索頁（W1 · W2 主要落點）</h4>
+        <div class="tour-list">
+          <div class="tour-row"><div class="p">routes/explore.py</div><div class="d">探索頁 API（店家列表、照片）。評分/評論、地圖的新端點會加在這附近。</div></div>
+          <div class="tour-row"><div class="p">services/cafe_explore_service.py</div><div class="d">組店家清單 + 使用者的收藏/去過狀態 + 卡片配色。</div></div>
+          <div class="tour-row"><div class="p">services/google_maps_service.py</div><div class="d">取店家照片、補 place_id。W2 的座標回填可從這延伸。</div></div>
+        </div>
+      </div>
+
+      <div class="tour-group">
+        <h4>社群（W3：將整併進店家頁）</h4>
+        <div class="tour-list">
+          <div class="tour-row"><div class="p">routes/community.py</div><div class="d">社群 API。整併後改為綁定單一店家。</div></div>
+          <div class="tour-row"><div class="p">services/post_service.py</div><div class="d">貼文、按讚、留言。</div></div>
+          <div class="tour-row"><div class="p">services/note_service.py</div><div class="d">便利貼（24 小時）、按讚、留言。</div></div>
+          <div class="tour-row"><div class="p">services/community_service.py</div><div class="d">已棄用，僅保留相容；功能已拆到上面兩支。</div></div>
+        </div>
+      </div>
+
+      <div class="tour-group">
+        <h4>其他服務</h4>
+        <div class="tour-list">
+          <div class="tour-row"><div class="p">services/quiz_service.py</div><div class="d">人格測驗計分。</div></div>
+          <div class="tour-row"><div class="p">services/user_service.py</div><div class="d">刪除某使用者的所有資料（帳號清除用）。</div></div>
+          <div class="tour-row"><div class="p">services/cache_service.py</div><div class="d">記憶體 LRU 快取；多 worker 部署時建議改 Redis。</div></div>
+          <div class="tour-row"><div class="p">services/settings_service.py</div><div class="d">存在資料庫的 key/value 設定（如目前選用的模型）。</div></div>
+          <div class="tour-row"><div class="p">services/ollama_admin_service.py</div><div class="d">模型健康檢查、取得預設模型。</div></div>
+          <div class="tour-row"><div class="p">services/admin_service.py</div><div class="d">後台操作記錄與統計。W4 的評估看板可能落在後台。</div></div>
+        </div>
+      </div>
+
+      <div class="tour-group">
+        <h4>資料模型 · models/</h4>
+        <div class="tour-list">
+          <div class="tour-row"><div class="p">models/cafe.py</div><div class="d">Cafes / Tags / cafe_tags / OperatingHours。<b>W2 的 lat/lng、W1 的 review 表都會加在這一區。</b></div></div>
+          <div class="tour-row"><div class="p">models/user.py</div><div class="d">User / UserShopState（收藏、去過）。</div></div>
+          <div class="tour-row"><div class="p">models/community.py</div><div class="d">貼文 / 便利貼 / 按讚 / 留言。</div></div>
+          <div class="tour-row"><div class="p">models/quiz.py</div><div class="d">測驗題目與結果類型。</div></div>
+          <div class="tour-row"><div class="p">models/system.py</div><div class="d">系統設定、後台記錄、公告等。</div></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========== 尾註 ========== -->
+  <div class="foot">
+    <p style="margin:0 0 10px"><b>一點小提醒：</b>這四條線底下藏的深度（座標回填、投影與聚合、review→GNN 接縫、社群功能取捨、評估看板）其實比標題多不少。
+      每項的 Definition of Done 就是「做到哪算完」的參考線，對著它做可以避免不小心每項只做薄薄一層。</p>
+    <p style="margin:0"><b>有兩件事，最好趁原負責人還在、交接期間先一起敲定：</b>① review 資料表 schema（你 × 原負責人 × NLP 負責人）；② 社群保留/移除清單。這兩個卡在最前面，早點談定可以省掉後面不少返工。</p>
+  </div>
+
+</div>
+</div>
+
+</body>
+</html>
