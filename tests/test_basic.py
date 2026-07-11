@@ -4,7 +4,12 @@ from app import app, db
 @pytest.fixture
 def client():
     app.config['TESTING'] = True
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+    with app.app_context():
+        # 防呆：測試只准跑在 SQLite 上（DB_URI 由 conftest.py 強制設定）。
+        # 若引擎綁到真實資料庫，這裡直接中止，避免 drop_all 誤刪真實資料。
+        assert db.engine.url.drivername.startswith('sqlite'), (
+            f'測試拒絕在非 SQLite 資料庫上執行：{db.engine.url}'
+        )
     with app.test_client() as client:
         with app.app_context():
             db.create_all()

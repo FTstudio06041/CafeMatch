@@ -1,8 +1,9 @@
 """
 conversation_guide.py — 對話引導狀態機
 
-職責：分析對話歷史，判斷使用者已提供了哪些偏好資訊，
-     並產生引導指令告訴 AI「這一輪該做什麼」。
+職責：分析對話歷史，判斷使用者已提供了哪些偏好資訊；
+     需求不明確時產生「確認需求」指令，確認後的偏好
+     回流至此狀態機，由停止條件決定何時直接推薦。
 
 設計原則：
   - 不依賴 Flask、SQLAlchemy、Ollama（純 Python 邏輯）
@@ -15,10 +16,8 @@ import os
 import random
 
 from config.prompts import (
-    QUIZ_CONSENT_INSTRUCTION,
-    QUIZ_INVITATION_INSTRUCTION,
     ALREADY_RECOMMENDED_INSTRUCTION,
-    get_clarification_instruction
+    get_confirmation_instruction
 )
 from config.ai_constants import VAGUE_REQUEST_MAX_LEN
 
@@ -44,11 +43,11 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
     """
     對話引導的唯一入口。
 
-    分析對話歷史，決定 AI 這一輪應該繼續引導提問，還是直接推薦。
+    分析對話歷史，決定 AI 這一輪應該先確認使用者需求，還是直接推薦。
 
     參數:
         history: list[dict] — 對話歷史
-        extracted_data: dict — 透過 LLM 萃取出來的偏好與狀態
+        extracted_data: dict — 透過 LLM 萃取出來的偏好
 
     回傳:
         str  — 注入給 AI 的引導指令
@@ -60,30 +59,21 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
 
     extracted_data = extracted_data or {}
     collected = extracted_data.get("preferences", {})
-    
+
     # 計算收集到的總維度數量
     collected_keys = [k for k, v in collected.items() if v]
     collected_count = len(collected_keys)
 
     question_count = _count_ai_questions(history)
     user_rounds = sum(1 for m in history if m.get("role") == "user")
-    ai_rounds = sum(1 for m in history if m.get("role") in ("ai", "assistant"))
-    
-    # 檢查是否已經推薦過了 (簡單檢查 AI 歷史訊息長度是否較長，或是否包含推薦關鍵字)
+
+    # 檢查是否已經推薦過了 (簡單檢查 AI 歷史訊息是否包含推薦關鍵字)
     has_recommended = False
     for msg in history:
         if msg.get("role") in ("ai", "assistant"):
             if "推薦" in msg.get("content", "") and "地址" in msg.get("content", ""):
                 has_recommended = True
                 break
-
-    # === 情境配對 / 推薦決策 ===
-    quiz_consent = extracted_data.get("quiz_consent")
-    quiz_refused = extracted_data.get("quiz_refused", False)
-
-    # 使用者剛剛同意做情境配對
-    if quiz_consent is True:
-        return QUIZ_CONSENT_INSTRUCTION
 
     # 已經推薦過 → 進入推薦後階段
     if has_recommended:
@@ -95,19 +85,11 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
     )
     is_vague = _is_vague_request(latest_user_msg, collected_count, dimensions)
 
-    # 使用者已給具體需求（不籠統）→ 直接推薦，不邀請、也不追問
+    # 使用者已給具體需求（不籠統）→ 直接推薦，不再追問
     if not is_vague:
         return None
 
-    # 到這裡代表訊息很籠統：若還沒問過情境配對、也沒拒絕 → 邀請小卡
-    quiz_has_been_asked = any(
-        ("配對" in m.get("content", "")) or ("測驗" in m.get("content", ""))
-        for m in history if m.get("role") in ("ai", "assistant")
-    )
-    if not quiz_has_been_asked and not quiz_refused:
-        return QUIZ_INVITATION_INSTRUCTION
-
-    # === 停止條件（硬性，不靠 AI 判斷） ===
+    # === 停止條件（硬性，不靠 AI 判斷）：達標即結束確認、直接推薦 ===
 
     # 條件 1：AI 已問太多次 → 直接推薦
     if question_count >= strategy["max_questions"]:
@@ -121,9 +103,9 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
     if collected_count >= strategy["min_dimensions_to_recommend"]:
         return None
 
-    # === 產生引導指令 ===
+    # === 產生「確認需求」指令 ===
 
-    # 找出尚未蒐集的維度
+    # 找出尚未確認的維度
     missing = [d for d in dimensions if d["key"] not in collected_keys]
 
     if not missing:
@@ -140,18 +122,18 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
 
     summary = "；".join(summary_parts) if summary_parts else "尚無明確偏好"
 
-    # 選取下一個要問的維度
-    next_dim = missing[0]
-    if next_dim.get("example_prompts"):
-        example = random.choice(next_dim["example_prompts"])
+    # 只挑最不確定的維度來確認（不逐項盤問）
+    missing_labels = [d["label"] for d in missing]
+    if missing[0].get("example_prompts"):
+        example = random.choice(missing[0]["example_prompts"])
     else:
         example = ""
 
-    return get_clarification_instruction(
+    return get_confirmation_instruction(
         summary=summary,
+        missing_labels=missing_labels,
         question_count=question_count,
         max_questions=strategy['max_questions'],
-        next_dim_label=next_dim['label'],
         example=example
     )
 
@@ -232,7 +214,7 @@ def _load_config() -> dict:
 def _is_vague_request(user_message: str, collected_count: int, dimensions: list) -> bool:
     """
     判斷使用者這則訊息是否「很籠統」（沒有給出可據以推薦的具體需求）。
-    只有很籠統時才邀請情境配對小卡；只要有任何具體訊號就直接推薦。
+    只有很籠統時才先確認需求；只要有任何具體訊號就直接推薦。
 
     以下任一成立即視為「有具體需求」（回傳 False）：
       1. LLM 已萃取到至少一個偏好維度

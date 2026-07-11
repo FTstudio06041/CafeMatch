@@ -6,14 +6,21 @@
 
 import json
 import os
-from app import app, db, QuizQuestion, QuizOption, QuizResultType
+import sys
+
+# 讓腳本可以從 scripts/ 目錄直接執行
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app import app
+from database import db
+from models import QuizQuestion, QuizOption, QuizResultType
 
 
 def seed_quiz():
     """匯入心理測驗種子資料"""
 
-    # 取得種子資料檔案路徑
-    base_dir = os.path.dirname(os.path.abspath(__file__))
+    # 取得種子資料檔案路徑（專案根目錄的 data/）
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     json_path = os.path.join(base_dir, 'data', 'quiz_seeds.json')
 
     # 讀取 JSON 檔案

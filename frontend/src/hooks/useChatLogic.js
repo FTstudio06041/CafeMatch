@@ -82,11 +82,10 @@ export function useChatLogic(user, navigate) {
   }, [user?.isGuest, navigate]);
 
   const executeChatStream = useCallback(async (messageText, options = {}) => {
-    const { customTitle = null, hiddenPrompt = false, isQuizResult = false, replaceMsgIdx = null, situationalContext = null } = options;
+    const { customTitle = null, hiddenPrompt = false, isQuizResult = false, replaceMsgIdx = null } = options;
     if (isTyping) return;
-    if (!situationalContext && !messageText.trim()) return;
-    // 情境提交沒有使用者輸入文字，也視為隱藏 prompt（不顯示 user 泡泡）
-    const isHidden = hiddenPrompt || !!situationalContext;
+    if (!messageText.trim()) return;
+    const isHidden = hiddenPrompt;
     
     setIsTyping(true);
     
@@ -158,8 +157,7 @@ export function useChatLogic(user, navigate) {
         message: messageText,
         history: historyToSend,
         use_rag: true,
-        is_quiz_result: isQuizResult,
-        situational_context: situationalContext || undefined
+        is_quiz_result: isQuizResult
       }, abortControllerRef.current.signal);
 
       if (response.status === 429) {

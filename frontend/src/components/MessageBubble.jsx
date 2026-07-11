@@ -1,24 +1,16 @@
 import React from 'react';
-import { useState, useEffect, useRef, useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
-import SituationalPicker from './chat/SituationalPicker';
+import { useState, useEffect } from 'react';
 import CafeCard from './chat/CafeCard';
 import { THINKING_TEXTS } from '../utils/thinkingTexts';
 import { CHAT_UI_TEXTS } from '../utils/constants';
-import { Flip } from '../utils/gsap';
 
-export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handleRetry, handleFeedback, isDebugMode, onSituationalComplete }) {
+export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handleRetry, handleFeedback, isDebugMode }) {
   const role = msg?.role === 'user' ? 'user' : 'ai';
   let content = msg?.content ?? msg?.text ?? '';
   let safeContent = typeof content === 'string' ? content : String(content ?? '');
 
-  const { API_BASE_URL } = useContext(AuthContext);
-  const [isQuizActive, setIsQuizActive] = useState(false);
   const [textIndex, setTextIndex] = useState(0);
   const [fade, setFade] = useState(true);
-  const [situationalQuestions, setSituationalQuestions] = useState(null);
-  const inviteCardRef = useRef(null);
-  const flipStateRef = useRef(null);
 
   const statusKey = msg?.status || 'default';
   const currentTexts = THINKING_TEXTS[statusKey] || THINKING_TEXTS.default;
@@ -43,28 +35,16 @@ export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handl
     }
   }, [role, safeContent, currentTexts.length]);
 
-  const hasQuizCard = safeContent.includes('[SHOW_QUIZ_CARD]');
-  if (hasQuizCard) {
+  // 舊對話紀錄相容：移除已停用的情境配對小卡標記
+  if (safeContent.includes('[SHOW_QUIZ_CARD]')) {
     safeContent = safeContent.replace('[SHOW_QUIZ_CARD]', '').trim();
   }
 
-  // 預抓情境題目：卡片一出現就先載入，等使用者點「開始配對」時已就緒，
-  // 讓 SituationalPicker 直接以 question 狀態開場、避免 loading 閃爍破壞展開動畫
-  useEffect(() => {
-    if (!hasQuizCard || situationalQuestions) return;
-    let mounted = true;
-    fetch(`${API_BASE_URL}/api/situational/questions`, { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (mounted && d?.questions?.length) setSituationalQuestions(d.questions); })
-      .catch(() => {});
-    return () => { mounted = false; };
-  }, [hasQuizCard, situationalQuestions, API_BASE_URL]);
-
-  const isGenerating = isTyping && isLastMessage && role === 'ai' && safeContent === '' && !hasQuizCard;
+  const isGenerating = isTyping && isLastMessage && role === 'ai' && safeContent === '';
 
   return (
     <React.Fragment>
-      <div className={`message ${role}${hasQuizCard ? ' has-quiz' : ''}`}>
+      <div className={`message ${role}`}>
         {isGenerating ? (
           <div className="typing-indicator" style={{ margin: 0, padding: 0, background: 'transparent', display: 'flex', alignItems: 'center' }}>
             <span className={`thinking-text ${fade ? 'fade-in' : 'fade-out'}`}>
@@ -74,41 +54,12 @@ export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handl
         ) : (
           <>
             {safeContent && <div className="message-text">{safeContent}</div>}
-            {!safeContent && role === 'ai' && !hasQuizCard && (
+            {!safeContent && role === 'ai' && (
                <div className="message-text" style={{ color: '#aaa', fontStyle: 'italic' }}>生成中斷或無回應</div>
             )}
             {role === 'ai' && Array.isArray(msg?.cafes) && msg.cafes.length > 0 && (
               <div className="cafe-card-list">
                 {msg.cafes.map((c) => <CafeCard key={c.id} cafe={c} />)}
-              </div>
-            )}
-            {hasQuizCard && !isTyping && (
-              <div className="quiz-container" style={{ marginTop: '10px' }}>
-                {!isQuizActive ? (
-                  <div className="quiz-invite-card" ref={inviteCardRef}>
-                    <div className="quiz-invite-title">{CHAT_UI_TEXTS.quizTitle}</div>
-                    <div className="quiz-invite-desc">{CHAT_UI_TEXTS.quizDesc}</div>
-                    <button
-                      className="quiz-start-btn"
-                      onClick={() => {
-                        if (inviteCardRef.current) flipStateRef.current = Flip.getState(inviteCardRef.current);
-                        setIsQuizActive(true);
-                      }}
-                    >
-                      {CHAT_UI_TEXTS.startQuiz}
-                    </button>
-                  </div>
-                ) : (
-                  <SituationalPicker
-                    flipFromRef={flipStateRef}
-                    questions={situationalQuestions}
-                    onComplete={(situationalContext) => {
-                      setIsQuizActive(false);
-                      if(onSituationalComplete) onSituationalComplete(situationalContext, idx);
-                    }}
-                    onCancel={() => setIsQuizActive(false)}
-                  />
-                )}
               </div>
             )}
             {role === 'ai' && !isGenerating && (

@@ -1,19 +1,17 @@
-import { useState, useEffect, useContext, useRef, useCallback } from 'react';
+import { useState, useEffect, useContext, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 
 import '../ChatPage.css';
 import MessageBubble from '../components/MessageBubble';
 import ChatInputArea from '../components/chat/ChatInputArea';
-import WelcomeModal from '../components/chat/WelcomeModal';
 
-import { toast } from '../utils/toast';
 import { logger } from '../utils/logger';
 import { useChat } from '../context/ChatContext';
 import { chatService } from '../services/chatService';
 
 export default function ChatPage() {
-  const { user, API_BASE_URL } = useContext(AuthContext);
+  const { user } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -29,7 +27,6 @@ export default function ChatPage() {
   } = useChat();
 
   const [inputMsg, setInputMsg] = useState('');
-  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const chatWindowRef = useRef(null);
@@ -50,15 +47,13 @@ export default function ChatPage() {
 
   // 初始化與載入特定對話
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    if (params.get('welcome') === 'true') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setShowWelcomeModal(true);
-      // 清除 welcome param
-      navigate('/chat', { replace: true });
+    // 新用戶強制測驗：完成心理測驗前不得進入聊天
+    if (localStorage.getItem('forceQuiz') === 'true') {
+      navigate('/quiz', { replace: true });
       return;
     }
 
+    const params = new URLSearchParams(location.search);
     const urlId = params.get('id');
 
     // 處理測驗結果跳轉
@@ -140,18 +135,6 @@ export default function ChatPage() {
     executeChatStream(inputMsg);
   };
 
-  const handleSituationalComplete = useCallback((situationalContext, msgIdx) => {
-    // 情境元件不算分、不產生人格結果；直接把結構化情境偏好送進推薦管線
-    setTimeout(() => {
-      executeChatStream('', {
-        customTitle: '情境推薦',
-        hiddenPrompt: true,
-        situationalContext,
-        replaceMsgIdx: msgIdx,
-      });
-    }, 300);
-  }, [executeChatStream]);
-
   // ==========================================
   // 渲染
   // ==========================================
@@ -179,7 +162,6 @@ export default function ChatPage() {
                 handleRetry={handleRetry}
                 handleFeedback={handleFeedback}
                 isDebugMode={isDebugMode}
-                onSituationalComplete={handleSituationalComplete}
               />
             ))
           )}
@@ -199,8 +181,6 @@ export default function ChatPage() {
         />
 
       </div>
-
-      <WelcomeModal show={showWelcomeModal} onClose={() => setShowWelcomeModal(false)} />
     </>
   );
 }

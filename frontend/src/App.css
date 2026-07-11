@@ -45,8 +45,6 @@ body {
    當使用者在 OS 開啟 reduce motion 時，近乎關閉所有 CSS
    動畫/轉場（含公告鈴鐺、Modal、Toast 進場、hover 轉場），
    避免前庭敏感/暈動不適。
-   註：GSAP 驅動的 JS 動畫（情境卡片）不受此規範，需另用
-   gsap.matchMedia() 個別處理。
    ========================================= */
 @media (prefers-reduced-motion: reduce) {
     *,

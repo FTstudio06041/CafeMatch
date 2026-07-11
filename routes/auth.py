@@ -39,7 +39,8 @@ def authorize():
     frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173/')
     
     if is_new_user:
-        return redirect(f'{frontend_url}chat?welcome=true') 
+        # 新用戶強制先完成心理測驗，才能開始使用聊天
+        return redirect(f'{frontend_url}quiz?welcome=true')
     else:
         return redirect(f'{frontend_url}chat')
     

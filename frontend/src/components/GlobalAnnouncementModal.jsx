@@ -8,9 +8,9 @@ export default function GlobalAnnouncementModal() {
   const [showAnnouncement, setShowAnnouncement] = useState(false);
 
   const checkAnnouncement = useCallback(async () => {
-    // 防衝突機制：如果當前 URL 包含 welcome=true 參數（新用戶初次歡迎小卡），先不跳出系統公告
+    // 防衝突機制：新用戶處於強制心理測驗流程時，先不跳出系統公告
     const params = new URLSearchParams(window.location.search);
-    if (params.get('welcome') === 'true') {
+    if (params.get('welcome') === 'true' || localStorage.getItem('forceQuiz') === 'true') {
       return;
     }
 

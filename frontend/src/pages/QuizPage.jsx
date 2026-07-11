@@ -1,5 +1,5 @@
 import { useState, useEffect, useContext, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ClipboardList, BarChart3, MapPin, Play, Store } from 'lucide-react';
 import RadarChart from '../components/RadarChart';
@@ -10,6 +10,8 @@ import { toast } from '../utils/toast';
 import { logger } from '../utils/logger';
 // sessionStorage key — 用來在頁面切換時保留測驗結果
 const QUIZ_RESULT_CACHE_KEY = 'quizResultCache';
+// localStorage key — 新用戶強制測驗旗標（完成測驗前不得進入聊天）
+const FORCE_QUIZ_KEY = 'forceQuiz';
 
 // =============================================
 // QuizPage 主元件
@@ -17,6 +19,7 @@ const QUIZ_RESULT_CACHE_KEY = 'quizResultCache';
 export default function QuizPage() {
   const { user, API_BASE_URL, login } = useContext(AuthContext);
   const navigate = useNavigate();
+  const location = useLocation();
 
   // --- 測驗核心狀態 ---
   const [quizState, setQuizState] = useState('intro');        // 'intro' | 'loading' | 'question' | 'submitting' | 'result'
@@ -29,6 +32,19 @@ export default function QuizPage() {
   // 動畫過渡狀態
   const [isFading, setIsFading] = useState(false);
   const [selectedAnim, setSelectedAnim] = useState(null);       // 正在播放選中動畫的 optionId
+
+  // 強制模式：新用戶首次登入被導到 /quiz?welcome=true，完成測驗前不得進入聊天
+  const [isForced, setIsForced] = useState(() => localStorage.getItem(FORCE_QUIZ_KEY) === 'true');
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('welcome') === 'true') {
+      localStorage.setItem(FORCE_QUIZ_KEY, 'true');
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsForced(true);
+      navigate('/quiz', { replace: true });
+    }
+  }, [location.search, navigate]);
 
   // 初始化：恢復測驗結果快取
   useEffect(() => {
@@ -97,6 +113,10 @@ export default function QuizPage() {
 
       setQuizResult(data);
       setQuizState('result');
+
+      // 完成測驗 → 解除新用戶的強制測驗狀態
+      localStorage.removeItem(FORCE_QUIZ_KEY);
+      setIsForced(false);
 
       // 持久化到 sessionStorage，頁面切換後仍能顯示結果
       sessionStorage.setItem(QUIZ_RESULT_CACHE_KEY, JSON.stringify(data));
@@ -201,8 +221,12 @@ export default function QuizPage() {
             <div className="intro-view">
               {/* 上半部：深色區域 */}
               <div className="intro-upper">
-                <h1 className="intro-title">啡你莫屬人格解析</h1>
-                <p className="intro-subtitle">找到最適合你的花蓮咖啡廳</p>
+                <h1 className="intro-title">{isForced ? '歡迎來到 啡你莫屬！' : '啡你莫屬人格解析'}</h1>
+                <p className="intro-subtitle">
+                  {isForced
+                    ? '第一次見面，請先完成心理測驗，讓啡啡更了解你的喜好'
+                    : '找到最適合你的花蓮咖啡廳'}
+                </p>
                 {/* 波浪分隔線 */}
                 <svg className="intro-wave" viewBox="0 0 1440 120" preserveAspectRatio="none">
                   <path d="M0,60 C240,120 480,0 720,60 C960,120 1200,0 1440,60 L1440,120 L0,120 Z" />

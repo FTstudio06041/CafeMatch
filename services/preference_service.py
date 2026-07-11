@@ -25,9 +25,7 @@ def extract_preferences(history, user_message, model_name):
     prompt = f"{PREFERENCE_EXTRACTION_TASK}\n\n{PREFERENCE_EXTRACTION_RULES}\n\n{PREFERENCE_EXTRACTION_FORMAT}\n\n【對話紀錄】\n{history_text}"
 
     fallback_result = {
-        "preferences": {},
-        "quiz_consent": None,
-        "quiz_refused": False
+        "preferences": {}
     }
 
     client = OllamaClient()
@@ -39,9 +37,7 @@ def extract_preferences(history, user_message, model_name):
         result = client.extract_json_from_response(response_text)
         if result:
             return {
-                "preferences": result.get("preferences", {}),
-                "quiz_consent": result.get("quiz_consent"),
-                "quiz_refused": result.get("quiz_refused", False)
+                "preferences": result.get("preferences", {})
             }
         else:
             return fallback_result
