@@ -79,6 +79,123 @@
     box-shadow: none;              /* 確保沒有任何陰影效果 */
 }
 
+/* --- 偏好掌握度進度列 + 直接推薦按鈕 --- */
+.pref-progress-strip {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 20px 4px;
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+.pref-progress-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.pref-progress-labels {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.pref-progress-percent {
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: var(--text-main);
+    white-space: nowrap;
+}
+
+.pref-progress-hint {
+    font-size: 0.75rem;
+    color: var(--text-main);
+    opacity: 0.6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pref-progress-track {
+    height: 6px;
+    border-radius: 3px;
+    background-color: rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+}
+
+.pref-progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent-color), var(--brand-secondary, var(--accent-color)));
+    transition: width 0.6s ease;
+}
+
+.pref-recommend-btn {
+    min-height: 44px;
+    padding: 8px 18px;
+    background-color: var(--accent-color);
+    color: #fff;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: bold;
+    white-space: nowrap;
+    transition: 0.2s;
+}
+
+.pref-recommend-btn:hover:not(:disabled) {
+    background-color: var(--text-main);
+}
+
+.pref-recommend-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+    .pref-progress-strip {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        padding: 8px 12px 4px;
+    }
+
+    .pref-recommend-btn {
+        width: 100%;
+    }
+}
+
+/* --- 確認需求的快速回覆選項 --- */
+.quick-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.quick-option-btn {
+    min-height: 44px;
+    padding: 8px 20px;
+    background-color: transparent;
+    color: var(--text-main);
+    border: 1px solid var(--text-main);
+    border-radius: 50px;
+    cursor: pointer;
+    font-size: 0.92rem;
+    font-weight: bold;
+    transition: 0.2s;
+}
+
+.quick-option-btn:hover {
+    background-color: var(--text-main);
+    color: var(--bg-main);
+}
+
 /* --- 訊息下方的操作按鈕區 (Retry, Like, Dislike) --- */
 .message-actions {
     display: flex;

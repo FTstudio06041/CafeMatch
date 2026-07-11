@@ -27,11 +27,26 @@ export const normalizeChatSession = (chat) => ({
   messages: Array.isArray(chat?.messages) ? chat.messages.map(normalizeMessage) : []
 });
 
+const TOTAL_PREF_DIMS = 5; // 偏好維度總數（與後端 guide_dimensions.json 對齊）
+
 export function useChatLogic(user, navigate) {
   const [currentChat, setCurrentChat] = useState(EMPTY_CHAT);
   const [isTyping, setIsTyping] = useState(false);
+  // 偏好掌握度：base = 起始值（做完心理測驗進場為 50，一般對話為 0），
+  // dims = 已掌握的偏好維度數（只增不減）
+  const [chatProgress, setChatProgress] = useState({ base: 0, dims: 0 });
   const abortControllerRef = useRef(null);
   const currentChatRef = useRef(currentChat);
+
+  // 換算成 0~100 的百分比：維度補滿 base 到 100 之間的距離
+  const progressPercent = Math.min(
+    100,
+    Math.round(chatProgress.base + chatProgress.dims * ((100 - chatProgress.base) / TOTAL_PREF_DIMS))
+  );
+
+  const resetProgress = useCallback((base = 0) => {
+    setChatProgress({ base, dims: 0 });
+  }, []);
 
   const setNormalizedCurrentChat = useCallback((updater) => {
     if (typeof updater !== 'function') {
@@ -82,10 +97,15 @@ export function useChatLogic(user, navigate) {
   }, [user?.isGuest, navigate]);
 
   const executeChatStream = useCallback(async (messageText, options = {}) => {
-    const { customTitle = null, hiddenPrompt = false, isQuizResult = false, replaceMsgIdx = null } = options;
+    const { customTitle = null, hiddenPrompt = false, isQuizResult = false, replaceMsgIdx = null, forceRecommend = false } = options;
     if (isTyping) return;
     if (!messageText.trim()) return;
     const isHidden = hiddenPrompt;
+
+    // 心理測驗結果進場：偏好掌握度從 50% 起跳
+    if (isQuizResult) {
+      setChatProgress({ base: 50, dims: 0 });
+    }
     
     setIsTyping(true);
     
@@ -148,7 +168,10 @@ export function useChatLogic(user, navigate) {
       const prevMsgs = nextMessages.slice(0, -excludeCount);
       historyToSend = prevMsgs.slice(-6).map(m => ({
         role: m.role,
-        content: m.content
+        // 附有推薦卡片的 AI 訊息加上標記，讓後端狀態機知道「已經推薦過」
+        content: (m.role === 'ai' && Array.isArray(m.cafes) && m.cafes.length > 0)
+          ? `${m.content}\n[已推薦店家卡片]`
+          : m.content
       }));
     }
 
@@ -157,7 +180,8 @@ export function useChatLogic(user, navigate) {
         message: messageText,
         history: historyToSend,
         use_rag: true,
-        is_quiz_result: isQuizResult
+        is_quiz_result: isQuizResult,
+        force_recommend: forceRecommend
       }, abortControllerRef.current.signal);
 
       if (response.status === 429) {
@@ -173,7 +197,13 @@ export function useChatLogic(user, navigate) {
       let ndjsonBuffer = '';
 
       const processParsed = async (parsed) => {
-        if (parsed.status) {
+        if (parsed.progress_dims !== undefined) {
+          // 偏好掌握度只增不減
+          setChatProgress((prev) => ({
+            ...prev,
+            dims: Math.max(prev.dims, parsed.progress_dims)
+          }));
+        } else if (parsed.status) {
           await syncStreamState(currentAiContent, currentDebugInfo, '', false, parsed.status);
         } else if (parsed.debug_info || parsed.type === 'debug_info') {
           currentDebugInfo = parsed.debug_info || parsed;
@@ -278,6 +308,8 @@ export function useChatLogic(user, navigate) {
     handleFeedback,
     handleStop,
     currentChatRef,
-    EMPTY_CHAT
+    EMPTY_CHAT,
+    progressPercent,
+    resetProgress
   };
 }

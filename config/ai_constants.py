@@ -14,6 +14,3 @@ PREFERENCE_HISTORY_LIMIT = 10    # 偏好萃取時看最近幾筆對話
 
 # Conversation Guide Keywords（對話引導關鍵字）
 CHAT_EXIT_KEYWORDS = ['聊天', '笑話', '說故事', '別提咖啡', '不想找', '隨便聊', '其他事']  # 使用者想跳出「找咖啡」主題
-
-# 確認需求門檻：使用者訊息長度 <= 此值、且無具體偏好訊號時，才視為「很籠統」而先確認需求
-VAGUE_REQUEST_MAX_LEN = 12

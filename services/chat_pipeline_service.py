@@ -16,6 +16,7 @@ class ChatPipelineService:
             user_message = data.get('message', '')
             history = data.get('history', [])
             is_quiz_result = data.get('is_quiz_result', False)
+            force_recommend = data.get('force_recommend', False)
 
             if not user_message:
                 yield json.dumps({"error": "未提供訊息", "done": True}, ensure_ascii=False) + "\n"
@@ -37,9 +38,11 @@ class ChatPipelineService:
 
             if is_cafe_related:
                 if is_quiz_result:
-                    # 心理測驗結果：跳過確認需求，直接根據測驗內容推薦
+                    # 心理測驗結果進場：先讓 AI 根據測驗結果確認這次的實際需求，
+                    # 不直接推薦；後續輪次的偏好照常回流狀態機決定何時推薦
                     yield json.dumps({"status": "processing_quiz_result"}, ensure_ascii=False) + "\n"
-                    guide_instruction = None
+                    from config.prompts import QUIZ_RESULT_CONFIRMATION_INSTRUCTION
+                    guide_instruction = QUIZ_RESULT_CONFIRMATION_INSTRUCTION
                 else:
                     yield json.dumps({"status": "extracting_preferences"}, ensure_ascii=False) + "\n"
                     model_name = get_selected_model() or get_default_model()
@@ -51,11 +54,21 @@ class ChatPipelineService:
                             all_keywords.extend(vals)
                     matched_keywords = list(set(matched_keywords + all_keywords))
 
-                    # 確認需求 → 結果丟給狀態機：萃取出的偏好交由狀態機
-                    # 決定「這一輪要先確認需求，還是直接推薦」
-                    temp_history = history.copy()
-                    temp_history.append({"role": "user", "content": user_message})
-                    guide_instruction = conversation_guide.analyze_and_guide(temp_history, extracted_data)
+                    # 回報已掌握的偏好維度數，供前端計算「偏好掌握度」百分比
+                    collected_dims = sum(
+                        1 for v in (extracted_data.get("preferences") or {}).values() if v
+                    )
+                    yield json.dumps({"progress_dims": collected_dims}, ensure_ascii=False) + "\n"
+
+                    if force_recommend:
+                        # 使用者按下「直接推薦」：跳過確認需求，直接以現有資訊推薦
+                        guide_instruction = None
+                    else:
+                        # 確認需求 → 結果丟給狀態機：萃取出的偏好交由狀態機
+                        # 決定「這一輪要先確認需求，還是直接推薦」
+                        temp_history = history.copy()
+                        temp_history.append({"role": "user", "content": user_message})
+                        guide_instruction = conversation_guide.analyze_and_guide(temp_history, extracted_data)
 
             from config.prompts import ALREADY_RECOMMENDED_INSTRUCTION
             should_recommend = (guide_instruction is None) or (guide_instruction == ALREADY_RECOMMENDED_INSTRUCTION)

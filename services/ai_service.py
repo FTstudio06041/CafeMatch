@@ -87,9 +87,18 @@ def stream_generate(model_name, prompt_text, is_cafe_related, cafe_context, db, 
         yield json.dumps(initial_debug, ensure_ascii=False) + "\n"
 
     client = OllamaClient()
-    
+
+    # 防止模型在回答結束後把 Prompt 的區塊標籤與內容外洩到使用者可見的回覆中
+    stop_sequences = [
+        "<POLICY>", "<TASK_RULES>", "<OUTPUT_FORMAT>",
+        "<KNOWLEDGE_BASE>", "<CONVERSATION_SUMMARY>", "<USER_MESSAGE>"
+    ]
+
     try:
-        response = client.generate(model=model_name, prompt=prompt_text, stream=True, timeout=OLLAMA_CLIENT_TIMEOUT)
+        response = client.generate(
+            model=model_name, prompt=prompt_text, stream=True,
+            timeout=OLLAMA_CLIENT_TIMEOUT, options={"stop": stop_sequences}
+        )
 
         for line in response.iter_lines():
             if line:

@@ -10,7 +10,7 @@ class OllamaClient:
     def __init__(self, base_url=None):
         self.base_url = base_url or OLLAMA_BASE_URL
 
-    def generate(self, model, prompt, stream=False, timeout=None, format=None):
+    def generate(self, model, prompt, stream=False, timeout=None, format=None, options=None):
         url = f"{self.base_url}/api/generate"
         payload = {
             "model": model,
@@ -19,6 +19,8 @@ class OllamaClient:
         }
         if format:
             payload["format"] = format
+        if options:
+            payload["options"] = options
             
         timeout = timeout or (OLLAMA_CLIENT_TIMEOUT if stream else 30)
         

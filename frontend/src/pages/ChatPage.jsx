@@ -23,7 +23,9 @@ export default function ChatPage() {
     handleFeedback,
     handleStop,
     currentChatRef,
-    EMPTY_CHAT
+    EMPTY_CHAT,
+    progressPercent,
+    resetProgress
   } = useChat();
 
   const [inputMsg, setInputMsg] = useState('');
@@ -75,20 +77,32 @@ export default function ChatPage() {
           + (quizData.inner_voice ? `\n【內心獨白】${quizData.inner_voice}` : '')
           + (quizData.profile ? `\n【特質側寫】${quizData.profile}` : '')
           + (scoreParts.length > 0 ? `\n【五維分數】${scoreParts.join('、')}` : '')
-          + (quizData.cafe_match ? `\n【氛圍對應】${quizData.cafe_match}` : '')
-          + `\n\n請根據以上測驗結果，推薦適合我的花蓮咖啡廳，並說明為什麼適合我。`;
+          + (quizData.cafe_match ? `\n【氛圍對應】${quizData.cafe_match}` : '');
       } catch {
-        promptText = `我剛做完測驗，結果適合「${rawQuizContext}」，請根據這個結果推薦我類似的咖啡廳或豆子。`;
+        promptText = `我剛完成了咖啡人格測驗，結果是「${rawQuizContext}」。`;
       }
-      
+
+      // 測驗結果不直接推薦：以隱藏訊息送出，讓 AI 先根據結果確認這次的實際需求，
+      // 確認後的偏好再交由狀態機決定何時推薦
       setNormalizedCurrentChat(EMPTY_CHAT);
       setTimeout(() => {
-        executeChatStream(promptText, { customTitle: '我做完測驗，結果...' });
+        executeChatStream(promptText, {
+          customTitle: '測驗結果諮詢',
+          hiddenPrompt: true,
+          isQuizResult: true,
+        });
       }, 0);
       return;
     }
 
-    // 正常載入對話
+    // 存檔後的網址同步（/chat → /chat?id=X）：還是同一個對話，
+    // 不重新載入、也不重置偏好掌握度
+    if (urlId && currentChatRef.current?.id && String(currentChatRef.current.id) === String(urlId)) {
+      return;
+    }
+
+    // 正常載入對話：偏好掌握度重新起算
+    resetProgress(0);
     if (!urlId || urlId === 'new') {
       setNormalizedCurrentChat(EMPTY_CHAT);
     } else {
@@ -135,6 +149,15 @@ export default function ChatPage() {
     executeChatStream(inputMsg);
   };
 
+  // 「直接推薦」：跳過確認需求，立刻以目前掌握的偏好推薦
+  const handleForceRecommend = () => {
+    if (isTyping) return;
+    executeChatStream('請直接根據目前的資訊推薦咖啡廳', {
+      customTitle: '直接推薦',
+      forceRecommend: true,
+    });
+  };
+
   // ==========================================
   // 渲染
   // ==========================================
@@ -162,11 +185,33 @@ export default function ChatPage() {
                 handleRetry={handleRetry}
                 handleFeedback={handleFeedback}
                 isDebugMode={isDebugMode}
+                onQuickReply={(text) => executeChatStream(text)}
               />
             ))
           )}
         </div>
-        
+
+        {currentChat.messages && currentChat.messages.length > 0 && (
+          <div className="pref-progress-strip">
+            <div className="pref-progress-main">
+              <div className="pref-progress-labels">
+                <span className="pref-progress-percent">偏好掌握度 {progressPercent}%</span>
+                <span className="pref-progress-hint">越接近 100%，推薦結果越準確</span>
+              </div>
+              <div className="pref-progress-track" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100} aria-label="偏好掌握度">
+                <div className="pref-progress-fill" style={{ width: `${progressPercent}%` }} />
+              </div>
+            </div>
+            <button
+              className="pref-recommend-btn"
+              onClick={handleForceRecommend}
+              disabled={isTyping}
+            >
+              直接推薦咖啡廳
+            </button>
+          </div>
+        )}
+
         <ChatInputArea
           user={user}
           inputMsg={inputMsg}

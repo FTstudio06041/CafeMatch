@@ -17,9 +17,9 @@ import random
 
 from config.prompts import (
     ALREADY_RECOMMENDED_INSTRUCTION,
+    READY_TO_RECOMMEND_INSTRUCTION,
     get_confirmation_instruction
 )
-from config.ai_constants import VAGUE_REQUEST_MAX_LEN
 
 
 # ==========================================
@@ -43,15 +43,18 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
     """
     對話引導的唯一入口。
 
-    分析對話歷史，決定 AI 這一輪應該先確認使用者需求，還是直接推薦。
+    分析對話歷史，決定 AI 這一輪應該確認需求，還是邀請使用者按「直接推薦」按鈕。
+
+    注意：推薦只能由使用者按下「直接推薦咖啡廳」按鈕觸發
+    （pipeline 收到 force_recommend 時會跳過本函式）；
+    本狀態機永遠不會主動回傳「直接推薦」的決策。
 
     參數:
         history: list[dict] — 對話歷史
         extracted_data: dict — 透過 LLM 萃取出來的偏好
 
     回傳:
-        str  — 注入給 AI 的引導指令
-        None — 不需引導，AI 應直接根據資料庫資料推薦店家
+        str — 注入給 AI 的引導指令
     """
     config = _load_config()
     dimensions = config["dimensions"]
@@ -67,11 +70,12 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
     question_count = _count_ai_questions(history)
     user_rounds = sum(1 for m in history if m.get("role") == "user")
 
-    # 檢查是否已經推薦過了 (簡單檢查 AI 歷史訊息是否包含推薦關鍵字)
+    # 檢查是否已經推薦過了（前端會在附有推薦卡片的 AI 歷史訊息加上標記）
     has_recommended = False
     for msg in history:
         if msg.get("role") in ("ai", "assistant"):
-            if "推薦" in msg.get("content", "") and "地址" in msg.get("content", ""):
+            content = msg.get("content", "")
+            if "[已推薦店家卡片]" in content or ("推薦" in content and "地址" in content):
                 has_recommended = True
                 break
 
@@ -79,37 +83,30 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
     if has_recommended:
         return ALREADY_RECOMMENDED_INSTRUCTION
 
-    # 判斷這則訊息是否「很籠統」（沒給具體需求）
-    latest_user_msg = next(
-        (m.get("content", "") for m in reversed(history) if m.get("role") == "user"), ""
-    )
-    is_vague = _is_vague_request(latest_user_msg, collected_count, dimensions)
+    # 使用者質疑心理測驗結果（覺得不準）→ 提高確認門檻，多問幾題
+    quiz_doubted = _user_doubted_quiz(history)
+    if quiz_doubted:
+        max_questions = strategy.get("doubt_max_questions", 5)
+        min_dimensions = strategy.get("doubt_min_dimensions", 3)
+        max_rounds = strategy.get("doubt_recommend_after_rounds", 7)
+    else:
+        max_questions = strategy["max_questions"]
+        min_dimensions = strategy["min_dimensions_to_recommend"]
+        max_rounds = strategy["recommend_after_rounds"]
 
-    # 使用者已給具體需求（不籠統）→ 直接推薦，不再追問
-    if not is_vague:
-        return None
-
-    # === 停止條件（硬性，不靠 AI 判斷）：達標即結束確認、直接推薦 ===
-
-    # 條件 1：AI 已問太多次 → 直接推薦
-    if question_count >= strategy["max_questions"]:
-        return None
-
-    # 條件 2：對話輪數已夠多 → 直接推薦
-    if user_rounds >= strategy["recommend_after_rounds"]:
-        return None
-
-    # 條件 3：已蒐集到足夠維度 → 直接推薦 (短路條件)
-    if collected_count >= strategy["min_dimensions_to_recommend"]:
-        return None
-
-    # === 產生「確認需求」指令 ===
+    # === 確認完成條件（硬性，不靠 AI 判斷）===
+    # 達標後不會自動推薦，而是邀請使用者按下「直接推薦咖啡廳」按鈕。
 
     # 找出尚未確認的維度
     missing = [d for d in dimensions if d["key"] not in collected_keys]
 
-    if not missing:
-        return None  # 所有維度都已蒐集，直接推薦
+    if (
+        question_count >= max_questions        # AI 已問太多次
+        or user_rounds >= max_rounds           # 對話輪數已夠多
+        or collected_count >= min_dimensions   # 已蒐集到足夠維度
+        or not missing                         # 所有維度都已蒐集
+    ):
+        return READY_TO_RECOMMEND_INSTRUCTION
 
     # 組裝已知偏好摘要
     summary_parts = []
@@ -122,20 +119,30 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
 
     summary = "；".join(summary_parts) if summary_parts else "尚無明確偏好"
 
-    # 只挑最不確定的維度來確認（不逐項盤問）
-    missing_labels = [d["label"] for d in missing]
-    if missing[0].get("example_prompts"):
-        example = random.choice(missing[0]["example_prompts"])
+    # 一次只針對下一個不確定的維度確認（不逐項盤問）
+    next_dim = missing[0]
+    if next_dim.get("example_prompts"):
+        example = random.choice(next_dim["example_prompts"])
     else:
         example = ""
 
     return get_confirmation_instruction(
         summary=summary,
-        missing_labels=missing_labels,
+        next_dim_label=next_dim["label"],
         question_count=question_count,
-        max_questions=strategy['max_questions'],
-        example=example
+        max_questions=max_questions,
+        example=example,
+        quick_options=next_dim.get("quick_options")
     )
+
+
+def get_known_keywords() -> set:
+    """回傳所有維度的偵測關鍵字集合（供偏好萃取結果驗證用）。"""
+    config = _load_config()
+    keywords = set()
+    for d in config.get("dimensions", []):
+        keywords.update(d.get("detect_keywords", []))
+    return keywords
 
 
 # ==========================================
@@ -167,7 +174,10 @@ def update_strategy(new_strategy: dict) -> dict:
     allowed_keys = {
         "max_questions",
         "min_dimensions_to_recommend",
-        "recommend_after_rounds"
+        "recommend_after_rounds",
+        "doubt_max_questions",
+        "doubt_min_dimensions",
+        "doubt_recommend_after_rounds"
     }
 
     for key, value in new_strategy.items():
@@ -211,26 +221,19 @@ def _load_config() -> dict:
 
 
 
-def _is_vague_request(user_message: str, collected_count: int, dimensions: list) -> bool:
-    """
-    判斷使用者這則訊息是否「很籠統」（沒有給出可據以推薦的具體需求）。
-    只有很籠統時才先確認需求；只要有任何具體訊號就直接推薦。
+# 使用者覺得心理測驗結果不準的訊號（對應測驗結果開場的快速選項）
+_QUIZ_DOUBT_SIGNALS = ('有點落差', '完全不像', '不太準', '不準', '不像我')
 
-    以下任一成立即視為「有具體需求」（回傳 False）：
-      1. LLM 已萃取到至少一個偏好維度
-      2. 訊息長度超過門檻（長訊息通常帶有需求，即使關鍵字/LLM 沒抓到）
-      3. 訊息含任何維度關鍵字（安靜、手沖、平價…）
-    """
-    if collected_count >= 1:
-        return False
-    text = (user_message or "").strip()
-    if len(text) > VAGUE_REQUEST_MAX_LEN:
-        return False
-    for d in dimensions or []:
-        for kw in d.get("detect_keywords", []):
-            if kw and kw in text:
-                return False
-    return True
+
+def _user_doubted_quiz(history: list) -> bool:
+    """檢查使用者是否表達過「測驗結果不準」。"""
+    for m in history:
+        if m.get("role") != "user":
+            continue
+        content = m.get("content", "")
+        if any(sig in content for sig in _QUIZ_DOUBT_SIGNALS):
+            return True
+    return False
 
 
 def _count_ai_questions(history: list) -> int:

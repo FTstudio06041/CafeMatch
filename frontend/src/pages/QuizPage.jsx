@@ -213,7 +213,7 @@ export default function QuizPage() {
   // 渲染
   // =============================================
   return (
-    <>
+    <div className="quiz-page-container">
         <div className={`quiz-content ${quizState === 'intro' ? 'intro-active' : ''}`}>
 
           {/* ===== 介紹頁：直接渲染在 quiz-content 內（全版佈滿） ===== */}
@@ -448,6 +448,6 @@ export default function QuizPage() {
             </div>
           )}
         </div>
-    </>
+    </div>
   );
 }

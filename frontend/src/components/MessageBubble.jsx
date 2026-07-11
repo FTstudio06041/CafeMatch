@@ -4,7 +4,7 @@ import CafeCard from './chat/CafeCard';
 import { THINKING_TEXTS } from '../utils/thinkingTexts';
 import { CHAT_UI_TEXTS } from '../utils/constants';
 
-export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handleRetry, handleFeedback, isDebugMode }) {
+export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handleRetry, handleFeedback, isDebugMode, onQuickReply }) {
   const role = msg?.role === 'user' ? 'user' : 'ai';
   let content = msg?.content ?? msg?.text ?? '';
   let safeContent = typeof content === 'string' ? content : String(content ?? '');
@@ -40,6 +40,22 @@ export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handl
     safeContent = safeContent.replace('[SHOW_QUIZ_CARD]', '').trim();
   }
 
+  // 解析 AI 附帶的快速回覆選項標記：[QUICK_OPTIONS] 選項一 | 選項二
+  let quickOptions = [];
+  const qoIdx = safeContent.indexOf('[QUICK_OPTIONS]');
+  if (qoIdx !== -1) {
+    quickOptions = safeContent
+      .slice(qoIdx + '[QUICK_OPTIONS]'.length)
+      .split(/[|｜]/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 4);
+    safeContent = safeContent.slice(0, qoIdx).trim();
+  } else {
+    // 串流中標記尚未傳完時，先隱藏結尾的不完整標記片段
+    safeContent = safeContent.replace(/\[[A-Z_]*$/, '').trimEnd();
+  }
+
   const isGenerating = isTyping && isLastMessage && role === 'ai' && safeContent === '';
 
   return (
@@ -60,6 +76,19 @@ export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handl
             {role === 'ai' && Array.isArray(msg?.cafes) && msg.cafes.length > 0 && (
               <div className="cafe-card-list">
                 {msg.cafes.map((c) => <CafeCard key={c.id} cafe={c} />)}
+              </div>
+            )}
+            {role === 'ai' && quickOptions.length > 0 && isLastMessage && !isTyping && (
+              <div className="quick-options">
+                {quickOptions.map((opt) => (
+                  <button
+                    key={opt}
+                    className="quick-option-btn"
+                    onClick={() => onQuickReply && onQuickReply(opt)}
+                  >
+                    {opt}
+                  </button>
+                ))}
               </div>
             )}
             {role === 'ai' && !isGenerating && (
