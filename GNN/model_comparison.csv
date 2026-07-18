@@ -1,0 +1,4 @@
+﻿,套件,Test Acc,Pos Score,Neg Score,訓練時間
+HGT,torch_geometric.nn.HGTConv,0.8106,0.6879,0.2431,12.4s
+GAT,torch_geometric.nn.GATConv + to_hetero,0.816,0.7165,0.2487,6.4s
+GraphSAGE,torch_geometric.nn.SAGEConv + to_hetero,0.7715,0.6882,0.2801,3.8s
