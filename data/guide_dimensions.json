@@ -64,6 +64,9 @@
     "recommend_after_rounds": 4,
     "doubt_max_questions": 5,
     "doubt_min_dimensions": 3,
-    "doubt_recommend_after_rounds": 7
+    "doubt_recommend_after_rounds": 7,
+    "inaccurate_max_questions": 6,
+    "inaccurate_min_dimensions": 4,
+    "inaccurate_recommend_after_rounds": 9
   }
 }

@@ -1,10 +1,25 @@
 import { useState, useEffect, useContext, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
-import { ClipboardList, BarChart3, MapPin, Play, Store } from 'lucide-react';
+import { ClipboardList, BarChart3, MapPin, Play, Store, ArrowLeft } from 'lucide-react';
 import RadarChart from '../components/RadarChart';
 import { quizService } from '../services/quizService';
 import '../QuizPage.css';
+
+// 每題的情境插畫：檔名 = 題號（frontend/src/assets/quiz/1.jpg → 第 1 題），
+// 新增題目插畫只要把圖丟進資料夾即可，沒有圖的題目不顯示
+const questionImages = import.meta.glob('../assets/quiz/*.{jpg,jpeg,png,webp}', {
+  eager: true,
+  import: 'default',
+});
+
+const getQuestionImage = (order) => {
+  for (const ext of ['jpg', 'jpeg', 'png', 'webp']) {
+    const img = questionImages[`../assets/quiz/${order}.${ext}`];
+    if (img) return img;
+  }
+  return null;
+};
 
 import { toast } from '../utils/toast';
 import { logger } from '../utils/logger';
@@ -158,6 +173,16 @@ export default function QuizPage() {
     }, 400);
   };
 
+  // 回到上一題（動畫進行中不可按，避免與自動前進衝突）
+  const handleBack = () => {
+    if (currentStep === 0 || isFading || selectedAnim !== null) return;
+    setIsFading(true);
+    setTimeout(() => {
+      setCurrentStep((prev) => prev - 1);
+      setIsFading(false);
+    }, 250);
+  };
+
   // 多選：切換 checkbox（最多 3 個）
   const handleMultiToggle = (questionId, optionId) => {
     setSelectedAnswers((prev) => {
@@ -276,13 +301,24 @@ export default function QuizPage() {
 
           {/* ===== 非 intro 狀態：包在 quiz-card 內 ===== */}
           {quizState !== 'intro' && (
-            <div className={`quiz-card ${quizState === 'result' ? 'result-mode' : ''}`}>
+            <div className={`quiz-card ${quizState === 'result' ? 'result-mode' : ''}${quizState === 'question' && currentQ && getQuestionImage(currentQ.order) ? ' question-wide' : ''}`}>
 
               {/* ===== 進度條（答題中顯示） ===== */}
               {quizState === 'question' && currentQ && (
                 <div className="progress-container">
-                  <div className="progress-track">
-                    <div className="progress-fill" style={{ width: `${progressPercentage}%` }} />
+                  <div className="progress-row">
+                    <button
+                      className="quiz-back-btn"
+                      onClick={handleBack}
+                      disabled={currentStep === 0}
+                      aria-label="回到上一題"
+                      style={{ visibility: currentStep === 0 ? 'hidden' : 'visible' }}
+                    >
+                      <ArrowLeft size={18} strokeWidth={2.5} />
+                    </button>
+                    <div className="progress-track">
+                      <div className="progress-fill" style={{ width: `${progressPercentage}%` }} />
+                    </div>
                   </div>
                   <div className="progress-label">{currentStep + 1} / {totalQuestions}</div>
                 </div>
@@ -299,8 +335,21 @@ export default function QuizPage() {
               {/* ===== 答題頁 ===== */}
               {quizState === 'question' && currentQ && (
                 <div className="question-wrapper">
-                  <div className={`question-slide ${isFading ? 'fading-out' : ''}`} key={currentQ.id}>
-                    
+                  <div className={`question-slide ${isFading ? 'fading-out' : ''}${getQuestionImage(currentQ.order) ? ' with-img' : ''}`} key={currentQ.id}>
+
+                    {/* 情境插畫（依題號對應）：桌面左欄，窄螢幕退回直式 */}
+                    {getQuestionImage(currentQ.order) && (
+                      <div className="question-visual">
+                        <img
+                          className="question-illustration"
+                          src={getQuestionImage(currentQ.order)}
+                          alt={`第 ${currentQ.order} 題情境插畫${currentQ.scenario_tag ? `：${currentQ.scenario_tag}` : ''}`}
+                        />
+                      </div>
+                    )}
+
+                    <div className="question-main">
+
                     {/* 情境標籤 */}
                     {currentQ.scenario_tag && (
                       <div className="scenario-tag">{currentQ.scenario_tag}</div>
@@ -345,7 +394,7 @@ export default function QuizPage() {
                         {currentQ.options.map((opt) => (
                           <div
                             key={opt.id}
-                            className={`option-card ${selectedAnim === opt.id ? 'selected' : ''}`}
+                            className={`option-card ${selectedAnim === opt.id ? 'selected' : ''}${selectedAnswers[currentQ.id] === opt.id ? ' chosen' : ''}`}
                             onClick={() => handleSingleSelect(currentQ.id, opt.id)}
                           >
                             <span className="option-main-text">
@@ -359,6 +408,7 @@ export default function QuizPage() {
                         ))}
                       </div>
                     )}
+                    </div>
                   </div>
                 </div>
               )}

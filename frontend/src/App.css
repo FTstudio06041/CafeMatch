@@ -484,6 +484,12 @@ body {
     .nav-btn {
         padding: 8px 10px;
         font-size: 0.95rem;
+        /* 觸控目標 ≥44px */
+        min-height: 44px;
+        min-width: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .nav-btn.active, .nav-btn.highlighted {

@@ -20,6 +20,7 @@ from config.prompts import (
     READY_TO_RECOMMEND_INSTRUCTION,
     get_confirmation_instruction
 )
+from services.preference_adjuster import detect_accuracy_feedback
 
 
 # ==========================================
@@ -83,9 +84,16 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
     if has_recommended:
         return ALREADY_RECOMMENDED_INSTRUCTION
 
-    # 使用者質疑心理測驗結果（覺得不準）→ 提高確認門檻，多問幾題
-    quiz_doubted = _user_doubted_quiz(history)
-    if quiz_doubted:
+    # 使用者對測驗結果的回饋 → 三級確認門檻：
+    #   覺得準       → 基本門檻
+    #   有點落差     → 提高門檻，多問幾題
+    #   完全不像我   → 測驗資料作廢，幾乎重建輪廓，問最多
+    accuracy = detect_accuracy_feedback(history)
+    if accuracy == 'inaccurate':
+        max_questions = strategy.get("inaccurate_max_questions", 6)
+        min_dimensions = strategy.get("inaccurate_min_dimensions", 4)
+        max_rounds = strategy.get("inaccurate_recommend_after_rounds", 9)
+    elif accuracy == 'partial':
         max_questions = strategy.get("doubt_max_questions", 5)
         min_dimensions = strategy.get("doubt_min_dimensions", 3)
         max_rounds = strategy.get("doubt_recommend_after_rounds", 7)
@@ -121,17 +129,21 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
 
     # 一次只針對下一個不確定的維度確認（不逐項盤問）
     next_dim = missing[0]
-    if next_dim.get("example_prompts"):
-        example = random.choice(next_dim["example_prompts"])
-    else:
-        example = ""
+    example_prompts = next_dim.get("example_prompts") or []
+    examples = random.sample(example_prompts, min(2, len(example_prompts)))
+
+    # 使用者最後一句話：讓 AI 順著剛剛的回答接話、劇情式推進
+    latest_user_msg = next(
+        (m.get("content", "") for m in reversed(history) if m.get("role") == "user"), ""
+    )
 
     return get_confirmation_instruction(
         summary=summary,
         next_dim_label=next_dim["label"],
         question_count=question_count,
         max_questions=max_questions,
-        example=example,
+        latest_user_msg=latest_user_msg[:80],
+        examples=examples,
         quick_options=next_dim.get("quick_options")
     )
 
@@ -177,7 +189,10 @@ def update_strategy(new_strategy: dict) -> dict:
         "recommend_after_rounds",
         "doubt_max_questions",
         "doubt_min_dimensions",
-        "doubt_recommend_after_rounds"
+        "doubt_recommend_after_rounds",
+        "inaccurate_max_questions",
+        "inaccurate_min_dimensions",
+        "inaccurate_recommend_after_rounds"
     }
 
     for key, value in new_strategy.items():
@@ -219,21 +234,6 @@ def _load_config() -> dict:
 
 
 
-
-
-# 使用者覺得心理測驗結果不準的訊號（對應測驗結果開場的快速選項）
-_QUIZ_DOUBT_SIGNALS = ('有點落差', '完全不像', '不太準', '不準', '不像我')
-
-
-def _user_doubted_quiz(history: list) -> bool:
-    """檢查使用者是否表達過「測驗結果不準」。"""
-    for m in history:
-        if m.get("role") != "user":
-            continue
-        content = m.get("content", "")
-        if any(sig in content for sig in _QUIZ_DOUBT_SIGNALS):
-            return True
-    return False
 
 
 def _count_ai_questions(history: list) -> int:

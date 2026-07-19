@@ -68,6 +68,8 @@ export default function ChatPage() {
         const scoreParts = [];
         const scoreLabels = { work: '工作讀書', env: '空間氛圍', social: '社交舒適', taste: '餐飲口味', cp: 'CP值' };
         if (quizData.scores) {
+          // 保存五維分數，供「直接推薦」時作為 GNN 推薦的基礎向量
+          localStorage.setItem('latestQuizScores', JSON.stringify(quizData.scores));
           for (const [key, val] of Object.entries(quizData.scores)) {
             scoreParts.push(`${scoreLabels[key] || key}：${val}`);
           }

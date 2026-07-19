@@ -97,6 +97,34 @@
     gap: 8px;
 }
 
+.progress-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+}
+
+/* 回到上一題 */
+.quiz-back-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    border-radius: 50%;
+    border: 1.5px solid var(--accent-color);
+    background: transparent;
+    color: var(--accent-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: 0.2s;
+}
+
+.quiz-back-btn:hover:not(:disabled) {
+    background: var(--accent-color);
+    color: #fff;
+}
+
 .progress-track {
     width: 100%;
     height: 6px;
@@ -385,6 +413,19 @@
 /* =============================================
    題目文案
    ============================================= */
+/* 每題情境插畫（檔名=題號自動對應） */
+.question-illustration {
+    width: 100%;
+    max-width: 420px;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    border-radius: 18px;
+    border: 1px solid rgba(78, 52, 46, 0.12);
+    box-shadow: 0 10px 30px rgba(78, 52, 46, 0.16);
+    margin: 0 auto 24px;
+    display: block;
+}
+
 .question-text {
     font-size: 1.25rem;
     font-weight: 700;
@@ -409,6 +450,47 @@
 
 .question-slide.fading-out {
     animation: fadeSlideOut 0.25s ease forwards;
+}
+
+/* 有情境插畫的題目：桌面左右兩欄（圖左、題目+選項右），整題一屏收完 */
+.quiz-card.question-wide {
+    max-width: 960px;
+}
+
+.question-slide.with-img {
+    display: grid;
+    grid-template-columns: minmax(260px, 340px) 1fr;
+    gap: 40px;
+    align-items: center;
+    text-align: left;
+}
+
+.question-slide.with-img .question-illustration {
+    width: 100%;
+    max-width: 100%;
+    aspect-ratio: 1 / 1;
+    margin: 0;
+}
+
+.question-slide.with-img .question-text {
+    max-width: 100%;
+}
+
+/* 窄螢幕退回直式：圖片高度用視窗高度上限壓住，避免把選項擠出畫面 */
+@media (max-width: 900px) {
+    .question-slide.with-img {
+        display: flex;
+        flex-direction: column;
+        text-align: center;
+        gap: 0;
+    }
+
+    .question-slide.with-img .question-illustration {
+        max-width: 420px;
+        aspect-ratio: 16 / 9;
+        max-height: 30vh;
+        margin: 0 auto 20px;
+    }
 }
 
 @keyframes fadeSlideIn {
@@ -490,6 +572,12 @@
     color: white;
     transform: scale(0.98);
     box-shadow: 0 4px 20px rgba(67, 42, 0, 0.25);
+}
+
+/* 回到上一題時，標記先前選過的答案 */
+.option-card.chosen:not(.selected) {
+    border-color: var(--accent-gold);
+    background: rgba(147, 128, 122, 0.14);
 }
 
 .option-card.selected .option-subtext {

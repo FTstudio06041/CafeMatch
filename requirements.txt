@@ -26,3 +26,9 @@ Flask-Limiter==4.1.1
 Flask-Migrate==4.1.0
 gunicorn==21.2.0
 pytest==8.2.2
+
+# GNN 推薦（CPU 推論即可；torch 建議用 CPU 版：
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu ）
+torch==2.13.0
+torch-geometric==2.8.0
+pandas==3.0.3

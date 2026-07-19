@@ -176,12 +176,23 @@ export function useChatLogic(user, navigate) {
     }
 
     try {
+      // 「直接推薦」時附上最近一次心理測驗五維分數，作為 GNN 推薦的基礎向量
+      let quizScores;
+      if (forceRecommend) {
+        try {
+          quizScores = JSON.parse(localStorage.getItem('latestQuizScores') || 'null') || undefined;
+        } catch {
+          quizScores = undefined;
+        }
+      }
+
       const response = await chatService.streamChat({
         message: messageText,
         history: historyToSend,
         use_rag: true,
         is_quiz_result: isQuizResult,
-        force_recommend: forceRecommend
+        force_recommend: forceRecommend,
+        quiz_scores: quizScores
       }, abortControllerRef.current.signal);
 
       if (response.status === 429) {

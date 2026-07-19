@@ -75,9 +75,23 @@ class ChatPipelineService:
 
             cafe_context = ""
             cafes = []
+            recommend_engine = None
             if is_cafe_related and should_recommend:
                 yield json.dumps({"status": "retrieving_cafes"}, ensure_ascii=False) + "\n"
-                cafes = retrieve_cafe_data(matched_keywords, Cafes, Tags)
+                if force_recommend:
+                    # GNN 推薦接口：測驗基礎分數 × 對話確認結果 → 調整五維 → GNN 打分
+                    cafes = ChatPipelineService._recommend_with_gnn(
+                        data, history, user_message, extracted_data
+                    )
+                    if cafes:
+                        recommend_engine = "gnn"
+                if not cafes:
+                    cafes = retrieve_cafe_data(matched_keywords, Cafes, Tags)
+                    if cafes:
+                        recommend_engine = "keyword"
+                if recommend_engine:
+                    # 讓前端／測試可以驗證這批推薦來自哪個引擎
+                    yield json.dumps({"recommend_engine": recommend_engine}, ensure_ascii=False) + "\n"
                 cafe_context = format_cafe_context(cafes)
                 if cafes:
                     yield json.dumps({"cafes": [serialize_cafe(c) for c in cafes]}, ensure_ascii=False) + "\n"
@@ -125,3 +139,71 @@ class ChatPipelineService:
         except Exception as e:
             current_app.logger.exception(f"Chat API Error: {e}")
             yield json.dumps({"error": "系統暫時無法處理，請稍後再試", "done": True}, ensure_ascii=False) + "\n"
+
+    @staticmethod
+    def _recommend_with_gnn(data, history, user_message, extracted_data):
+        """
+        GNN 推薦接口：
+          心理測驗五維分數（payload 或 DB 最新紀錄）
+          × 使用者對測驗準不準的回饋
+          × 對話確認到的偏好
+          → preference_adjuster 調整五維向量 → gnn_recommender 打分。
+
+        任一環節失敗回傳 []，由呼叫端回退關鍵字檢索。
+        """
+        from services import gnn_recommender
+        from services.preference_adjuster import build_gnn_input
+
+        try:
+            quiz_scores = data.get('quiz_scores')
+            if not (isinstance(quiz_scores, dict) and quiz_scores):
+                quiz_scores = ChatPipelineService._latest_quiz_scores_from_db()
+
+            temp_history = history.copy()
+            temp_history.append({"role": "user", "content": user_message})
+            preferences = (extracted_data or {}).get("preferences")
+
+            adjusted, hard_filters, accuracy = build_gnn_input(
+                quiz_scores, temp_history, preferences
+            )
+            ranked = gnn_recommender.recommend_by_scores(adjusted, hard_filters)
+            if not ranked:
+                return []
+
+            ids = [c['cafe_id'] for c in ranked]
+            rows = {c.id: c for c in Cafes.query.filter(Cafes.id.in_(ids)).all()}
+            cafes = [rows[i] for i in ids if i in rows]
+
+            adjusted_str = {k: round(v, 1) for k, v in adjusted.items()}
+            current_app.logger.info(
+                f"[GNN] 推薦 {len(cafes)} 家（回饋={accuracy}、調整後五維={adjusted_str}、硬過濾={hard_filters}）"
+            )
+            return cafes
+        except gnn_recommender.GnnUnavailable as e:
+            current_app.logger.warning(f"[GNN] 不可用，回退關鍵字檢索：{e}")
+            return []
+        except Exception as e:
+            current_app.logger.exception(f"[GNN] 推薦失敗，回退關鍵字檢索：{e}")
+            return []
+
+    @staticmethod
+    def _latest_quiz_scores_from_db():
+        """登入使用者：從資料庫取最新一次心理測驗的五維分數。"""
+        user_email = session.get('user_email')
+        if not user_email:
+            return None
+        user = User.query.filter_by(email=user_email).first()
+        if not user:
+            return None
+        from models import UserQuizResult
+        record = UserQuizResult.query.filter_by(user_id=user.id)\
+            .order_by(UserQuizResult.created_at.desc()).first()
+        if not record:
+            return None
+        return {
+            'work': record.score_work,
+            'env': record.score_env,
+            'social': record.score_social,
+            'taste': record.score_taste,
+            'cp': record.score_cp,
+        }

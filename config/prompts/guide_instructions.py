@@ -28,18 +28,29 @@ QUIZ_RESULT_CONFIRMATION_INSTRUCTION = (
 )
 
 # 確認需求
-def get_confirmation_instruction(summary, next_dim_label, question_count, max_questions, example="", quick_options=None):
+def get_confirmation_instruction(summary, next_dim_label, question_count, max_questions,
+                                 latest_user_msg="", examples=None, quick_options=None):
     """
     產生「確認使用者需求」的引導指令。
 
-    使用者需求還不夠明確時，讓 AI 針對下一個不確定的維度，
-    用一個簡短自然的問題確認；確認後的偏好會回流到狀態機決定何時推薦。
+    讓 AI 順著使用者剛說的話「接話」，把下一個不確定維度的確認問題
+    自然編進對話劇情裡，而不是制式地逐項問卷；
+    確認後的偏好會回流到狀態機決定何時邀請推薦。
     """
     instruction = (
         f"【任務】使用者的需求還不夠明確，這一輪請先跟他確認需求，不要推薦店家。\n"
         f"目前已知的偏好：{summary}。\n"
-        f"這一輪請針對「{next_dim_label}」，以朋友般的自然口吻問「一個」簡短的問題；"
-        f"不要逐項盤問、不要列清單、不要一次問一大串，問完就停，等使用者回覆。\n"
+    )
+    if latest_user_msg:
+        instruction += f"使用者剛剛說：「{latest_user_msg}」。\n"
+    instruction += (
+        f"請先用半句話自然回應他剛剛說的內容（像朋友接話，不要重複他的原句），"
+        f"然後「順著這個話題」把「{next_dim_label}」的確認問題編進對話裡——\n"
+        f"問題必須跟他剛剛的回答或已知偏好有關聯"
+        f"（例如他說要跟朋友聚會，就問「聚會想要什麼樣的氛圍」；"
+        f"他說想吃甜點，就問「配甜點的話預算大概抓多少」），"
+        f"讓對話像有劇情地推進，絕對不要突兀地換話題、不要像問卷一樣制式。\n"
+        f"只問「一個」簡短的問題，問完就停，等使用者回覆。\n"
         f"【目前進度】已提問次數：{question_count} / 最大上限：{max_questions}。\n"
     )
     if quick_options:
@@ -50,11 +61,12 @@ def get_confirmation_instruction(summary, next_dim_label, question_count, max_qu
         )
     else:
         instruction += QUICK_OPTIONS_FORMAT
-    if example:
+    examples = [e for e in (examples or []) if e]
+    if examples:
+        examples_text = "\n".join(f"- {e}" for e in examples)
         instruction += (
-            f"\n\n【重要禁止事項】\n"
-            f"絕對不可以原封不動照抄這句話：「{example}」。\n"
-            f"請你一定要發揮創意、換句話說，讓每次的問法都不一樣！"
+            f"\n\n【問法靈感（絕對禁止照抄，一定要換句話說、並結合上面的對話脈絡）】\n"
+            f"{examples_text}"
         )
     return instruction
 
