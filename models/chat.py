@@ -9,6 +9,9 @@ class ChatSession(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     title = db.Column(db.String(100), nullable=False)
     messages = db.Column(db.JSON, nullable=False, default=list)
+    # 累積偏好狀態：{"preferences": {...}, "progress_base": 0|50}
+    # 讓偏好掌握度與已確認維度跨重新整理／重開對話仍然保留
+    pref_state = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime, default=get_utc_now)
     updated_at = db.Column(db.DateTime, default=get_utc_now, onupdate=get_utc_now)
 

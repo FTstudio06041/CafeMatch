@@ -121,6 +121,13 @@ def init_db():
         print('[INIT] 已為 community_posts 表新增 original_post_id 欄位')
     except Exception:
         db.session.rollback()
+
+    try:
+        db.session.execute(db.text("ALTER TABLE chat_sessions ADD COLUMN pref_state JSON NULL"))
+        db.session.commit()
+        print('[INIT] 已為 chat_sessions 表新增 pref_state 欄位')
+    except Exception:
+        db.session.rollback()
         
     # 初始化管理員帳號
     admin_emails = os.getenv('ADMIN_EMAILS', 'wjy28396@gmail.com').split(',')

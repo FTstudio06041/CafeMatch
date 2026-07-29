@@ -28,8 +28,9 @@ def build_prompt(user_message, history, is_cafe_related, cafe_context, guide_ins
         prompt += f"\n\n【本輪具體任務】\n{guide_instruction.strip()}"
     prompt += "\n</TASK_RULES>\n\n"
     
-    from config.prompts import ALREADY_RECOMMENDED_INSTRUCTION
-    should_recommend = (guide_instruction is None) or (guide_instruction == ALREADY_RECOMMENDED_INSTRUCTION)
+    # 推薦輸出格式只在「按鈕觸發推薦」（無引導指令）時注入；
+    # 推薦後模式不再檢索、也不注入推薦格式，避免模型自行編店名
+    should_recommend = guide_instruction is None
     
     # 3. Output Format Layer
     if is_cafe_related and should_recommend:

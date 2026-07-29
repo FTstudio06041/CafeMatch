@@ -19,6 +19,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -48,35 +49,46 @@ def port_open(port: int) -> bool:
         return False
 
 
+# 各服務的啟動指令與工作目錄（用 cmd /k：指令失敗時視窗會留著顯示錯誤，方便排查）
+_START_COMMANDS = {
+    "backend": (r'"%s" app.py' % os.path.join(ROOT, "venv", "Scripts", "python.exe"), ROOT),
+    "frontend": ("npm run dev", os.path.join(ROOT, "frontend")),
+    "ollama": ("ollama serve", ROOT),
+}
+
+# 啟動後等待連線的秒數（前端 Vite 冷啟較久）
+_STARTUP_WAIT = {"backend": 12, "frontend": 25, "ollama": 20}
+
+
 def start_service(name: str) -> str:
-    """啟動服務（各自開新主控台視窗）。回傳訊息字串。"""
+    """
+    啟動服務：開新的 cmd 視窗執行（失敗時視窗保留，錯誤訊息看得到），
+    接著輪詢連接埠確認是否真的起來，回傳可讀的結果訊息。
+    """
     svc = SERVICES[name]
     if port_open(svc["port"]):
         return "已經在執行中"
-
-    env = {**os.environ, "PYTHONUTF8": "1"}
-    if name == "backend":
-        subprocess.Popen(
-            [os.path.join(ROOT, "venv", "Scripts", "python.exe"), "app.py"],
-            cwd=ROOT, env=env, creationflags=CREATE_NEW_CONSOLE,
-        )
-    elif name == "frontend":
-        subprocess.Popen(
-            "npm run dev", shell=True,
-            cwd=os.path.join(ROOT, "frontend"), env=env,
-            creationflags=CREATE_NEW_CONSOLE,
-        )
-    elif name == "ollama":
-        try:
-            subprocess.Popen(
-                "ollama serve", shell=True, env=env,
-                creationflags=CREATE_NEW_CONSOLE,
-            )
-        except FileNotFoundError:
-            return "找不到 ollama，請確認已安裝"
-    else:
+    if name not in _START_COMMANDS:
         return "此服務不支援從面板啟動"
-    return "啟動指令已送出"
+
+    command, cwd = _START_COMMANDS[name]
+    env = {**os.environ, "PYTHONUTF8": "1"}
+    title = f"CafeMatch - {svc['label']}"
+    try:
+        # /k 保留視窗：服務正常時顯示日誌，啟動失敗時錯誤訊息不會一閃即逝
+        subprocess.Popen(
+            f'start "{title}" cmd /k {command}',
+            shell=True, cwd=cwd, env=env,
+        )
+    except OSError as e:
+        return f"啟動失敗：{e}"
+
+    deadline = time.time() + _STARTUP_WAIT.get(name, 15)
+    while time.time() < deadline:
+        if port_open(svc["port"]):
+            return "啟動成功"
+        time.sleep(0.5)
+    return f"尚未在 {_STARTUP_WAIT.get(name, 15)} 秒內就緒，請看新開的「{title}」視窗確認錯誤"
 
 
 app = Flask(__name__)
@@ -153,6 +165,14 @@ PAGE = """<!doctype html>
   <div class="grid" id="cards"></div>
   <p class="msg" id="msg"></p>
 
+  <div class="card" style="margin-top:22px; align-items:flex-start; flex-direction:column; gap:10px;">
+    <div class="info" style="width:100%">
+      <h2>資料庫備份</h2>
+      <div class="hint" id="backupHint">保留最新 10 份，輸出到專案的 backups/ 目錄</div>
+    </div>
+    <button id="backupBtn">立即備份</button>
+  </div>
+
   <footer>面板本身跑在 http://localhost:5999 · 關閉面板不影響已啟動的服務</footer>
 </div>
 
@@ -201,14 +221,39 @@ async function startOne(name, label) {
 }
 
 document.getElementById('startAll').onclick = async () => {
-  msg.textContent = '正在啟動缺少的服務⋯';
+  msg.textContent = '正在啟動缺少的服務⋯（等待就緒，最多約 25 秒）';
   const r = await fetch('/api/start-all', { method: 'POST' });
   const d = await r.json();
   msg.textContent = d.message;
-  setTimeout(refresh, 2000);
+  refresh();
+};
+
+const backupBtn = document.getElementById('backupBtn');
+const backupHint = document.getElementById('backupHint');
+
+async function loadBackups() {
+  try {
+    const r = await fetch('/api/backups');
+    const d = await r.json();
+    backupHint.textContent = d.items.length
+      ? `最近一次：${d.items[0].name}（${d.items[0].size_kb} KB）　共 ${d.items.length} 份`
+      : '尚無備份　·　保留最新 10 份，輸出到專案的 backups/ 目錄';
+  } catch (e) {}
+}
+
+backupBtn.onclick = async () => {
+  backupBtn.disabled = true;
+  backupBtn.textContent = '備份中⋯';
+  const r = await fetch('/api/backup', { method: 'POST' });
+  const d = await r.json();
+  msg.textContent = d.message;
+  backupBtn.disabled = false;
+  backupBtn.textContent = '立即備份';
+  loadBackups();
 };
 
 refresh();
+loadBackups();
 setInterval(refresh, 3000);
 </script>
 </body>
@@ -243,6 +288,19 @@ def api_start_all():
     if not port_open(SERVICES["mysql"]["port"]):
         results.append("MySQL 未啟動，請從 Windows 服務管理員啟動")
     return jsonify({"message": "；".join(results) if results else "全部服務都已在執行中"})
+
+
+@app.route("/api/backup", methods=["POST"])
+def api_backup():
+    from scripts.backup_db import run_backup
+    ok, message = run_backup()
+    return jsonify({"ok": ok, "message": message})
+
+
+@app.route("/api/backups")
+def api_backups():
+    from scripts.backup_db import list_backups
+    return jsonify({"items": list_backups()})
 
 
 if __name__ == "__main__":

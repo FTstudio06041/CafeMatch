@@ -44,8 +44,8 @@ export function useChatLogic(user, navigate) {
     Math.round(chatProgress.base + chatProgress.dims * ((100 - chatProgress.base) / TOTAL_PREF_DIMS))
   );
 
-  const resetProgress = useCallback((base = 0) => {
-    setChatProgress({ base, dims: 0 });
+  const resetProgress = useCallback((base = 0, dims = 0) => {
+    setChatProgress({ base, dims });
   }, []);
 
   const setNormalizedCurrentChat = useCallback((updater) => {
@@ -69,7 +69,8 @@ export function useChatLogic(user, navigate) {
       const normalizedChat = normalizeChatSession(chatState);
       const payload = {
         title: normalizedChat.title,
-        messages: normalizedChat.messages
+        messages: normalizedChat.messages,
+        pref_state: normalizedChat.pref_state || undefined
       };
       if (normalizedChat.id) {
         payload.id = normalizedChat.id;
@@ -126,6 +127,10 @@ export function useChatLogic(user, navigate) {
 
     const chatWithPendingAi = normalizeChatSession({
       ...currentChatRef.current,
+      // 測驗流程進場：把 50% 起始值記進對話狀態，重開對話也能還原
+      ...(isQuizResult
+        ? { pref_state: { ...(currentChatRef.current.pref_state || {}), progress_base: 50 } }
+        : {}),
       title: chatTitle,
       messages: nextMessages
     });
@@ -176,14 +181,23 @@ export function useChatLogic(user, navigate) {
     }
 
     try {
-      // 「直接推薦」時附上最近一次心理測驗五維分數，作為 GNN 推薦的基礎向量
+      // 「直接推薦」時附上最近一次心理測驗五維分數，作為 GNN 推薦的基礎向量；
+      // 並收集本對話已推薦過的店家 id，讓「換一批」真的換一批
       let quizScores;
+      let excludeCafeIds;
       if (forceRecommend) {
         try {
           quizScores = JSON.parse(localStorage.getItem('latestQuizScores') || 'null') || undefined;
         } catch {
           quizScores = undefined;
         }
+        const seen = new Set();
+        for (const m of currentChatRef.current.messages || []) {
+          for (const c of m.cafes || []) {
+            if (c && c.id != null) seen.add(c.id);
+          }
+        }
+        excludeCafeIds = seen.size > 0 ? [...seen] : undefined;
       }
 
       const response = await chatService.streamChat({
@@ -192,7 +206,10 @@ export function useChatLogic(user, navigate) {
         use_rag: true,
         is_quiz_result: isQuizResult,
         force_recommend: forceRecommend,
-        quiz_scores: quizScores
+        quiz_scores: quizScores,
+        exclude_cafe_ids: excludeCafeIds,
+        // 帶回累積偏好，後端會與本輪萃取合併（長對話不失憶）
+        pref_state: currentChatRef.current.pref_state || undefined
       }, abortControllerRef.current.signal);
 
       if (response.status === 429) {
@@ -213,6 +230,15 @@ export function useChatLogic(user, navigate) {
           setChatProgress((prev) => ({
             ...prev,
             dims: Math.max(prev.dims, parsed.progress_dims)
+          }));
+        } else if (parsed.pref_state) {
+          // 後端合併後的累積偏好：掛在對話物件上，隨對話儲存、重開可還原
+          setNormalizedCurrentChat((prev) => ({
+            ...prev,
+            pref_state: {
+              ...(prev.pref_state || {}),
+              preferences: parsed.pref_state.preferences || {}
+            }
           }));
         } else if (parsed.status) {
           await syncStreamState(currentAiContent, currentDebugInfo, '', false, parsed.status);

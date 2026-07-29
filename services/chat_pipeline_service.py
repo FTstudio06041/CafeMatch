@@ -1,4 +1,5 @@
 import json
+import re
 from flask import current_app, session
 from database import db
 from models import User, Cafes, Tags, AiQueryLog
@@ -48,45 +49,70 @@ class ChatPipelineService:
                     model_name = get_selected_model() or get_default_model()
                     extracted_data = preference_service.extract_preferences(history, user_message, model_name)
 
+                    temp_history = history.copy()
+                    temp_history.append({"role": "user", "content": user_message})
+
+                    # 累積偏好：先前輪次確認過的偏好（隨對話儲存、由前端帶回）
+                    # 與本輪萃取結果合併 — 長對話不再因 6 則歷史視窗而「失憶」
+                    base_prefs = ChatPipelineService._clean_pref_dict(
+                        (data.get('pref_state') or {}).get('preferences')
+                        if isinstance(data.get('pref_state'), dict) else None
+                    )
+                    fresh_prefs = (extracted_data or {}).get("preferences") or {}
+                    merged_prefs = ChatPipelineService._merge_preferences(base_prefs, fresh_prefs)
+
+                    # 「都可以／沒特別需求」這類明確回答也計入維度：
+                    # 使用者明說沒偏好，等同回答了該維度，百分比要照實反映
+                    merged_prefs = conversation_guide.apply_no_preference_answers(
+                        temp_history, merged_prefs
+                    )
+                    extracted_data = {"preferences": merged_prefs}
+
                     all_keywords = []
-                    if extracted_data and "preferences" in extracted_data:
-                        for vals in extracted_data["preferences"].values():
-                            all_keywords.extend(vals)
+                    for vals in merged_prefs.values():
+                        all_keywords.extend(v for v in vals if v != '不限')
                     matched_keywords = list(set(matched_keywords + all_keywords))
 
-                    # 回報已掌握的偏好維度數，供前端計算「偏好掌握度」百分比
-                    collected_dims = sum(
-                        1 for v in (extracted_data.get("preferences") or {}).values() if v
-                    )
+                    # 回報累積偏好與維度數：前端即時更新百分比、並隨對話儲存
+                    collected_dims = sum(1 for v in merged_prefs.values() if v)
                     yield json.dumps({"progress_dims": collected_dims}, ensure_ascii=False) + "\n"
+                    yield json.dumps(
+                        {"pref_state": {"preferences": merged_prefs}}, ensure_ascii=False
+                    ) + "\n"
 
                     if force_recommend:
                         # 使用者按下「直接推薦」：跳過確認需求，直接以現有資訊推薦
                         guide_instruction = None
                     else:
-                        # 確認需求 → 結果丟給狀態機：萃取出的偏好交由狀態機
-                        # 決定「這一輪要先確認需求，還是直接推薦」
-                        temp_history = history.copy()
-                        temp_history.append({"role": "user", "content": user_message})
+                        # 確認需求 → 結果丟給狀態機（狀態機只負責確認節奏，永不出卡片）
                         guide_instruction = conversation_guide.analyze_and_guide(temp_history, extracted_data)
 
-            from config.prompts import ALREADY_RECOMMENDED_INSTRUCTION
-            should_recommend = (guide_instruction is None) or (guide_instruction == ALREADY_RECOMMENDED_INSTRUCTION)
-
+            # 推薦（出卡片）只發生在使用者按下「直接推薦咖啡廳」按鈕的那一輪
             cafe_context = ""
             cafes = []
             recommend_engine = None
-            if is_cafe_related and should_recommend:
+            if is_cafe_related and force_recommend:
                 yield json.dumps({"status": "retrieving_cafes"}, ensure_ascii=False) + "\n"
-                if force_recommend:
-                    # GNN 推薦接口：測驗基礎分數 × 對話確認結果 → 調整五維 → GNN 打分
-                    cafes = ChatPipelineService._recommend_with_gnn(
-                        data, history, user_message, extracted_data
-                    )
-                    if cafes:
-                        recommend_engine = "gnn"
+                # 「換一批」：排除這個對話已經推薦過的店家
+                exclude_ids = set()
+                for cid in (data.get('exclude_cafe_ids') or []):
+                    try:
+                        exclude_ids.add(int(cid))
+                    except (TypeError, ValueError):
+                        continue
+
+                # GNN 推薦接口：測驗基礎分數 × 對話確認結果 → 調整五維 → GNN 打分
+                cafes = ChatPipelineService._recommend_with_gnn(
+                    data, history, user_message, extracted_data, exclude_ids
+                )
+                if cafes:
+                    recommend_engine = "gnn"
                 if not cafes:
                     cafes = retrieve_cafe_data(matched_keywords, Cafes, Tags)
+                    if exclude_ids:
+                        remaining = [c for c in cafes if c.id not in exclude_ids]
+                        # 全被排除時寧可重複推薦，也不要空手而回
+                        cafes = remaining or cafes
                     if cafes:
                         recommend_engine = "keyword"
                 if recommend_engine:
@@ -123,6 +149,15 @@ class ChatPipelineService:
 
             show_debug = is_debug_requested and is_admin
 
+            # 快速選項保底：選項是狀態機決定的，不依賴模型是否聽話。
+            # 若指令有指定 [QUICK_OPTIONS] 而模型漏了，在 done 前補上。
+            expected_options_line = None
+            if guide_instruction:
+                m = re.search(r'\[QUICK_OPTIONS\][^\n]+', guide_instruction)
+                if m:
+                    expected_options_line = m.group(0).strip()
+
+            generated_text = ""
             yield json.dumps({"status": "generating_response"}, ensure_ascii=False) + "\n"
             for chunk in ai_service.stream_generate(
                 model_name=model_name,
@@ -134,14 +169,62 @@ class ChatPipelineService:
                 user_id=user_id,
                 show_debug=show_debug
             ):
+                if expected_options_line:
+                    try:
+                        parsed = json.loads(chunk)
+                        if parsed.get("response"):
+                            generated_text += parsed["response"]
+                        if parsed.get("done") and "[QUICK_OPTIONS]" not in generated_text:
+                            yield json.dumps(
+                                {"response": "\n\n" + expected_options_line},
+                                ensure_ascii=False
+                            ) + "\n"
+                    except (ValueError, TypeError):
+                        pass
                 yield chunk
 
         except Exception as e:
             current_app.logger.exception(f"Chat API Error: {e}")
             yield json.dumps({"error": "系統暫時無法處理，請稍後再試", "done": True}, ensure_ascii=False) + "\n"
 
+    # 偏好維度白名單（與 guide_dimensions.json / 萃取格式對齊）
+    _ALLOWED_PREF_DIMS = ('purpose', 'vibe', 'taste', 'budget', 'special')
+
     @staticmethod
-    def _recommend_with_gnn(data, history, user_message, extracted_data):
+    def _clean_pref_dict(prefs):
+        """驗證前端帶回的累積偏好：只收已知維度、字串值、每維度最多 6 個。"""
+        clean = {}
+        if not isinstance(prefs, dict):
+            return clean
+        for dim in ChatPipelineService._ALLOWED_PREF_DIMS:
+            vals = prefs.get(dim)
+            if not isinstance(vals, list):
+                continue
+            kept = [v.strip() for v in vals if isinstance(v, str) and v.strip()][:6]
+            if kept:
+                clean[dim] = kept
+        return clean
+
+    @staticmethod
+    def _merge_preferences(base, fresh):
+        """
+        合併累積偏好與本輪萃取結果（去重、保序、每維度上限 6）。
+        若某維度原本是「不限」而本輪出現真實偏好，以真實偏好取代。
+        """
+        merged = {}
+        for dim in ChatPipelineService._ALLOWED_PREF_DIMS:
+            vals = []
+            for v in (base.get(dim) or []) + (fresh.get(dim) or []):
+                if isinstance(v, str) and v and v not in vals:
+                    vals.append(v)
+            real = [v for v in vals if v != '不限']
+            vals = real if real else vals
+            if vals:
+                merged[dim] = vals[:6]
+        return merged
+
+    @staticmethod
+    def _recommend_with_gnn(data, history, user_message, extracted_data, exclude_ids=None):
         """
         GNN 推薦接口：
           心理測驗五維分數（payload 或 DB 最新紀錄）
@@ -166,7 +249,15 @@ class ChatPipelineService:
             adjusted, hard_filters, accuracy = build_gnn_input(
                 quiz_scores, temp_history, preferences
             )
-            ranked = gnn_recommender.recommend_by_scores(adjusted, hard_filters)
+            # 已表達的偏好關鍵字：與店家標籤混合排序，補足 GNN 對當輪需求的反應度
+            pref_keywords = []
+            for vals in (preferences or {}).values():
+                pref_keywords.extend(v for v in vals if isinstance(v, str) and v != '不限')
+
+            ranked = gnn_recommender.recommend_by_scores(
+                adjusted, hard_filters, exclude_ids=exclude_ids,
+                pref_keywords=pref_keywords
+            )
             if not ranked:
                 return []
 
@@ -176,7 +267,8 @@ class ChatPipelineService:
 
             adjusted_str = {k: round(v, 1) for k, v in adjusted.items()}
             current_app.logger.info(
-                f"[GNN] 推薦 {len(cafes)} 家（回饋={accuracy}、調整後五維={adjusted_str}、硬過濾={hard_filters}）"
+                f"[GNN] 推薦 {len(cafes)} 家（回饋={accuracy}、調整後五維={adjusted_str}、"
+                f"硬過濾={hard_filters}、混合關鍵字={pref_keywords}）"
             )
             return cafes
         except gnn_recommender.GnnUnavailable as e:

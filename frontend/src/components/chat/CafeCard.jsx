@@ -19,8 +19,10 @@ export default function CafeCard({ cafe }) {
   return (
     <div className="cafe-card">
       <div className="cafe-card-img">
+        {/* 推薦卡片只有幾張且是當下的互動焦點，不用 lazy：
+            lazy 在剛串流出現的捲動容器裡可能延遲觸發，造成空白卡 */}
         {showImg ? (
-          <img src={cafe.image} alt={cafe.name} loading="lazy" onError={() => setImgError(true)} />
+          <img src={cafe.image} alt={cafe.name} onError={() => setImgError(true)} />
         ) : (
           <div className="cafe-card-img-placeholder"><Coffee size={28} /></div>
         )}

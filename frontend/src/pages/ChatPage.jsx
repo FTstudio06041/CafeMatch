@@ -103,20 +103,24 @@ export default function ChatPage() {
       return;
     }
 
-    // 正常載入對話：偏好掌握度重新起算
-    resetProgress(0);
+    // 正常載入對話
     if (!urlId || urlId === 'new') {
+      resetProgress(0);
       setNormalizedCurrentChat(EMPTY_CHAT);
     } else {
       if (user?.isGuest) {
         navigate('/chat?id=new', { replace: true });
         return;
       }
-      // 載入資料庫對話
+      // 載入資料庫對話，並從儲存的累積偏好還原掌握度百分比
       chatService.fetchSessionDetail(urlId)
         .then(data => {
           if (data.id) {
             setNormalizedCurrentChat(data);
+            const ps = data.pref_state || {};
+            const dims = Object.values(ps.preferences || {})
+              .filter(v => Array.isArray(v) && v.length > 0).length;
+            resetProgress(ps.progress_base || 0, dims);
           } else {
             navigate('/chat?id=new', { replace: true });
           }

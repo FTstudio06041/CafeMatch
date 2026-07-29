@@ -7,7 +7,9 @@ def get_utc_now():
 
 import os
 
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+# 用 127.0.0.1 而非 localhost：Windows 上 localhost 會先嘗試 IPv6 (::1)，
+# 而 Ollama 預設只綁 IPv4，每次連線都要等約 2 秒才退回 —— 每輪對話會白白多花數秒
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 OLLAMA_DEFAULT_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.2:3b")
 
 ANALYSIS_KEYWORDS = [

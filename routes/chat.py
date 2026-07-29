@@ -37,6 +37,7 @@ def get_chat_session_detail(user, session_id):
         "id": chat_session.id,
         "title": chat_session.title,
         "messages": chat_session.messages,
+        "pref_state": chat_session.pref_state,
         "updated_at": chat_session.updated_at.strftime('%Y-%m-%d %H:%M:%S') if chat_session.updated_at else None
     })
 
@@ -68,6 +69,15 @@ def save_chat_session(user):
         cleaned_messages.append(cleaned_msg)
     messages = cleaned_messages
 
+    # 累積偏好狀態（只收已知欄位、限制大小）
+    pref_state = data.get('pref_state')
+    if isinstance(pref_state, dict):
+        pref_state = {k: v for k, v in pref_state.items() if k in ('preferences', 'progress_base')}
+        if len(json.dumps(pref_state, ensure_ascii=False)) > 20000:
+            pref_state = None
+    else:
+        pref_state = None
+
     try:
         if session_id:
             chat_session = ChatSession.query.filter_by(id=session_id, user_id=user.id).first()
@@ -76,6 +86,8 @@ def save_chat_session(user):
             
             chat_session.title = title
             chat_session.messages = messages
+            if pref_state is not None:
+                chat_session.pref_state = pref_state
             chat_session.updated_at = get_utc_now()
         else:
             new_id = str(uuid.uuid4())
@@ -83,7 +95,8 @@ def save_chat_session(user):
                 id=new_id,
                 user_id=user.id,
                 title=title,
-                messages=messages
+                messages=messages,
+                pref_state=pref_state
             )
             db.session.add(chat_session)
         

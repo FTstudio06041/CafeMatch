@@ -62,7 +62,8 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
     strategy = config["strategy"]
 
     extracted_data = extracted_data or {}
-    collected = extracted_data.get("preferences", {})
+    # 「都可以／沒特別需求」等明確回答也計入維度（冪等，pipeline 可能已套用過）
+    collected = apply_no_preference_answers(history, extracted_data.get("preferences", {}))
 
     # 計算收集到的總維度數量
     collected_keys = [k for k, v in collected.items() if v]
@@ -146,6 +147,59 @@ def analyze_and_guide(history: list, extracted_data: dict = None) -> str | None:
         examples=examples,
         quick_options=next_dim.get("quick_options")
     )
+
+
+# 「明確表示沒有偏好」的訊號：這也是一種明確回答，該維度視為已確認
+_NO_PREFERENCE_SIGNALS = ('都可以', '沒有', '沒特別', '隨便', '不限', '沒差', '皆可', '不用', 'ok', '可以')
+
+
+def apply_no_preference_answers(history: list, preferences: dict) -> dict:
+    """
+    掃描對話中的「AI 提問 → 使用者回答」配對：
+    若 AI 針對某維度發問（訊息帶有該維度的快速選項），而使用者明確回答
+    「都可以／沒特別需求」等，該維度標記為已確認（值 '不限'）。
+
+    這讓百分比照實反映使用者已明確回答的內容，狀態機也不會重複追問。
+    """
+    config = _load_config()
+    dimensions = config.get("dimensions", [])
+    preferences = dict(preferences or {})
+
+    for i in range(len(history) - 1):
+        ai_msg = history[i]
+        user_msg = history[i + 1]
+        if ai_msg.get("role") not in ("ai", "assistant") or user_msg.get("role") != "user":
+            continue
+        ai_content = ai_msg.get("content", "")
+        reply = (user_msg.get("content", "") or "").strip()
+
+        # 使用者的回答必須是簡短且明確的「沒偏好」表述
+        if len(reply) > 12 or not any(sig in reply.lower() for sig in _NO_PREFERENCE_SIGNALS):
+            continue
+
+        # 比對 AI 這一題問的是哪個維度（訊息中帶有該維度的快速選項）
+        for d in dimensions:
+            opts = d.get("quick_options") or []
+            if len(opts) >= 2 and opts[0] in ai_content and opts[1] in ai_content:
+                if not preferences.get(d["key"]):
+                    preferences[d["key"]] = ['不限']
+                break
+
+    return preferences
+
+
+def get_keyword_dimension_map() -> dict:
+    """
+    回傳 {關鍵字: 維度 key} 對照表（供偏好萃取快篩使用）。
+    長關鍵字優先比對，避免短詞先命中造成誤判。
+    """
+    config = _load_config()
+    mapping = {}
+    for d in config.get("dimensions", []):
+        for kw in d.get("detect_keywords", []):
+            if kw:
+                mapping.setdefault(kw, d["key"])
+    return dict(sorted(mapping.items(), key=lambda kv: len(kv[0]), reverse=True))
 
 
 def get_known_keywords() -> set:

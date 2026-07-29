@@ -37,6 +37,13 @@ TIER2_POOL_SIZE = 6
 TIER1_PICK = 3
 TIER2_PICK = 2
 
+# 標籤匹配在最終排序的權重（0 = 純 GNN、1 = 純標籤匹配）
+TAG_BLEND_WEIGHT = 0.4
+# 有明確偏好時，保證最匹配的前幾家一定入選（其餘名額仍隨機，維持變化性）
+GUARANTEED_TOP_MATCHES = 2
+# GNN 分數正規化的最小跨距，避免微小差異被放大成決定性差距
+MIN_GNN_SPAN = 0.15
+
 # 硬過濾條件 → review_tags 關鍵字
 _HARD_FILTER_TAGS = {
     'pet': ('寵物',),
@@ -178,41 +185,100 @@ def _passes_hard_filters(cafe_id: int, hard_filters: dict, id2tags: dict) -> boo
     return True
 
 
-def _tiered_sample(candidates: list) -> list:
-    """分層抽樣：精選（≥4.7）抽 3 + 優質（4.0~4.7）抽 2，不足時互補。"""
+def _tag_match_score(cafe_id: int, keywords: list, id2tags: dict) -> float:
+    """
+    使用者已表達的偏好關鍵字，與店家 review_tags 的匹配比例（0~1）。
+
+    GNN 的 predictor 輸出擠在很窄的區間（實測多在 0.96~0.98），
+    對「這一輪講了什麼」不夠敏感；標籤匹配補上這塊反應度。
+    """
+    if not keywords:
+        return 0.0
+    tags_text = ' '.join(id2tags.get(cafe_id, []))
+    if not tags_text:
+        return 0.0
+    hit = sum(1 for kw in keywords if kw and kw in tags_text)
+    return hit / len(keywords)
+
+
+def _blend_scores(candidates: list, keywords: list, id2tags: dict, weight: float) -> None:
+    """
+    就地寫入 blended_score = (1-w)·正規化GNN + w·標籤匹配。
+
+    GNN 原始分數先做 min-max 正規化，否則它的窄區間會被標籤分數淹沒。
+    """
+    if not candidates:
+        return
+    raw = [c['gnn_score'] for c in candidates]
+    lo, hi = min(raw), max(raw)
+    # 跨距下限：GNN 分數擠成一團時（常見），純 min-max 會把 0.01 的差距
+    # 放大成滿分差距、壓過標籤匹配。設下限讓微小差異維持微小。
+    span = max(hi - lo, MIN_GNN_SPAN)
+    for c in candidates:
+        norm_gnn = (c['gnn_score'] - lo) / span
+        tag = _tag_match_score(c['cafe_id'], keywords, id2tags)
+        c['tag_score'] = tag
+        c['blended_score'] = (1 - weight) * norm_gnn + weight * tag if keywords else norm_gnn
+
+
+def _tiered_sample(candidates: list, guaranteed: int = 0) -> list:
+    """
+    分層抽樣：精選（≥4.7）抽 3 + 優質（4.0~4.7）抽 2，不足時互補。
+
+    guaranteed > 0 時，先把整體分數最高的前 N 家「保證入選」，
+    避免使用者明講的需求（例如寵物友善）被隨機抽樣洗掉；
+    其餘名額仍隨機，維持每次推薦的變化性。
+    """
+    rank_key = lambda c: c.get('blended_score', c['gnn_score'])
+
+    locked = []
+    if guaranteed > 0:
+        ranked_all = sorted(candidates, key=rank_key, reverse=True)
+        locked = ranked_all[:guaranteed]
+        locked_ids = {c['cafe_id'] for c in locked}
+        candidates = [c for c in candidates if c['cafe_id'] not in locked_ids]
     tier1 = sorted(
         [c for c in candidates if c['avg_score'] >= TIER1_THRESHOLD],
-        key=lambda c: c['gnn_score'], reverse=True
+        key=rank_key, reverse=True
     )
     tier2 = sorted(
         [c for c in candidates if TIER2_MIN <= c['avg_score'] < TIER1_THRESHOLD],
-        key=lambda c: c['gnn_score'], reverse=True
+        key=rank_key, reverse=True
     )
 
-    chosen = random.sample(tier1[:TIER1_POOL_SIZE], min(TIER1_PICK, len(tier1[:TIER1_POOL_SIZE])))
-    chosen += random.sample(tier2[:TIER2_POOL_SIZE], min(TIER2_PICK, len(tier2[:TIER2_POOL_SIZE])))
+    total = TIER1_PICK + TIER2_PICK
+    remaining = max(0, total - len(locked))
+    # 保證名額佔掉的份額，按比例從精選層先扣
+    pick1 = max(0, min(TIER1_PICK, remaining))
+    pick2 = max(0, remaining - pick1)
 
-    if len(chosen) < TIER1_PICK + TIER2_PICK:
+    chosen = random.sample(tier1[:TIER1_POOL_SIZE], min(pick1, len(tier1[:TIER1_POOL_SIZE])))
+    chosen += random.sample(tier2[:TIER2_POOL_SIZE], min(pick2, len(tier2[:TIER2_POOL_SIZE])))
+
+    if len(chosen) < remaining:
         chosen_ids = {c['cafe_id'] for c in chosen}
         extra = [c for c in tier1 + tier2 if c['cafe_id'] not in chosen_ids]
-        need = TIER1_PICK + TIER2_PICK - len(chosen)
-        chosen += extra[:need]
+        chosen += extra[:remaining - len(chosen)]
 
-    return sorted(chosen, key=lambda c: c['gnn_score'], reverse=True)
+    return sorted(locked + chosen, key=rank_key, reverse=True)
 
 
 def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
-                        exclude_ids: set | None = None) -> list:
+                        exclude_ids: set | None = None,
+                        pref_keywords: list | None = None,
+                        tag_weight: float = TAG_BLEND_WEIGHT) -> list:
     """
-    以（調整後的）五維分數執行 GNN 推薦。
+    以（調整後的）五維分數執行 GNN 推薦，並用已表達的偏好關鍵字微調排序。
 
     參數:
-        scores:       {work, env, social, taste, cp} 調整後分數
-        hard_filters: {'pet': bool, 'parking': bool, 'night': bool}
-        exclude_ids:  要排除的 DB cafe id（例如已推薦過的）
+        scores:        {work, env, social, taste, cp} 調整後分數
+        hard_filters:  {'pet': bool, 'parking': bool, 'night': bool}
+        exclude_ids:   要排除的 DB cafe id（例如已推薦過的）
+        pref_keywords: 對話中已表達的偏好關鍵字（與店家標籤混合排序）
+        tag_weight:    標籤匹配在最終分數的權重（0 = 純 GNN）
 
     回傳:
-        [{'cafe_id', 'gnn_score', 'avg_score', 'review_count'}]（依 gnn_score 排序，最多 5 家）
+        [{'cafe_id', 'gnn_score', 'tag_score', 'blended_score', 'avg_score', 'review_count'}]
 
     拋出:
         GnnUnavailable — 呼叫端應回退關鍵字檢索
@@ -256,4 +322,12 @@ def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
     if len(filtered) < TIER1_PICK + TIER2_PICK:
         filtered = candidates
 
-    return _tiered_sample(filtered)
+    # 混合排序：GNN 分數（正規化）＋ 這一輪講到的偏好與店家標籤的匹配度
+    keywords = [k for k in (pref_keywords or []) if isinstance(k, str) and k and k != '不限']
+    _blend_scores(filtered, keywords, state['id2tags'], tag_weight)
+
+    # 有明確偏好且真的有店家對上時，保證最匹配的兩家入選（其餘仍隨機）
+    has_match = any(c.get('tag_score', 0) > 0 for c in filtered)
+    guaranteed = GUARANTEED_TOP_MATCHES if (keywords and has_match) else 0
+
+    return _tiered_sample(filtered, guaranteed=guaranteed)

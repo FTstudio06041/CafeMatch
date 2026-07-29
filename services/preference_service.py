@@ -45,11 +45,35 @@ def _sanitize_preferences(prefs, user_text, ai_text):
     return clean
 
 
+def _rule_extract(user_message: str) -> dict:
+    """用維度關鍵字表直接萃取偏好（不呼叫 LLM）。"""
+    from services.conversation_guide import get_keyword_dimension_map
+
+    text = (user_message or '').strip()
+    prefs = {}
+    for kw, dim in get_keyword_dimension_map().items():
+        if kw in text and kw.lower() not in _GENERIC_STOPWORDS:
+            vals = prefs.setdefault(dim, [])
+            # 已被更長的關鍵字涵蓋就不重複收（例如「早午餐」已收則跳過「餐」）
+            if not any(kw in existing for existing in vals):
+                vals.append(kw)
+    return prefs
+
+
 def extract_preferences(history, user_message, model_name):
     """
-    呼叫 LLM 進行意圖與偏好萃取，回傳 JSON。
+    偏好萃取：短訊息走關鍵字快篩（零 LLM 呼叫），其餘交給 LLM。
     這是一個純粹的萃取服務，嚴禁生成推薦結果或使用 RAG。
     """
+    # === 快篩路徑 ===
+    # 萃取結果本來就會被驗證層限縮成「使用者說過或已知維度詞彙」，
+    # 因此關鍵字命中時 LLM 幾乎沒有加值 —— 直接省下一次 LLM 呼叫（每輪數秒）。
+    # 只有規則完全落空時，才付錢請 LLM 解讀使用者的自創說法。
+    fast = _rule_extract(user_message)
+    if fast:
+        logging.info(f"[Extraction] 快篩命中，跳過 LLM：{fast}")
+        return {"preferences": fast}
+
     # 組裝供萃取的歷史字串（同時分開累積使用者／AI 的話，供結果驗證）
     history_text = ""
     user_text = ""
