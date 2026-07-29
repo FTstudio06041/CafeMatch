@@ -1,10 +1,20 @@
 import { logger } from './logger';
 import { toast } from './toast';
 
-// 判斷是否在 devtunnels 或 localhost
-export const API_BASE_URL = window.location.hostname.includes('devtunnels.ms')
-  ? `https://${window.location.host.replace('-5173', '-5000')}`
-  : (import.meta.env.VITE_API_URL || 'http://localhost:5000');
+// API 位址的決定順序：
+//   1. VITE_API_URL（明確指定時最優先）
+//   2. devtunnels：把 -5173 換成 -5000
+//   3. localhost 開發：直接打本機後端 5000
+//   4. 其他網域（外網）：走同源空字串，由 Vite / 反向代理把 /api 轉給後端
+//      —— 不能寫死 localhost:5000，那會變成連到「訪客自己的電腦」
+const hostname = window.location.hostname;
+const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+
+export const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  (hostname.includes('devtunnels.ms')
+    ? `https://${window.location.host.replace('-5173', '-5000')}`
+    : (isLocalhost ? 'http://localhost:5000' : ''));
 
 /**
  * 統一的 API 請求工具

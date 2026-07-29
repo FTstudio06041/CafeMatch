@@ -6,16 +6,17 @@ import RadarChart from '../components/RadarChart';
 import { quizService } from '../services/quizService';
 import '../QuizPage.css';
 
-// 每題的情境插畫：檔名 = 題號（frontend/src/assets/quiz/1.jpg → 第 1 題），
-// 新增題目插畫只要把圖丟進資料夾即可，沒有圖的題目不顯示
-const questionImages = import.meta.glob('../assets/quiz/*.{jpg,jpeg,png,webp}', {
+// 咖啡人格插畫：檔名 = 人格類型 key（work / env / social / taste / cp /
+// work_env / taste_cp / balanced），由 scripts/sync_cafe_photos.py 同步產生
+const personalityImages = import.meta.glob('../assets/personality/*.{jpg,jpeg,png,webp}', {
   eager: true,
   import: 'default',
 });
 
-const getQuestionImage = (order) => {
+const getPersonalityImage = (typeKey) => {
+  if (!typeKey) return null;
   for (const ext of ['jpg', 'jpeg', 'png', 'webp']) {
-    const img = questionImages[`../assets/quiz/${order}.${ext}`];
+    const img = personalityImages[`../assets/personality/${typeKey}.${ext}`];
     if (img) return img;
   }
   return null;
@@ -301,7 +302,7 @@ export default function QuizPage() {
 
           {/* ===== 非 intro 狀態：包在 quiz-card 內 ===== */}
           {quizState !== 'intro' && (
-            <div className={`quiz-card ${quizState === 'result' ? 'result-mode' : ''}${quizState === 'question' && currentQ && getQuestionImage(currentQ.order) ? ' question-wide' : ''}`}>
+            <div className={`quiz-card ${quizState === 'result' ? 'result-mode' : ''}`}>
 
               {/* ===== 進度條（答題中顯示） ===== */}
               {quizState === 'question' && currentQ && (
@@ -335,20 +336,7 @@ export default function QuizPage() {
               {/* ===== 答題頁 ===== */}
               {quizState === 'question' && currentQ && (
                 <div className="question-wrapper">
-                  <div className={`question-slide ${isFading ? 'fading-out' : ''}${getQuestionImage(currentQ.order) ? ' with-img' : ''}`} key={currentQ.id}>
-
-                    {/* 情境插畫（依題號對應）：桌面左欄，窄螢幕退回直式 */}
-                    {getQuestionImage(currentQ.order) && (
-                      <div className="question-visual">
-                        <img
-                          className="question-illustration"
-                          src={getQuestionImage(currentQ.order)}
-                          alt={`第 ${currentQ.order} 題情境插畫${currentQ.scenario_tag ? `：${currentQ.scenario_tag}` : ''}`}
-                        />
-                      </div>
-                    )}
-
-                    <div className="question-main">
+                  <div className={`question-slide ${isFading ? 'fading-out' : ''}`} key={currentQ.id}>
 
                     {/* 情境標籤 */}
                     {currentQ.scenario_tag && (
@@ -408,7 +396,6 @@ export default function QuizPage() {
                         ))}
                       </div>
                     )}
-                    </div>
                   </div>
                 </div>
               )}
@@ -424,16 +411,27 @@ export default function QuizPage() {
               {/* ===== 結果頁 ===== */}
               {quizState === 'result' && quizResult && (
                 <div className="result-view">
-                  {/* 專屬稱號 */}
-                  <div className="result-title-badge">你的咖啡人格</div>
-                  <h1 className="result-title">{quizResult.result?.title}</h1>
+                  {/* 主視覺：插畫 + 稱號/內心獨白（桌面並排、手機直式） */}
+                  <div className="result-hero">
+                    {getPersonalityImage(quizResult.result?.type_key) && (
+                      <img
+                        className="result-persona-img"
+                        src={getPersonalityImage(quizResult.result.type_key)}
+                        alt={`咖啡人格插畫：${quizResult.result?.title || ''}`}
+                      />
+                    )}
 
-                  {/* 內心獨白 */}
-                  {quizResult.result?.inner_voice && (
-                    <div className="result-quote">
-                      <p>「{quizResult.result.inner_voice}」</p>
+                    <div className="result-hero-text">
+                      <div className="result-title-badge">你的咖啡人格</div>
+                      <h1 className="result-title">{quizResult.result?.title}</h1>
+
+                      {quizResult.result?.inner_voice && (
+                        <div className="result-quote">
+                          <p>「{quizResult.result.inner_voice}」</p>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
 
                   {/* 主體內容區：左右並排 */}
                   <div className="result-body">

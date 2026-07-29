@@ -9,6 +9,8 @@ env/
 
 # 忽略敏感資料
 .env
+.env.backup*
+.env.*.bak
 
 # 忽略 VS Code 設定檔
 .vscode/

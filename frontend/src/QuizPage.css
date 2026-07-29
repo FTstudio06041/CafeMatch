@@ -68,10 +68,14 @@
     position: relative;
 }
 
-/* 結果頁寬度加大，容納左右並排 */
+/* 結果頁寬度加大，容納左右並排。
+   注意：這裡必須用 flex-start —— 內容比卡片高時，justify-content: center
+   會把上半部推到捲動範圍之外，導致標題被切掉且捲不到。 */
 .quiz-card.result-mode {
     max-width: 960px;
-    padding: 20px 0;
+    padding: 20px 0 32px;
+    min-height: auto;
+    justify-content: flex-start;
 }
 
 @keyframes cardAppear {
@@ -413,19 +417,6 @@
 /* =============================================
    題目文案
    ============================================= */
-/* 每題情境插畫（檔名=題號自動對應） */
-.question-illustration {
-    width: 100%;
-    max-width: 420px;
-    aspect-ratio: 4 / 3;
-    object-fit: cover;
-    border-radius: 18px;
-    border: 1px solid rgba(78, 52, 46, 0.12);
-    box-shadow: 0 10px 30px rgba(78, 52, 46, 0.16);
-    margin: 0 auto 24px;
-    display: block;
-}
-
 .question-text {
     font-size: 1.25rem;
     font-weight: 700;
@@ -450,47 +441,6 @@
 
 .question-slide.fading-out {
     animation: fadeSlideOut 0.25s ease forwards;
-}
-
-/* 有情境插畫的題目：桌面左右兩欄（圖左、題目+選項右），整題一屏收完 */
-.quiz-card.question-wide {
-    max-width: 960px;
-}
-
-.question-slide.with-img {
-    display: grid;
-    grid-template-columns: minmax(260px, 340px) 1fr;
-    gap: 40px;
-    align-items: center;
-    text-align: left;
-}
-
-.question-slide.with-img .question-illustration {
-    width: 100%;
-    max-width: 100%;
-    aspect-ratio: 1 / 1;
-    margin: 0;
-}
-
-.question-slide.with-img .question-text {
-    max-width: 100%;
-}
-
-/* 窄螢幕退回直式：圖片高度用視窗高度上限壓住，避免把選項擠出畫面 */
-@media (max-width: 900px) {
-    .question-slide.with-img {
-        display: flex;
-        flex-direction: column;
-        text-align: center;
-        gap: 0;
-    }
-
-    .question-slide.with-img .question-illustration {
-        max-width: 420px;
-        aspect-ratio: 16 / 9;
-        max-height: 30vh;
-        margin: 0 auto 20px;
-    }
 }
 
 @keyframes fadeSlideIn {
@@ -792,16 +742,66 @@
 }
 
 .result-title {
-    font-size: 4rem;
+    font-size: 2.6rem;
     font-weight: 900;
-    margin-bottom: 24px;
-    line-height: 1.3;
+    margin-bottom: 20px;
+    line-height: 1.25;
+    text-wrap: balance;
     background: linear-gradient(135deg, var(--accent-color), var(--accent-gold), var(--accent-warm));
     background-size: 200% 200%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     animation: gradientShift 4s ease infinite;
+}
+
+/* 結果頁主視覺：插畫 + 稱號／內心獨白。
+   採行動優先：預設直式，寬度夠（≥700px）才並排——
+   本頁其他 RWD 用 1366px 斷點，筆電也會落在那個區間，故這裡自訂斷點。 */
+.result-hero {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.result-hero-text {
+    min-width: 0;
+}
+
+.result-persona-img {
+    width: 100%;
+    max-width: 190px;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 20px;
+    border: 1px solid rgba(78, 52, 46, 0.12);
+    box-shadow: 0 12px 32px rgba(78, 52, 46, 0.2);
+    display: block;
+    margin: 0 auto;
+}
+
+@media (min-width: 700px) {
+    .result-hero {
+        grid-template-columns: 260px minmax(0, 1fr);
+        gap: 32px;
+        text-align: left;
+        margin-bottom: 28px;
+    }
+
+    /* 沒有插畫時，文字佔滿整行 */
+    .result-hero:not(:has(.result-persona-img)) {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+
+    .result-persona-img {
+        max-width: 260px;
+        margin: 0;
+    }
 }
 
 @keyframes gradientShift {
@@ -813,19 +813,19 @@
 /* 內心獨白（引用區塊） */
 .result-quote {
     width: 100%;
-    padding: 24px 28px;
+    padding: 18px 22px;
     background: rgba(245, 235, 224, 0.6);
     border-left: 4px solid var(--accent-gold);
     border-radius: 0 16px 16px 0;
-    margin-bottom: 28px;
+    margin-bottom: 0;
     text-align: left;
 }
 
 .result-quote p {
     font-style: italic;
     color: var(--accent-warm);
-    line-height: 1.8;
-    font-size: 1.3rem;
+    line-height: 1.7;
+    font-size: 1.05rem;
 }
 
 /* 特質側寫 */
@@ -846,8 +846,8 @@
 
 .result-profile p {
     color: var(--text-main);
-    line-height: 1.8;
-    font-size: 1.3rem;
+    line-height: 1.75;
+    font-size: 1.05rem;
 }
 
 /* 結果頁主體：左右並排容器 */
@@ -884,7 +884,7 @@
 }
 
 .result-cafe-match .match-title {
-    font-size: 1.5rem;
+    font-size: 1.15rem;
     font-weight: 700;
     color: var(--accent-color);
     margin-bottom: 10px;
@@ -896,7 +896,7 @@
 .result-cafe-match p {
     color: var(--text-main);
     line-height: 1.7;
-    font-size: 1.2rem;
+    font-size: 1.02rem;
 }
 
 /* =============================================

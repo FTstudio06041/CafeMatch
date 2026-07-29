@@ -32,3 +32,6 @@ pytest==8.2.2
 torch==2.13.0
 torch-geometric==2.8.0
 pandas==3.0.3
+
+# 圖片同步腳本的縮圖壓縮（scripts/sync_cafe_photos.py，缺少時會退回原檔複製）
+Pillow==12.3.0
