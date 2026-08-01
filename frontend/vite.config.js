@@ -19,9 +19,32 @@ const proxy = Object.fromEntries(
   backendPaths.map(path => [path, { target: BACKEND, changeOrigin: true }])
 )
 
+// 預先宣告所有實際用到的相依套件，強迫 Vite 在啟動時一次打包完。
+// 不宣告的話，頁面是 lazy 載入的（App.jsx 的 lazy()），每進一個 chunk 才發現
+// 新套件，Vite 就重跑一次 optimize 並換掉模組 URL 的 ?v= hash。本機幾十毫秒
+// 內就結束所以看不出來，但穿過 Cloudflare 隧道時模組請求慢，同一次載入會混到
+// 不同世代的 chunk —— 出現兩份 React，hooks 的 dispatcher 是 null，
+// 畫面直接掛在 "Cannot read properties of null (reading 'useState')"。
+const optimizeDeps = {
+  include: [
+    'react',
+    'react-dom',
+    'react-dom/client',
+    'react/jsx-runtime',
+    'react/jsx-dev-runtime',
+    'react-router-dom',
+    'lucide-react',
+    'framer-motion',
+    'typewriter-effect',
+    'recharts',
+    'react-cropper',
+  ],
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps,
   server: {
     host: true,        // 綁定 0.0.0.0，外部連線才進得來
     allowedHosts,
