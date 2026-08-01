@@ -71,8 +71,7 @@ def extract_preferences(history, user_message, model_name):
     # 只有規則完全落空時，才付錢請 LLM 解讀使用者的自創說法。
     fast = _rule_extract(user_message)
     if fast:
-        logging.info(f"[Extraction] 快篩命中，跳過 LLM：{fast}")
-        return {"preferences": fast}
+        return {"preferences": fast, "fast_path": True}
 
     # 組裝供萃取的歷史字串（同時分開累積使用者／AI 的話，供結果驗證）
     history_text = ""

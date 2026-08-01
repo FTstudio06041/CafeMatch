@@ -3,7 +3,7 @@ import re
 from flask import current_app, session
 from database import db
 from models import User, Cafes, Tags, AiQueryLog
-from services import ai_service, conversation_guide, preference_service
+from services import ai_service, conversation_guide, preference_service, debug_logger
 from services.intent_classifier import classify_intent
 from services.cafe_retriever import retrieve_cafe_data, format_cafe_context, serialize_cafe
 from services.ollama_admin_service import check_health, get_default_model
@@ -44,10 +44,12 @@ class ChatPipelineService:
                     yield json.dumps({"status": "processing_quiz_result"}, ensure_ascii=False) + "\n"
                     from config.prompts import QUIZ_RESULT_CONFIRMATION_INSTRUCTION
                     guide_instruction = QUIZ_RESULT_CONFIRMATION_INSTRUCTION
+                    debug_logger.log_quiz_result(data.get('quiz_scores'), user_message)
                 else:
                     yield json.dumps({"status": "extracting_preferences"}, ensure_ascii=False) + "\n"
                     model_name = get_selected_model() or get_default_model()
-                    extracted_data = preference_service.extract_preferences(history, user_message, model_name)
+                    extracted_raw = preference_service.extract_preferences(history, user_message, model_name)
+                    extracted_data = extracted_raw
 
                     temp_history = history.copy()
                     temp_history.append({"role": "user", "content": user_message})
@@ -87,6 +89,21 @@ class ChatPipelineService:
                         # 確認需求 → 結果丟給狀態機（狀態機只負責確認節奏，永不出卡片）
                         guide_instruction = conversation_guide.analyze_and_guide(temp_history, extracted_data)
 
+                    # 終端除錯輸出：這一輪知道了什麼、決定做什麼
+                    decision, focus = ChatPipelineService._describe_decision(
+                        guide_instruction, force_recommend
+                    )
+                    debug_logger.log_round(
+                        turn=sum(1 for m in temp_history if m.get('role') == 'user'),
+                        user_message=user_message,
+                        fresh_prefs=fresh_prefs,
+                        merged_prefs=merged_prefs,
+                        dims=collected_dims,
+                        decision=decision,
+                        focus_dim=focus,
+                        fast_path=bool((extracted_raw or {}).get('fast_path')),
+                    )
+
             # 推薦（出卡片）只發生在使用者按下「直接推薦咖啡廳」按鈕的那一輪
             cafe_context = ""
             cafes = []
@@ -115,6 +132,12 @@ class ChatPipelineService:
                         cafes = remaining or cafes
                     if cafes:
                         recommend_engine = "keyword"
+                    # GNN 失敗時走這條，除錯輸出要標明是回退路徑
+                    debug_logger.log_recommendation(
+                        accuracy='-', base_scores=None, adjusted_scores=None,
+                        hard_filters=None, keywords=matched_keywords,
+                        engine='keyword', cafes=cafes, excluded=len(exclude_ids),
+                    )
                 if recommend_engine:
                     # 讓前端／測試可以驗證這批推薦來自哪個引擎
                     yield json.dumps({"recommend_engine": recommend_engine}, ensure_ascii=False) + "\n"
@@ -191,6 +214,24 @@ class ChatPipelineService:
     _ALLOWED_PREF_DIMS = ('purpose', 'vibe', 'taste', 'budget', 'special')
 
     @staticmethod
+    def _describe_decision(guide_instruction, force_recommend):
+        """把狀態機的決定翻成人看得懂的字串（供終端除錯輸出）。"""
+        if force_recommend:
+            return '略過確認（使用者按下推薦按鈕）', None
+        if guide_instruction is None:
+            return '直接推薦', None
+        if '」的確認問題' in guide_instruction:
+            focus = guide_instruction.split('把「')[1].split('」的確認問題')[0]
+            return '確認需求', focus
+        if '已經透過下方卡片推薦過' in guide_instruction:
+            return '推薦後問答（不出新卡片）', None
+        if '大致掌握' in guide_instruction:
+            return '資訊足夠 → 邀請使用者按推薦按鈕', None
+        if '準不準' in guide_instruction:
+            return '詢問測驗結果是否準確', None
+        return '其他引導', None
+
+    @staticmethod
     def _clean_pref_dict(prefs):
         """驗證前端帶回的累積偏好：只收已知維度、字串值、每維度最多 6 個。"""
         clean = {}
@@ -265,10 +306,15 @@ class ChatPipelineService:
             rows = {c.id: c for c in Cafes.query.filter(Cafes.id.in_(ids)).all()}
             cafes = [rows[i] for i in ids if i in rows]
 
-            adjusted_str = {k: round(v, 1) for k, v in adjusted.items()}
-            current_app.logger.info(
-                f"[GNN] 推薦 {len(cafes)} 家（回饋={accuracy}、調整後五維={adjusted_str}、"
-                f"硬過濾={hard_filters}、混合關鍵字={pref_keywords}）"
+            debug_logger.log_recommendation(
+                accuracy=accuracy,
+                base_scores=quiz_scores,
+                adjusted_scores=adjusted,
+                hard_filters=hard_filters,
+                keywords=pref_keywords,
+                engine='gnn',
+                cafes=cafes,
+                excluded=len(exclude_ids or []),
             )
             return cafes
         except gnn_recommender.GnnUnavailable as e:

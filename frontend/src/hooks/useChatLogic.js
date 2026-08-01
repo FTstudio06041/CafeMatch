@@ -185,12 +185,15 @@ export function useChatLogic(user, navigate) {
       // 並收集本對話已推薦過的店家 id，讓「換一批」真的換一批
       let quizScores;
       let excludeCafeIds;
-      if (forceRecommend) {
+      // 測驗結果進場那輪也帶上分數，後端終端除錯輸出才看得到原始五維
+      if (forceRecommend || isQuizResult) {
         try {
           quizScores = JSON.parse(localStorage.getItem('latestQuizScores') || 'null') || undefined;
         } catch {
           quizScores = undefined;
         }
+      }
+      if (forceRecommend) {
         const seen = new Set();
         for (const m of currentChatRef.current.messages || []) {
           for (const c of m.cafes || []) {
