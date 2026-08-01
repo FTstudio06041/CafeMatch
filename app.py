@@ -6,7 +6,11 @@ from flask_cors import CORS
 from database import db
 from extensions import oauth, limiter, migrate
 
-load_dotenv()
+# override=True：.env 一律蓋過已存在的環境變數。
+# 啟動面板會把自己的 os.environ 傳給它啟動的後端（dev_launcher.py），
+# 面板若開著沒關，舊的環境變數會一直被繼承下去；預設的 override=False
+# 會讓 .env 完全不生效，改了金鑰卻怎麼重啟都沒用。
+load_dotenv(override=True)
 if os.getenv('FLASK_ENV') == 'development' or os.getenv('ALLOW_INSECURE_OAUTH') == '1':
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
