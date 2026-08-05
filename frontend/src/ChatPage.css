@@ -171,11 +171,21 @@
 }
 
 /* --- 確認需求的快速回覆選項 --- */
+.quick-options-block {
+    margin-top: 12px;
+}
+
 .quick-options {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-top: 12px;
+}
+
+.quick-options-hint {
+    margin-top: 8px;
+    font-size: 0.78rem;
+    color: var(--text-main);
+    opacity: 0.55;
 }
 
 .quick-option-btn {

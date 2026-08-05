@@ -92,9 +92,31 @@ def log_quiz_result(scores, user_message=''):
     _bottom()
 
 
+def log_off_topic(user_message, matched):
+    """使用者要求與咖啡廳無關的事，系統直接婉拒。"""
+    if not enabled():
+        return
+    _top('離題請求（已婉拒）')
+    _line('使用者', (user_message or '')[:44])
+    _line('命中詞', matched or '（未知）')
+    _line('本輪動作', '婉拒並說明本系統只做咖啡廳推薦，不萃取偏好')
+    _bottom()
+
+
+def log_blocked_recommend(collected, needed):
+    """使用者要求推薦，但掌握的資料還不足以做出有根據的推薦。"""
+    if not enabled():
+        return
+    _top('推薦請求被擋下（資料不足）')
+    _line('掌握度', f'{collected} / 5 個維度（至少需要 {needed} 個）')
+    _line('本輪動作', '不出卡片，改由狀態機再確認一題')
+    _bottom()
+
+
 def log_round(turn, user_message, fresh_prefs, merged_prefs, dims,
-              decision, focus_dim=None, fast_path=False):
-    """一般對話輪：萃取什麼、累積什麼、狀態機決定什麼。"""
+              decision, focus_dim=None, fast_path=False,
+              scores=None, prev_scores=None, asked=None):
+    """一般對話輪：萃取什麼、累積什麼、五維怎麼變、狀態機決定什麼。"""
     if not enabled():
         return
     _top(f'第 {turn} 輪對話')
@@ -102,12 +124,30 @@ def log_round(turn, user_message, fresh_prefs, merged_prefs, dims,
     source = '（關鍵字快篩，未呼叫 LLM）' if fast_path else '（LLM 萃取）'
     _line('本輪萃取', f'{_fmt_prefs(fresh_prefs)}  {source}')
     _line('累積偏好', _fmt_prefs(merged_prefs))
+    if scores:
+        _line('五維分數', _fmt_scores_delta(scores, prev_scores))
     _line('掌握度', f'{dims} / 5 個維度')
+    if asked:
+        _line('已問過', '、'.join(DIM_LABELS.get(k, k) for k in asked))
     decision_text = decision
     if focus_dim:
         decision_text = f'{decision} → 這輪問「{focus_dim}」'
     _line('狀態機', decision_text)
     _bottom()
+
+
+def _fmt_scores_delta(scores, prev):
+    """五維分數，有變動的加註增減量：口味 7 (+3)"""
+    parts = []
+    for d in DIMS:
+        now = float(scores.get(d, 0) or 0)
+        text = f'{SCORE_LABELS[d]} {now:g}'
+        if prev:
+            diff = now - float(prev.get(d, 0) or 0)
+            if abs(diff) > 0.05:
+                text += f' ({diff:+g})'
+        parts.append(text)
+    return '  '.join(parts)
 
 
 def log_recommendation(accuracy, base_scores, adjusted_scores, hard_filters,

@@ -59,14 +59,14 @@
     }
   ],
   "strategy": {
-    "max_questions": 3,
-    "min_dimensions_to_recommend": 2,
-    "recommend_after_rounds": 4,
+    "max_questions": 4,
+    "min_dimensions_to_recommend": 3,
+    "recommend_after_rounds": 6,
     "doubt_max_questions": 5,
-    "doubt_min_dimensions": 3,
-    "doubt_recommend_after_rounds": 7,
+    "doubt_min_dimensions": 4,
+    "doubt_recommend_after_rounds": 8,
     "inaccurate_max_questions": 6,
-    "inaccurate_min_dimensions": 4,
-    "inaccurate_recommend_after_rounds": 9
+    "inaccurate_min_dimensions": 5,
+    "inaccurate_recommend_after_rounds": 10
   }
 }

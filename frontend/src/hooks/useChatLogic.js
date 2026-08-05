@@ -27,25 +27,41 @@ export const normalizeChatSession = (chat) => ({
   messages: Array.isArray(chat?.messages) ? chat.messages.map(normalizeMessage) : []
 });
 
-const TOTAL_PREF_DIMS = 5; // 偏好維度總數（與後端 guide_dimensions.json 對齊）
+const DEFAULT_PREF_TARGET = 3; // 後端未回報時的預設目標維度數
 
 export function useChatLogic(user, navigate) {
   const [currentChat, setCurrentChat] = useState(EMPTY_CHAT);
   const [isTyping, setIsTyping] = useState(false);
-  // 偏好掌握度：base = 起始值（做完心理測驗進場為 50，一般對話為 0），
-  // dims = 已掌握的偏好維度數（只增不減）
-  const [chatProgress, setChatProgress] = useState({ base: 0, dims: 0 });
+  // 偏好掌握度：
+  //   base   = 起始值（做完心理測驗進場為 50，一般對話為 0）
+  //   dims   = 已掌握的偏好維度數（只增不減）
+  //   target = 這次打算問到幾維（後端依測驗信任度決定）
+  // 分母用 target 而不是固定 5：狀態機本來就不會問滿五題，
+  // 固定除以 5 會讓 100% 永遠達不到。
+  const [chatProgress, setChatProgress] = useState({
+    base: 0, dims: 0, target: DEFAULT_PREF_TARGET,
+  });
+  // 推薦門檻：掌握的維度太少時，推薦等於亂猜（後端實測不同需求會拿到幾乎一樣的結果），
+  // 所以後端會擋下推薦改成再問一題，前端同步把按鈕鎖起來並說明還差多少。
+  const [recommendGate, setRecommendGate] = useState({
+    ready: false, needs: Math.ceil(DEFAULT_PREF_TARGET / 2),
+  });
   const abortControllerRef = useRef(null);
   const currentChatRef = useRef(currentChat);
 
-  // 換算成 0~100 的百分比：維度補滿 base 到 100 之間的距離
   const progressPercent = Math.min(
     100,
-    Math.round(chatProgress.base + chatProgress.dims * ((100 - chatProgress.base) / TOTAL_PREF_DIMS))
+    Math.round(
+      chatProgress.base +
+      chatProgress.dims * ((100 - chatProgress.base) / Math.max(1, chatProgress.target))
+    )
   );
 
-  const resetProgress = useCallback((base = 0, dims = 0) => {
-    setChatProgress({ base, dims });
+  const resetProgress = useCallback((base = 0, dims = 0, target = DEFAULT_PREF_TARGET) => {
+    const safeTarget = target || DEFAULT_PREF_TARGET;
+    setChatProgress({ base, dims, target: safeTarget });
+    const needs = Math.max(1, Math.ceil(safeTarget / 2));
+    setRecommendGate({ ready: dims >= needs, needs });
   }, []);
 
   const setNormalizedCurrentChat = useCallback((updater) => {
@@ -193,7 +209,9 @@ export function useChatLogic(user, navigate) {
           quizScores = undefined;
         }
       }
-      if (forceRecommend) {
+      // 本對話已出現過的店家 id：按鈕推薦時用來「換一批」，
+      // 平常則讓後端在推薦後追問時能拿資料回答（地址、價位等）
+      {
         const seen = new Set();
         for (const m of currentChatRef.current.messages || []) {
           for (const c of m.cafes || []) {
@@ -227,19 +245,36 @@ export function useChatLogic(user, navigate) {
       const decoder = new TextDecoder('utf-8');
       let ndjsonBuffer = '';
 
+      // 本次串流回報的進度基準與目標，供後續 pref_state 一併存進對話
+      let streamTarget = null;
+      let streamBase = null;
+
       const processParsed = async (parsed) => {
         if (parsed.progress_dims !== undefined) {
-          // 偏好掌握度只增不減
+          // 基準值與目標值都由後端決定：
+          //   有測驗 → base 50、目標 3~5 維（看使用者說測驗準不準）
+          //   沒測驗 → base 0、目標 5 維（系統對他一無所知，要問滿）
+          if (parsed.progress_target) streamTarget = parsed.progress_target;
+          if (parsed.progress_base !== undefined) streamBase = parsed.progress_base;
           setChatProgress((prev) => ({
-            ...prev,
-            dims: Math.max(prev.dims, parsed.progress_dims)
+            base: parsed.progress_base !== undefined ? parsed.progress_base : prev.base,
+            dims: Math.max(prev.dims, parsed.progress_dims),
+            target: parsed.progress_target || prev.target,
           }));
+          if (parsed.recommend_ready !== undefined) {
+            setRecommendGate((prev) => ({
+              ready: parsed.recommend_ready,
+              needs: parsed.recommend_needs || prev.needs,
+            }));
+          }
         } else if (parsed.pref_state) {
           // 後端合併後的累積偏好：掛在對話物件上，隨對話儲存、重開可還原
           setNormalizedCurrentChat((prev) => ({
             ...prev,
             pref_state: {
               ...(prev.pref_state || {}),
+              ...(streamTarget ? { progress_target: streamTarget } : {}),
+              ...(streamBase !== null ? { progress_base: streamBase } : {}),
               preferences: parsed.pref_state.preferences || {}
             }
           }));
@@ -350,6 +385,8 @@ export function useChatLogic(user, navigate) {
     currentChatRef,
     EMPTY_CHAT,
     progressPercent,
-    resetProgress
+    resetProgress,
+    recommendGate,
+    chatProgress
   };
 }

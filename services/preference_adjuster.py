@@ -12,6 +12,10 @@ preference_adjuster.py — 心理測驗分數 × 對話確認結果 → GNN 輸�
 
 DIMS = ["work", "env", "social", "taste", "cp"]
 
+# 「什麼都還不知道」時的中性基準：各維度等權。
+# 值本身多少不重要（推薦前會除以最大值正規化），重要的是各維相等。
+NEUTRAL_BASELINE = 1
+
 # 使用者對測驗結果的回饋 → 基礎分數信任權重
 # （含「准」異體字，涵蓋使用者手打的變體）
 _INACCURATE_SIGNALS = ('完全不像', '完全不準', '完全不准', '都不準', '都不准')
@@ -95,6 +99,7 @@ def build_gnn_input(quiz_scores: dict | None, history: list, preferences: dict |
     base = quiz_scores or {}
     adjusted = {d: float(base.get(d, 0) or 0) * weight for d in DIMS}
     hard_filters = {'pet': False, 'parking': False, 'night': False}
+    matched_boosts = set()
 
     for values in (preferences or {}).values():
         if not isinstance(values, list):
@@ -105,9 +110,22 @@ def build_gnn_input(quiz_scores: dict | None, history: list, preferences: dict |
             for flag, signals in _HARD_FILTER_KEYWORDS.items():
                 if any(sig in kw for sig in signals):
                     hard_filters[flag] = True
-            for boost_kw, boosts in _KEYWORD_BOOSTS.items():
+            for boost_kw in _KEYWORD_BOOSTS:
                 if boost_kw in kw:
-                    for dim, val in boosts.items():
-                        adjusted[dim] += val
+                    matched_boosts.add(boost_kw)
+
+    # 每個加分詞只計一次：偏好清單可能同時出現「聚會」與「朋友聚會」，
+    # 逐筆累加會讓同一個意思被重複加分，長對話後分數會嚴重灌水。
+    for boost_kw in matched_boosts:
+        for dim, val in _KEYWORD_BOOSTS[boost_kw].items():
+            adjusted[dim] += val
+
+    # 完全沒有訊號時（沒做測驗、或說測驗完全不準，且還沒講任何偏好）
+    # 會得到全零向量。但推薦模型的輸入是「除以最大值」正規化過的，
+    # 真實測驗至少有一維是 1，全零是模型沒見過的分布外輸入，
+    # 出來的分數會退化（實測上限只有 0.92，且不同需求推薦幾乎一樣）。
+    # 「什麼都不知道」的正確表示是各維度等權，而不是每維都拿零分。
+    if not any(adjusted.values()):
+        adjusted = {d: NEUTRAL_BASELINE for d in DIMS}
 
     return adjusted, hard_filters, accuracy

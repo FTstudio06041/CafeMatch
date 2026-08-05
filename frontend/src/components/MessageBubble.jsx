@@ -79,16 +79,22 @@ export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handl
               </div>
             )}
             {role === 'ai' && quickOptions.length > 0 && isLastMessage && !isTyping && (
-              <div className="quick-options">
-                {quickOptions.map((opt) => (
-                  <button
-                    key={opt}
-                    className="quick-option-btn"
-                    onClick={() => onQuickReply && onQuickReply(opt)}
-                  >
-                    {opt}
-                  </button>
-                ))}
+              <div className="quick-options-block">
+                <div className="quick-options">
+                  {quickOptions.map((opt) => (
+                    <button
+                      key={opt}
+                      className="quick-option-btn"
+                      onClick={() => onQuickReply && onQuickReply(opt)}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+                {/* 選項只是捷徑，使用者隨時可以打自己的答案 */}
+                <div className="quick-options-hint">
+                  以上是常見選項，也可以直接在下方輸入你自己的想法
+                </div>
               </div>
             )}
             {role === 'ai' && !isGenerating && (

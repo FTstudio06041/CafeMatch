@@ -11,6 +11,13 @@ from extensions import oauth, limiter, migrate
 # 面板若開著沒關，舊的環境變數會一直被繼承下去；預設的 override=False
 # 會讓 .env 完全不生效，改了金鑰卻怎麼重啟都沒用。
 load_dotenv(override=True)
+
+# 測試專用逃生門：pytest 用 TEST_DB_URI 強制走 in-memory SQLite。
+# 必須放在 load_dotenv 之後 —— 因為 override=True 會把 .env 的 DB_URI
+# 蓋回真實資料庫，測試就會打到正式資料（曾經因此整批資料表被 drop）。
+if os.getenv('TEST_DB_URI'):
+    os.environ['DB_URI'] = os.environ['TEST_DB_URI']
+
 if os.getenv('FLASK_ENV') == 'development' or os.getenv('ALLOW_INSECURE_OAUTH') == '1':
     os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 

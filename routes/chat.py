@@ -72,7 +72,10 @@ def save_chat_session(user):
     # 累積偏好狀態（只收已知欄位、限制大小）
     pref_state = data.get('pref_state')
     if isinstance(pref_state, dict):
-        pref_state = {k: v for k, v in pref_state.items() if k in ('preferences', 'progress_base')}
+        pref_state = {
+            k: v for k, v in pref_state.items()
+            if k in ('preferences', 'progress_base', 'progress_target')
+        }
         if len(json.dumps(pref_state, ensure_ascii=False)) > 20000:
             pref_state = None
     else:

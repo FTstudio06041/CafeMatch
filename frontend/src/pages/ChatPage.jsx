@@ -25,7 +25,9 @@ export default function ChatPage() {
     currentChatRef,
     EMPTY_CHAT,
     progressPercent,
-    resetProgress
+    resetProgress,
+    recommendGate,
+    chatProgress
   } = useChat();
 
   const [inputMsg, setInputMsg] = useState('');
@@ -120,7 +122,7 @@ export default function ChatPage() {
             const ps = data.pref_state || {};
             const dims = Object.values(ps.preferences || {})
               .filter(v => Array.isArray(v) && v.length > 0).length;
-            resetProgress(ps.progress_base || 0, dims);
+            resetProgress(ps.progress_base || 0, dims, ps.progress_target);
           } else {
             navigate('/chat?id=new', { replace: true });
           }
@@ -155,9 +157,12 @@ export default function ChatPage() {
     executeChatStream(inputMsg);
   };
 
+  // 還差幾項需求才允許推薦（資料太少就推薦等於亂猜，按鈕在此之前鎖住）
+  const missingDims = Math.max(0, recommendGate.needs - chatProgress.dims);
+
   // 「直接推薦」：跳過確認需求，立刻以目前掌握的偏好推薦
   const handleForceRecommend = () => {
-    if (isTyping) return;
+    if (isTyping || !recommendGate.ready) return;
     executeChatStream('請直接根據目前的資訊推薦咖啡廳', {
       customTitle: '直接推薦',
       forceRecommend: true,
@@ -202,7 +207,11 @@ export default function ChatPage() {
             <div className="pref-progress-main">
               <div className="pref-progress-labels">
                 <span className="pref-progress-percent">偏好掌握度 {progressPercent}%</span>
-                <span className="pref-progress-hint">越接近 100%，推薦結果越準確</span>
+                <span className="pref-progress-hint">
+                  {recommendGate.ready
+                    ? '越接近 100%，推薦結果越準確'
+                    : `再確認 ${missingDims} 項需求就能推薦`}
+                </span>
               </div>
               <div className="pref-progress-track" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100} aria-label="偏好掌握度">
                 <div className="pref-progress-fill" style={{ width: `${progressPercent}%` }} />
@@ -211,7 +220,10 @@ export default function ChatPage() {
             <button
               className="pref-recommend-btn"
               onClick={handleForceRecommend}
-              disabled={isTyping}
+              disabled={isTyping || !recommendGate.ready}
+              title={recommendGate.ready
+                ? '以目前掌握的偏好推薦咖啡廳'
+                : `還不夠了解你的需求，再確認 ${missingDims} 項就能推薦`}
             >
               直接推薦咖啡廳
             </button>

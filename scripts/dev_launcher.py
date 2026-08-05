@@ -60,6 +60,86 @@ _START_COMMANDS = {
 _STARTUP_WAIT = {"backend": 12, "frontend": 25, "ollama": 20}
 
 
+def window_title(name: str) -> str:
+    """服務主控台視窗的標題（啟動時設定，之後用它找回視窗）。"""
+    return f"CafeMatch - {SERVICES[name]['label']}"
+
+
+# 這個面板這次執行期間啟動過哪些服務（只有這些才有我們開的終端視窗）
+_panel_started = set()
+
+
+def focus_console_window(name: str) -> bool:
+    """
+    把該服務的主控台視窗叫到最前面（讓使用者看得到即時日誌）。
+
+    以標題尋找視窗。不限定「這次面板啟動的」—— 面板重開後仍然要能叫出
+    先前開的終端視窗，否則每次重啟面板就失去這個功能。
+
+    注意有些工具會改寫主控台標題（實測 npm / vite 會把整個標題換掉），
+    因此找不到不代表服務有問題，只代表沒辦法叫它到前景；
+    呼叫端會提示改用「在新視窗重啟」。
+    """
+    try:
+        import ctypes
+        from ctypes import wintypes
+    except ImportError:
+        return False
+
+    user32 = ctypes.windll.user32
+    base = window_title(name)
+    found = []
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, wintypes.HWND, wintypes.LPARAM)
+    def _each(hwnd, _lparam):
+        if not user32.IsWindowVisible(hwnd):
+            return True
+        length = user32.GetWindowTextLengthW(hwnd)
+        if length:
+            buf = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buf, length + 1)
+            if base in buf.value:
+                found.append(hwnd)
+                return False
+        return True
+
+    user32.EnumWindows(_each, 0)
+    if not found:
+        return False
+
+    hwnd = found[0]
+    SW_RESTORE = 9
+    user32.ShowWindow(hwnd, SW_RESTORE)   # 若被最小化先還原
+    user32.SetForegroundWindow(hwnd)
+    user32.BringWindowToTop(hwnd)
+    return True
+
+
+def stop_service(name: str) -> None:
+    """停掉佔用該服務連接埠的行程（供「在新視窗重啟」使用）。"""
+    import socket as _socket
+    port = SERVICES[name]["port"]
+    try:
+        out = subprocess.run(
+            ["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True, timeout=10
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return
+    pids = set()
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 5 and parts[3] == "LISTENING" and parts[1].endswith(f":{port}"):
+            pids.add(parts[4])
+    for pid in pids:
+        subprocess.run(["taskkill", "/F", "/T", "/PID", pid],
+                       capture_output=True, timeout=10)
+    # 等連接埠真的釋放
+    for _ in range(20):
+        if not port_open(port):
+            return
+        time.sleep(0.3)
+
+
 def start_service(name: str) -> str:
     """
     啟動服務：開新的 cmd 視窗執行（失敗時視窗保留，錯誤訊息看得到），
@@ -73,13 +153,15 @@ def start_service(name: str) -> str:
 
     command, cwd = _START_COMMANDS[name]
     env = {**os.environ, "PYTHONUTF8": "1"}
-    title = f"CafeMatch - {svc['label']}"
+    title = window_title(name)
     try:
-        # /k 保留視窗：服務正常時顯示日誌，啟動失敗時錯誤訊息不會一閃即逝
+        # /k 保留視窗：服務正常時顯示日誌，啟動失敗時錯誤訊息不會一閃即逝。
+        # 先用 title 指令釘住視窗標題，之後才好把它找回來叫到前景。
         subprocess.Popen(
-            f'start "{title}" cmd /k {command}',
+            f'start "{title}" cmd /k title {title} ^& {command}',
             shell=True, cwd=cwd, env=env,
         )
+        _panel_started.add(name)
     except OSError as e:
         return f"啟動失敗：{e}"
 
@@ -126,6 +208,12 @@ PAGE = """<!doctype html>
   button:disabled { opacity: .45; cursor: not-allowed; }
   .linkbtn.ghost { background: transparent; color: var(--accent); }
   .linkbtn.ghost:hover { background: var(--surface); color: var(--accent-2); }
+  .ghost-btn {
+    background: transparent; color: var(--accent); border-color: var(--line);
+  }
+  .ghost-btn:hover:not(:disabled) {
+    background: var(--surface); color: var(--accent-2); border-color: var(--accent-2);
+  }
   .grid { display: grid; gap: 14px; }
   .card {
     background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
@@ -200,6 +288,15 @@ function render(status) {
       btn.disabled = up;
       btn.onclick = () => startOne(name, svc.label);
       card.appendChild(btn);
+
+      // 開啟該服務的主控台視窗，看即時日誌與除錯輸出
+      const term = document.createElement('button');
+      term.className = 'ghost-btn';
+      term.textContent = '終端';
+      term.title = `開啟 ${svc.label} 的終端視窗`;
+      term.disabled = !up;
+      term.onclick = () => openTerminal(name, svc.label);
+      card.appendChild(term);
     }
     cards.appendChild(card);
   }
@@ -218,6 +315,24 @@ async function startOne(name, label) {
   const d = await r.json();
   msg.textContent = `${label}：${d.message}`;
   setTimeout(refresh, 1500);
+}
+
+async function openTerminal(name, label) {
+  msg.textContent = `正在開啟 ${label} 的終端⋯`;
+  const r = await fetch('/api/terminal/' + name, { method: 'POST' });
+  const d = await r.json();
+  msg.textContent = `${label}：${d.message}`;
+
+  // 服務不是從面板啟動的就沒有終端視窗，詢問是否重開以便看日誌
+  if (d.needs_restart) {
+    if (confirm(`${d.message}。\n\n要重新啟動 ${label} 嗎？新的終端視窗會直接跳到前面，服務會短暫中斷。`)) {
+      msg.textContent = `正在重新啟動 ${label}⋯`;
+      const r2 = await fetch('/api/restart-in-terminal/' + name, { method: 'POST' });
+      const d2 = await r2.json();
+      msg.textContent = `${label}：${d2.message}`;
+      refresh();
+    }
+  }
 }
 
 document.getElementById('startAll').onclick = async () => {
@@ -288,6 +403,35 @@ def api_start_all():
     if not port_open(SERVICES["mysql"]["port"]):
         results.append("MySQL 未啟動，請從 Windows 服務管理員啟動")
     return jsonify({"message": "；".join(results) if results else "全部服務都已在執行中"})
+
+
+@app.route("/api/terminal/<name>", methods=["POST"])
+def api_terminal(name):
+    """把服務的主控台視窗叫到最前面（看即時日誌與除錯輸出）。"""
+    if name not in SERVICES:
+        return jsonify({"ok": False, "message": "未知的服務"}), 404
+    if not port_open(SERVICES[name]["port"]):
+        return jsonify({"ok": False, "message": "服務未啟動，請先按「啟動」"})
+    if focus_console_window(name):
+        return jsonify({"ok": True, "message": f"已開啟「{window_title(name)}」視窗"})
+
+    # 分辨兩種失敗，訊息才不會誤導
+    if name in _panel_started:
+        reason = "這個服務的終端視窗標題被它自己改掉了（npm / vite 會這樣），無法自動叫到前景"
+    else:
+        reason = "這個服務不是從本面板啟動的，沒有我們開的終端視窗"
+    return jsonify({"ok": False, "needs_restart": True, "message": reason})
+
+
+@app.route("/api/restart-in-terminal/<name>", methods=["POST"])
+def api_restart_in_terminal(name):
+    """停掉服務並在新的主控台視窗重新啟動（讓日誌看得見）。"""
+    if name not in _START_COMMANDS:
+        return jsonify({"ok": False, "message": "此服務不支援從面板啟動"}), 400
+    stop_service(name)
+    message = start_service(name)
+    focus_console_window(name)
+    return jsonify({"ok": message == "啟動成功", "message": f"重新啟動：{message}"})
 
 
 @app.route("/api/backup", methods=["POST"])
