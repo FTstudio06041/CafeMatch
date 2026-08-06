@@ -184,6 +184,13 @@ class ChatPipelineService:
                         exclude_ids.add(int(cid))
                     except (TypeError, ValueError):
                         continue
+            elif is_cafe_related and not force_recommend:
+                # 新增：聊天過程中的輕量 RAG，只給文字參考，不出卡片
+                yield json.dumps({"status": "retrieving_context"}, ensure_ascii=False) + "\n"
+                context_cafes = retrieve_cafe_data(matched_keywords, Cafes, Tags)
+                if context_cafes:
+                    cafe_context = format_cafe_context(context_cafes)
+                    # cafes 仍保持 []，不觸發卡片顯示
 
                 # GNN 推薦接口：測驗基礎分數 × 對話確認結果 → 調整五維 → GNN 打分
                 cafes = ChatPipelineService._recommend_with_gnn(
