@@ -92,14 +92,20 @@ def log_quiz_result(scores, user_message=''):
     _bottom()
 
 
-def log_off_topic(user_message, matched):
+def log_off_topic(user_message, category, stage=None, score=None, hit=None):
     """使用者要求與咖啡廳無關的事，系統直接婉拒。"""
     if not enabled():
         return
+    from services import off_topic_rag
     _top('離題請求（已婉拒）')
     _line('使用者', (user_message or '')[:44])
-    _line('命中詞', matched or '（未知）')
-    _line('本輪動作', '婉拒並說明本系統只做咖啡廳推薦，不萃取偏好')
+    _line('命中類別', f'{off_topic_rag.category_name(category)}（{category}）')
+    if stage == 'keyword':
+        _line('判定方式', f'關鍵字錨點「{hit}」')
+    else:
+        _line('判定方式', f'語意檢索（{off_topic_rag.backend_name()}）'
+                          f'  相似度 {float(score or 0):.3f}')
+    _line('本輪動作', '回該類別的固定台詞，不經 LLM、不萃取偏好')
     _bottom()
 
 

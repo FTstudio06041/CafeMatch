@@ -5,7 +5,8 @@ from database import db
 from models import User, Cafes, Tags, AiQueryLog
 from services import ai_service, conversation_guide, preference_service, debug_logger
 from services.preference_adjuster import build_gnn_input
-from services.intent_classifier import classify_intent, is_off_topic
+from services.intent_classifier import classify_intent
+from services import off_topic_rag
 from services.cafe_retriever import retrieve_cafe_data, format_cafe_context, serialize_cafe
 from services.ollama_admin_service import check_health, get_default_model
 from services.settings_service import get_selected_model
@@ -37,16 +38,23 @@ class ChatPipelineService:
             yield json.dumps({"status": "analyzing_intent"}, ensure_ascii=False) + "\n"
             is_cafe_related, matched_keywords = classify_intent(user_message)
 
-            # 明確與咖啡廳無關的請求（寫詩、寫程式、問天氣…）→ 直接婉拒並說明用途。
+            # 與咖啡廳無關的請求（寫詩、寫程式、問天氣…）→ 直接婉拒並說明用途。
             # 不做偏好萃取、不進狀態機，也不能真的照做。
-            off_topic, off_topic_hit = is_off_topic(user_message)
-            if off_topic:
-                from config.prompts import OFF_TOPIC_INSTRUCTION
-                debug_logger.log_off_topic(user_message, off_topic_hit)
-                yield from ChatPipelineService._respond_only(
-                    OFF_TOPIC_INSTRUCTION, user_message, history,
-                    is_debug_requested=is_debug_requested,
+            #
+            # 台詞直接取自 data/off_topic_dataset.json，不經 LLM 改寫：
+            # 交給模型潤飾會導致同一個問題每次講法不同、立場時鬆時緊，
+            # 而婉拒這種話最需要的就是「每次都一樣」。順帶省掉一次模型呼叫。
+            is_off, off_cat, off_response, off_detail = off_topic_rag.classify(user_message)
+            if is_off:
+                debug_logger.log_off_topic(
+                    user_message, off_cat,
+                    stage=off_detail.get('stage'),
+                    score=off_detail.get('score'),
+                    hit=off_detail.get('hit'),
                 )
+                yield json.dumps({"status": "generating_response"}, ensure_ascii=False) + "\n"
+                yield json.dumps({"response": off_response}, ensure_ascii=False) + "\n"
+                yield json.dumps({"done": True}, ensure_ascii=False) + "\n"
                 return
 
             if not is_cafe_related and len(history) > 0:
