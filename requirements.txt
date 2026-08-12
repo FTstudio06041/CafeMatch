@@ -35,3 +35,9 @@ pandas==3.0.3
 
 # 圖片同步腳本的縮圖壓縮（scripts/sync_cafe_photos.py，缺少時會退回原檔複製）
 Pillow==12.3.0
+
+# 離題檢索（services/off_topic_rag.py）不需要額外 Python 套件，
+# 但要有一顆 embedding 模型才會走語意比對：
+#   ollama pull bge-m3
+# 沒有的話會自動退回純 Python 的字元比對，準度較低但不會壞。
+# 換別顆模型：環境變數 OFF_TOPIC_EMBED_MODEL；強制走字元比對就設成空字串。

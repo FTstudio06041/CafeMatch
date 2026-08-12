@@ -18,3 +18,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 必須在 import app 之前設定
 os.environ['TEST_DB_URI'] = 'sqlite:///:memory:'
+
+# 離題檢索一律走純 Python 的字元比對後端：
+# 走 embedding 會讓每個測試都打一次 Ollama，慢、而且 CI 上根本沒有那顆模型。
+# 真實後端的準度由 scripts/eval_off_topic.py 負責量。
+os.environ['OFF_TOPIC_EMBED_MODEL'] = ''

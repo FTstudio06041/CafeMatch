@@ -201,7 +201,10 @@ def _build():
         labels.append('on_topic')
         cat_ids.append(None)
 
-    model = os.getenv('OFF_TOPIC_EMBED_MODEL', '').strip()
+    # 預設就用 bge-m3；模型沒 pull、Ollama 沒開、或呼叫失敗都會自動退回 lexical，
+    # 所以部署到沒有這顆模型的機器上不會壞，只是準度降回字面比對。
+    # 要強制走 lexical（例如單元測試不想依賴 Ollama）就設成空字串。
+    model = os.getenv('OFF_TOPIC_EMBED_MODEL', 'bge-m3').strip()
     backend = None
     if model:
         fingerprint = f'{model}|{len(texts)}|{hash(tuple(texts)) & 0xffffffff}'
