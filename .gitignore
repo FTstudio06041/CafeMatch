@@ -37,3 +37,5 @@ api_error.log
 tool_calls.txt
 temp_*.txt
 opus_report.txt
+# 離題檢索的向量快取（由 off_topic_dataset.json 算出來的衍生檔，4~5MB）
+data/off_topic_vectors.json
