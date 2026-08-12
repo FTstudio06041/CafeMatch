@@ -57,6 +57,10 @@ NEW_USER_TOP_K  = 50    # cosine similarity 取前幾名做連線
 NEW_USER_MIN_SIM = 0.5
 
 # ── 硬過濾條件（Q9）→ review_tags 關鍵字 ──────────────────
+# 注意：review_tags 是從評論文字抽出來的詞，不是店家屬性，
+# 56 家裡只有 2 家含「寵物」、0 家含「停車」與「夜」，所以這裡幾乎一定會放寬。
+# 網站端（services/cafe_facts.py）改從資料庫的 tags 表與營業時間取，
+# 寵物友善有 20 家、晚間營業有 12 家。這支離線腳本不連資料庫，維持現狀。
 HARD_FILTER_TAGS = {
     "pet"    : ("寵物",),
     "parking": ("停車",),

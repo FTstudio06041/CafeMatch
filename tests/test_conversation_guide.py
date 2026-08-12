@@ -598,3 +598,54 @@ def test_every_category_has_response_and_examples():
         assert len(cat.get('examples', [])) >= 5, f"{cat['id']} 例句太少，檢索會抓不到"
         assert '咖啡廳' in cat['response'] or '咖啡' in cat['response'], \
             f"{cat['id']} 的台詞沒有把話題導回咖啡廳"
+
+
+# ==========================================================
+# 硬條件（寵物友善／晚間營業）改吃資料庫
+# ==========================================================
+
+def test_hard_filter_uses_pool_not_tags():
+    """合格名單由呼叫端提供；名單裡沒有的店家一律不通過。"""
+    from services.gnn_recommender import _passes_hard_filters
+    pools = {'pet': {1, 2, 3}, 'night': {3, 4}}
+    assert _passes_hard_filters(1, {'pet': True}, pools) is True
+    assert _passes_hard_filters(4, {'pet': True}, pools) is False
+    assert _passes_hard_filters(3, {'pet': True, 'night': True}, pools) is True
+    assert _passes_hard_filters(1, {'pet': True, 'night': True}, pools) is False
+
+
+def test_hard_filter_without_data_does_not_block():
+    """
+    沒有資料可判斷的條件（目前是「好停車」）不能拿來擋店家，
+    否則會篩到零家再整批放寬，等於白做工還誤導使用者。
+    """
+    from services.gnn_recommender import _passes_hard_filters
+    pools = {'pet': {1, 2}}
+    assert _passes_hard_filters(99, {'parking': True}, pools) is True
+    # 沒帶名單進來時（例如離線腳本）也不該擋
+    assert _passes_hard_filters(99, {'pet': True}, None) is True
+
+
+def test_relaxing_keeps_qualifying_cafes():
+    """
+    符合條件的店家不夠湊滿一次推薦時要放寬，
+    但真的符合的那幾家必須留在結果裡 —— 直接整個丟掉等於無視使用者的要求。
+    """
+    from services.gnn_recommender import _tiered_sample, _blend_scores
+    candidates = [
+        {'cafe_id': i, 'gnn_logit': 17.0 - i * 0.1, 'avg_score': 4.8, 'review_count': 30}
+        for i in range(10)
+    ]
+    _blend_scores(candidates, [], {}, weight=0.35)
+    # 只有 7、8 兩家符合條件（不足 5 家 → 放寬）
+    result = _tiered_sample(candidates, must_include={7, 8})
+    ids = {c['cafe_id'] for c in result}
+    assert {7, 8} <= ids, f'符合條件的店家被洗掉了：{sorted(ids)}'
+    assert len(result) == 5
+
+
+def test_unsupported_filters_reported():
+    from services.cafe_facts import unsupported
+    assert unsupported({'pet': True, 'night': True}) == []
+    assert unsupported({'parking': True}) == ['parking']
+    assert unsupported({'parking': False}) == []

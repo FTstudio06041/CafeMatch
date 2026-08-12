@@ -476,9 +476,15 @@ class ChatPipelineService:
             for vals in (preferences or {}).values():
                 pref_keywords.extend(v for v in vals if isinstance(v, str) and v != '不限')
 
+            # 硬條件的合格名單從資料庫取（tags 表 + 營業時間），
+            # 不是拿評論抽出來的 review_tags 比對——那份 56 家只認得 2 家寵物友善
+            from services import cafe_facts
+            pools = cafe_facts.filter_pools()
+            ignored = cafe_facts.unsupported(hard_filters)
+
             ranked = gnn_recommender.recommend_by_scores(
                 adjusted, hard_filters, exclude_ids=exclude_ids,
-                pref_keywords=pref_keywords
+                pref_keywords=pref_keywords, filter_pools=pools
             )
             if not ranked:
                 return []
@@ -496,6 +502,8 @@ class ChatPipelineService:
                 engine='gnn',
                 cafes=cafes,
                 excluded=len(exclude_ids or []),
+                ignored_filters=ignored,
+                filter_pools=pools,
             )
             return cafes
         except gnn_recommender.GnnUnavailable as e:

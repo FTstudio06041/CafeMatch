@@ -157,7 +157,8 @@ def _fmt_scores_delta(scores, prev):
 
 
 def log_recommendation(accuracy, base_scores, adjusted_scores, hard_filters,
-                       keywords, engine, cafes, excluded=0):
+                       keywords, engine, cafes, excluded=0,
+                       ignored_filters=None, filter_pools=None):
     """按下「直接推薦」時：測驗分數如何被調整、最後推了哪幾家。"""
     if not enabled():
         return
@@ -165,9 +166,21 @@ def log_recommendation(accuracy, base_scores, adjusted_scores, hard_filters,
     _line('測驗回饋', ACCURACY_LABELS.get(accuracy, accuracy))
     _line('測驗基礎', _fmt_scores(base_scores))
     _line('調整後', _fmt_scores(adjusted_scores))
-    actives = [k for k, v in (hard_filters or {}).items() if v]
-    filter_names = {'pet': '寵物友善', 'parking': '好停車', 'night': '深夜營業'}
-    _line('硬過濾', '、'.join(filter_names.get(a, a) for a in actives) if actives else '（無）')
+    filter_names = {'pet': '寵物友善', 'parking': '好停車', 'night': '晚間營業'}
+    ignored = set(ignored_filters or [])
+    actives = [k for k, v in (hard_filters or {}).items() if v and k not in ignored]
+    if actives:
+        parts = []
+        for a in actives:
+            pool = (filter_pools or {}).get(a)
+            size = f'（{len(pool)} 家符合）' if pool is not None else ''
+            parts.append(f'{filter_names.get(a, a)}{size}')
+        _line('硬條件', '、'.join(parts))
+    else:
+        _line('硬條件', '（無）')
+    if ignored:
+        # 使用者提了但系統沒有資料可判斷 —— 講清楚，別讓人以為有考慮
+        _line('無法套用', '、'.join(filter_names.get(a, a) for a in ignored) + '（資料庫沒有這項資料）')
     _line('混合關鍵字', '、'.join(keywords) if keywords else '（無）')
     if excluded:
         _line('已排除', f'{excluded} 家（換一批）')

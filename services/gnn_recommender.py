@@ -62,12 +62,11 @@ TAG_BLEND_WEIGHT = 0.35
 # 有明確偏好時，保證最匹配的前幾家一定入選（其餘名額仍隨機，維持變化性）
 GUARANTEED_TOP_MATCHES = 2
 
-# 硬過濾條件 → review_tags 關鍵字
-_HARD_FILTER_TAGS = {
-    'pet': ('寵物',),
-    'parking': ('停車',),
-    'night': ('深夜', '晚', '夜'),
-}
+# 硬條件（寵物友善／晚間營業）的候選名單由呼叫端從資料庫取（services/cafe_facts.py）
+# 再傳進來。這裡不碰 DB，才能被 GNN 目錄的離線腳本直接匯入。
+#
+# 曾經是拿 review_tags 比對關鍵字，但那是從評論抽出來的詞不是店家屬性：
+# 56 家裡只有 2 家含「寵物」、0 家含「停車」與「夜」，等於形同虛設。
 
 
 class GnnUnavailable(Exception):
@@ -248,10 +247,20 @@ def _insert_new_user(projected_384, state, top_k: int = NEW_USER_TOP_K):
     return tmp, new_idx, vals.cpu().tolist()
 
 
-def _passes_hard_filters(cafe_id: int, hard_filters: dict, id2tags: dict) -> bool:
-    tags_text = ' '.join(id2tags.get(cafe_id, []))
-    for flag, keywords in _HARD_FILTER_TAGS.items():
-        if hard_filters.get(flag) and not any(kw in tags_text for kw in keywords):
+def _passes_hard_filters(cafe_id: int, hard_filters: dict, filter_pools: dict) -> bool:
+    """
+    使用者提出的硬條件，這家店有沒有全部符合。
+
+    只認 filter_pools 裡有名單的條件；沒有資料可判斷的（例如「好停車」）
+    在這裡視為不設限，由呼叫端另外告知使用者這個條件沒被套用。
+    """
+    for flag, wanted in (hard_filters or {}).items():
+        if not wanted:
+            continue
+        pool = (filter_pools or {}).get(flag)
+        if pool is None:
+            continue
+        if cafe_id not in pool:
             return False
     return True
 
@@ -298,22 +307,38 @@ def _blend_scores(candidates: list, keywords: list, id2tags: dict, weight: float
         )
 
 
-def _tiered_sample(candidates: list, guaranteed: int = 0) -> list:
+def _tiered_sample(candidates: list, guaranteed: int = 0,
+                   must_include: set | None = None) -> list:
     """
     分層抽樣：精選（≥4.7）抽 3 + 優質（4.0~4.7）抽 2，不足時互補。
 
-    guaranteed > 0 時，先把整體分數最高的前 N 家「保證入選」，
-    避免使用者明講的需求（例如寵物友善）被隨機抽樣洗掉；
-    其餘名額仍隨機，維持每次推薦的變化性。
+    must_include  硬條件真的符合的店家，一定入選（名額不夠時優先保留）。
+    guaranteed    再額外保證分數最高的前 N 家入選，避免使用者明講的需求
+                  被隨機抽樣洗掉；其餘名額仍隨機，維持每次推薦的變化性。
     """
-    # 一律用 blended_score；退而求其次也要用 logit 而不是 gnn_score，
-    # 後者飽和成 1.0 的家數很多，拿來排序等於沒排
-    rank_key = lambda c: c.get('blended_score', c.get('gnn_logit', c['gnn_score']))
+    def rank_key(c):
+        """
+        一律用 blended_score；退而求其次用 logit 而不是 gnn_score
+        —— 後者飽和成 1.0 的家數很多，拿來排序等於沒排。
+
+        （不要寫成 c.get('a', c.get('b', c['c']))：dict.get 的預設值會先求值，
+          就算 'a' 存在也會去取 c['c']，缺欄位時直接 KeyError。）
+        """
+        for key in ('blended_score', 'gnn_logit', 'gnn_score'):
+            if key in c:
+                return c[key]
+        return 0.0
 
     locked = []
-    if guaranteed > 0:
+    if must_include:
+        locked = sorted([c for c in candidates if c['cafe_id'] in must_include],
+                        key=rank_key, reverse=True)[:TIER1_PICK + TIER2_PICK]
+        locked_ids = {c['cafe_id'] for c in locked}
+        candidates = [c for c in candidates if c['cafe_id'] not in locked_ids]
+
+    if guaranteed > 0 and len(locked) < TIER1_PICK + TIER2_PICK:
         ranked_all = sorted(candidates, key=rank_key, reverse=True)
-        locked = ranked_all[:guaranteed]
+        locked += ranked_all[:guaranteed]
         locked_ids = {c['cafe_id'] for c in locked}
         candidates = [c for c in candidates if c['cafe_id'] not in locked_ids]
     tier1 = sorted(
@@ -345,7 +370,8 @@ def _tiered_sample(candidates: list, guaranteed: int = 0) -> list:
 def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
                         exclude_ids: set | None = None,
                         pref_keywords: list | None = None,
-                        tag_weight: float = TAG_BLEND_WEIGHT) -> list:
+                        tag_weight: float = TAG_BLEND_WEIGHT,
+                        filter_pools: dict | None = None) -> list:
     """
     以（調整後的）五維分數執行 GNN 推薦，並用已表達的偏好關鍵字微調排序。
 
@@ -355,6 +381,8 @@ def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
         exclude_ids:   要排除的 DB cafe id（例如已推薦過的）
         pref_keywords: 對話中已表達的偏好關鍵字（與店家標籤混合排序）
         tag_weight:    標籤匹配在最終分數的權重（0 = 純 GNN）
+        filter_pools:  {'pet': {cafe_id...}, 'night': {...}} 各硬條件的合格名單，
+                       由 services/cafe_facts.py 從資料庫取。沒帶就不套硬條件。
 
     回傳:
         [{'cafe_id', 'gnn_score', 'tag_score', 'blended_score', 'avg_score', 'review_count'}]
@@ -404,11 +432,17 @@ def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
             'review_count': review_count,
         })
 
-    # 硬過濾（寵物／停車／深夜）；若過濾後不足 5 家則放寬
-    filtered = [c for c in candidates
-                if _passes_hard_filters(c['cafe_id'], hard_filters, state['id2tags'])]
-    if len(filtered) < TIER1_PICK + TIER2_PICK:
+    # 硬條件（寵物友善／晚間營業）。只有 56 家店，兩個條件一起勾就剩四家，
+    # 湊不滿一次推薦時放寬 —— 但不是把條件整個丟掉：
+    # 符合的那幾家仍然保證入選，只是用其他好店把名額補滿。
+    strict = [c for c in candidates
+              if _passes_hard_filters(c['cafe_id'], hard_filters, filter_pools)]
+    if len(strict) < TIER1_PICK + TIER2_PICK:
         filtered = candidates
+        must_include = {c['cafe_id'] for c in strict}
+    else:
+        filtered = strict
+        must_include = set()
 
     # 混合排序：GNN 分數（正規化）＋ 這一輪講到的偏好與店家標籤的匹配度
     keywords = [k for k in (pref_keywords or []) if isinstance(k, str) and k and k != '不限']
@@ -418,4 +452,4 @@ def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
     has_match = any(c.get('tag_score', 0) > 0 for c in filtered)
     guaranteed = GUARANTEED_TOP_MATCHES if (keywords and has_match) else 0
 
-    return _tiered_sample(filtered, guaranteed=guaranteed)
+    return _tiered_sample(filtered, guaranteed=guaranteed, must_include=must_include)
