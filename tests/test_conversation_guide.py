@@ -649,3 +649,33 @@ def test_unsupported_filters_reported():
     assert unsupported({'pet': True, 'night': True}) == []
     assert unsupported({'parking': True}) == ['parking']
     assert unsupported({'parking': False}) == []
+
+
+def test_off_topic_falls_back_when_embedding_dies():
+    """
+    Ollama 掛掉、或聊天切到大模型把 embedding 模型擠出記憶體時，
+    離題防護必須當場退回字元比對，而不是靜靜失效。
+    （聊天模型是獨立設定，切換它本身不影響這裡。）
+    """
+    from services import off_topic_rag
+
+    off_topic_rag.reload_dataset()
+    original = off_topic_rag._embed
+
+    def boom(model, texts):
+        raise ConnectionError('模擬 Ollama 沒回應')
+
+    try:
+        off_topic_rag._embed = boom
+        off_topic_rag._embed_warned = True      # 別在測試輸出洗版
+        # 關鍵字錨點不需要模型，一定還在
+        assert off_topic_rag.classify('幫我寫一首詩')[0] is True
+        # 需要檢索的句子改用字元比對，門檻也要跟著換成 lexical 那組
+        hits, threshold = off_topic_rag.search('可以幫我做一份簡報大綱嗎')
+        assert hits, 'embedding 失效時仍應該有檢索結果'
+        assert threshold == off_topic_rag._load()['min_score_lexical']
+        # 正常需求不能因為降級就被誤殺
+        assert off_topic_rag.classify('想找個安靜的地方唸書')[0] is False
+    finally:
+        off_topic_rag._embed = original
+        off_topic_rag.reload_dataset()

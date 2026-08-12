@@ -129,11 +129,18 @@ def _lexical_scores(backend, qv):
 # embedding 後端：Ollama /api/embed
 # ----------------------------------------------------------------------
 
+# 讓 Ollama 把 embedding 模型留在記憶體多久。
+# 預設 5 分鐘，閒置後第一次檢查要付 ~2 秒冷啟動（實測）；
+# 這顆只佔 664MB，長期留著很划算。
+EMBED_KEEP_ALIVE = os.getenv('OFF_TOPIC_EMBED_KEEP_ALIVE', '30m')
+
+
 def _embed(model, texts):
     import requests
     base = os.getenv('OLLAMA_BASE_URL', 'http://127.0.0.1:11434').rstrip('/')
     r = requests.post(f'{base}/api/embed',
-                      json={'model': model, 'input': texts}, timeout=120)
+                      json={'model': model, 'input': texts,
+                            'keep_alive': EMBED_KEEP_ALIVE}, timeout=120)
     r.raise_for_status()
     return r.json()['embeddings']
 
@@ -213,12 +220,20 @@ def _build():
         except Exception as e:                                  # noqa: BLE001
             import logging
             logging.warning('離題檢索：embedding 後端不可用（%s），退回 lexical', e)
+
+    # 字元比對後端一律建起來當備援：純 Python、210 句算完不到 10ms，
+    # 留著不花什麼成本。Ollama 中途掛掉或 embedding 模型被大模型擠出記憶體時
+    # （切到 llama4 這種等級就會發生），可以當場頂上，
+    # 而不是讓離題防護整個靜靜失效。
+    lexical = _build_lexical(texts, cfg)
     if backend is None:
-        backend = _build_lexical(texts, cfg)
+        backend = lexical
 
     key = 'min_score_embedding' if backend['kind'] == 'embedding' else 'min_score'
     return {
         'backend': backend,
+        'standby': lexical,
+        'min_score_lexical': float(cfg.get('min_score', 0.28)),
         'labels': labels,
         'cat_ids': cat_ids,
         'keywords': keywords,
@@ -254,23 +269,49 @@ def backend_name():
 # ----------------------------------------------------------------------
 
 def search(user_message: str, top_k: int = 5):
-    """最相近的幾筆 [(label, category_id, score, example)]，調門檻與除錯用。"""
+    """
+    最相近的幾筆 [(label, category_id, score)]，調門檻與除錯用。
+
+    回傳 (排名, 這次實際用的門檻)——因為兩種後端的分數尺度不同，
+    臨時退回字元比對時門檻也要跟著換。
+    """
     state = _load()
     backend = state['backend']
+    threshold = state['min_score']
+
+    scores = None
     if backend['kind'] == 'embedding':
         try:
             qv = _unit(_embed(backend['model'], [user_message])[0])
-        except Exception:                                       # noqa: BLE001
-            return []
-        scores = _embedding_scores(backend, qv)
-    else:
+            scores = _embedding_scores(backend, qv)
+        except Exception as e:                                  # noqa: BLE001
+            # Ollama 掛了或模型被擠出記憶體 → 這一句改用字元比對，
+            # 不要整個放棄（放棄等於離題防護悄悄消失）
+            _warn_embed_failed(e)
+            backend, threshold = state['standby'], state['min_score_lexical']
+
+    if scores is None:
         scores = _lexical_scores(backend, _lexical_query(backend, user_message))
 
     ranked = sorted(
         zip(state['labels'], state['cat_ids'], scores),
         key=lambda x: x[2], reverse=True
     )
-    return ranked[:top_k]
+    return ranked[:top_k], threshold
+
+
+_embed_warned = False
+
+
+def _warn_embed_failed(err):
+    """只警告一次，免得 Ollama 掛掉時把日誌洗版。"""
+    global _embed_warned
+    if not _embed_warned:
+        import logging
+        logging.warning('離題檢索：embedding 呼叫失敗（%s），本次改用字元比對。'
+                        '常見原因是 Ollama 未啟動，或聊天切到大模型把 bge-m3 '
+                        '擠出記憶體。', err)
+        _embed_warned = True
 
 
 def match_keyword(user_message: str):
@@ -306,7 +347,7 @@ def classify(user_message: str):
     if _mentions_cafe(user_message):
         return blank
 
-    hits = search(user_message, top_k=10)
+    hits, threshold = search(user_message, top_k=10)
     if not hits:
         return blank
 
@@ -314,7 +355,7 @@ def classify(user_message: str):
     best_guard = next((h for h in hits if h[0] == 'on_topic'), None)
     score = best_off[2] if best_off else 0.0
 
-    if not best_off or score < state['min_score']:
+    if not best_off or score < threshold:
         return (False, None, None,
                 {'stage': None, 'score': score, 'hit': None})
 
