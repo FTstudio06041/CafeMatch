@@ -26,7 +26,15 @@ import torch.nn.functional as F
 import pandas as pd
 import json
 import random
-import copy
+
+# 資料檔一律以「這支腳本所在目錄」為準，不是行程的工作目錄
+# —— 否則從專案根目錄執行會找不到 hetero_graph.pt
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _path(fname):
+    return os.path.join(BASE_DIR, fname)
+
 
 DEVICE     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 HIDDEN_DIM = 128
@@ -43,6 +51,17 @@ TIER2_PICK      = 2
 
 # ── 新用戶接邊參數 ────────────────────────────────────────
 NEW_USER_TOP_K  = 50    # cosine similarity 取前幾名做連線
+# 相似度下限：低於這個值的「相似使用者」其實不相似，接了只會把雜訊灌進來。
+# 實測正常的測驗結果會落在 0.84~0.92，所以這條線平常不會擋到任何人，
+# 是給「誰都不像」的極端測驗結果用的保險。
+NEW_USER_MIN_SIM = 0.5
+
+# ── 硬過濾條件（Q9）→ review_tags 關鍵字 ──────────────────
+HARD_FILTER_TAGS = {
+    "pet"    : ("寵物",),
+    "parking": ("停車",),
+    "night"  : ("深夜", "晚", "夜"),
+}
 
 DIMS      = ["work", "env", "social", "taste", "cp"]
 DIM_NAMES = {"work":"工作專注","env":"環境美感","social":"社交氛圍","taste":"口味品質","cp":"CP值"}
@@ -184,18 +203,20 @@ def insert_new_user_into_graph(projected_384: torch.Tensor,
     """
     將新用戶插入圖中，步驟：
       1. 計算 projected_384 與所有 2286 個 user BERT 向量的 cosine similarity
-      2. 取前 top_k 個相似使用者
+      2. 取前 top_k 個相似使用者（低於 NEW_USER_MIN_SIM 的不接）
       3. 把新用戶的 384 維向量 append 到 data["user"].x 的最後一列
          → 新用戶的 idx = n_users（原本最後一個 idx + 1）
       4. 補上 user↔user 雙向邊：(new_idx → top_k_idx) 和 (top_k_idx → new_idx)
       5. 回傳「暫時修改過的圖」和「新用戶的 idx」
 
-    注意：這裡用 deep copy 不修改原始 data，推薦完後原圖不受影響。
+    原圖完全不動：新的 tensor 都用 torch.cat 另外建立，
+    其餘欄位是參考沿用（不是複製），所以不必 deep copy 整張大圖。
     """
     from torch_geometric.data import HeteroData
 
     n_users    = data["user"].x.shape[0]   # 2286
     new_idx    = n_users                   # 新用戶的節點 idx
+    device     = data["user"].x.device     # 跟著圖走，不要自己假設 DEVICE
 
     # ── Step 1：cosine similarity ─────────────────────────
     existing_bert = data["user"].x          # (n_users, 384)
@@ -203,13 +224,17 @@ def insert_new_user_into_graph(projected_384: torch.Tensor,
     exist_norm    = F.normalize(existing_bert, dim=-1)            # (n_users, 384)
     sim_scores    = (exist_norm @ new_vec_norm.T).squeeze(-1)     # (n_users,)
 
-    # ── Step 2：取前 top_k ────────────────────────────────
+    # ── Step 2：取前 top_k，並砍掉不夠相似的 ──────────────
     actual_k   = min(top_k, n_users)
     topk_vals, topk_idxs = torch.topk(sim_scores, actual_k)
-    # topk_idxs: (actual_k,) 品味最相近的使用者 idx
-
-    print(f"  [接邊] 新用戶與前 {actual_k} 名相似使用者連線")
-    print(f"         相似度範圍：{topk_vals[-1].item():.4f} ~ {topk_vals[0].item():.4f}")
+    keep = topk_vals >= NEW_USER_MIN_SIM
+    if keep.any():
+        topk_vals, topk_idxs = topk_vals[keep], topk_idxs[keep]
+    else:
+        # 一個夠像的都沒有 → 至少接最相近的那一個，
+        # 完全不接邊的話新用戶會是孤立節點，HGT 傳不到任何訊息
+        topk_vals, topk_idxs = topk_vals[:1], topk_idxs[:1]
+    actual_k = topk_idxs.shape[0]
 
     # ── Step 3：把新用戶向量 append 到 user 特徵矩陣 ───────
     # 注意：用 torch.cat 建立新 tensor，不修改原始 data
@@ -219,20 +244,15 @@ def insert_new_user_into_graph(projected_384: torch.Tensor,
     # ── Step 4：補上新的 user↔user 邊 ────────────────────
     # 新邊：new_idx → top_k_idx（雙向）
     new_src = torch.full((actual_k,), new_idx,
-                         dtype=torch.long, device=DEVICE)         # (k,) 全是 new_idx
-    new_dst = topk_idxs.to(DEVICE)                                # (k,) top_k 的舊用戶
+                         dtype=torch.long, device=device)         # (k,) 全是 new_idx
+    new_dst = topk_idxs.to(device)                                # (k,) top_k 的舊用戶
 
     # 雙向：new→old 和 old→new
     added_src = torch.cat([new_src, new_dst], dim=0)              # (2k,)
     added_dst = torch.cat([new_dst, new_src], dim=0)              # (2k,)
     added_edge = torch.stack([added_src, added_dst], dim=0)       # (2, 2k)
 
-    # 把新邊 concat 到原本的 user↔user 邊後面
-    orig_uu_edge = data["user", "similar_to", "user"].edge_index  # (2, orig_k)
-    merged_uu    = torch.cat([orig_uu_edge, added_edge], dim=1)   # (2, orig_k + 2k)
-
     # ── Step 5：組成臨時圖（不影響原始 data）─────────────
-    # 用淺複製 + 只替換需要修改的欄位，避免 deep copy 整張大圖
     tmp_data = HeteroData()
 
     # user 節點：換成包含新用戶的特徵矩陣
@@ -243,18 +263,15 @@ def insert_new_user_into_graph(projected_384: torch.Tensor,
     tmp_data["cafe"].x         = data["cafe"].x
     tmp_data["cafe"].num_nodes = data["cafe"].num_nodes
 
-    # user→cafe 邊：直接沿用（新用戶本來就沒有評論邊，不需要動）
-    tmp_data["user", "reviews",    "cafe"].edge_index = \
-        data["user", "reviews", "cafe"].edge_index
-    tmp_data["cafe", "reviewed_by","user"].edge_index = \
-        data["cafe", "reviewed_by", "user"].edge_index
-
-    # user↔user 邊：換成加了新邊的版本
-    tmp_data["user", "similar_to", "user"].edge_index = merged_uu
-
-    # cafe↔cafe 邊：直接沿用
-    tmp_data["cafe", "similar_to", "cafe"].edge_index = \
-        data["cafe", "similar_to", "cafe"].edge_index
+    # 邊：只有 user↔user 要加新邊，其餘原樣沿用。
+    # 用迴圈掃過所有邊型別而不是逐一列舉 —— 圖以後多一種邊時，
+    # 逐一列舉會靜默漏掉，HGTConv 拿不到那型別的邊也不會報錯。
+    for edge_type in data.edge_types:
+        orig = data[edge_type].edge_index
+        if edge_type == ("user", "similar_to", "user"):
+            tmp_data[edge_type].edge_index = torch.cat([orig, added_edge], dim=1)
+        else:
+            tmp_data[edge_type].edge_index = orig
 
     return tmp_data, new_idx, topk_idxs.cpu().tolist(), topk_vals.cpu().tolist()
 
@@ -267,16 +284,16 @@ def load_all():
     # 需要明確加入信任清單並設 weights_only=False
     from torch_geometric.data import HeteroData
     torch.serialization.add_safe_globals([HeteroData])
-    data = torch.load("hetero_graph.pt", map_location=DEVICE, weights_only=False)
+    data = torch.load(_path("hetero_graph.pt"), map_location=DEVICE, weights_only=False)
 
-    with open("user2idx.json", encoding="utf-8") as f:
+    with open(_path("user2idx.json"), encoding="utf-8") as f:
         user2idx = json.load(f)
-    with open("cafe2idx.json", encoding="utf-8") as f:
+    with open(_path("cafe2idx.json"), encoding="utf-8") as f:
         cafe2idx = json.load(f)
 
-    df = pd.read_csv("reviews_clean.csv")
+    df = pd.read_csv(_path("reviews_clean.csv"))
 
-    with open("cafes_updated.json", encoding="utf-8") as f:
+    with open(_path("cafes_updated.json"), encoding="utf-8") as f:
         cafes_raw = json.load(f)
     idx2cafe_id = {v: k for k, v in cafe2idx.items()}
     id2cafe     = {str(c["id"]): c for c in cafes_raw}
@@ -307,7 +324,7 @@ def load_all():
 def load_model(data):
     model = HGTWithQuiz(data).to(DEVICE)
     model.load_state_dict(
-        torch.load("best_model_with_quiz.pt", map_location=DEVICE, weights_only=False)
+        torch.load(_path("best_model_with_quiz.pt"), map_location=DEVICE, weights_only=False)
     )
     model.eval()
     return model
@@ -335,6 +352,32 @@ def _build_cafe_list(raw_scores, cafe_stats, idx2info):
             "google_url"  : info.get("google_url", ""),
         })
     return result
+
+
+def _passes_hard_filters(cafe, filters):
+    """Q9 勾選的條件（寵物友善／好停車／晚間營業）比對店家的 review_tags。"""
+    if not filters:
+        return True
+    tags_text = " ".join(cafe.get("review_tags", []))
+    for flag, keywords in HARD_FILTER_TAGS.items():
+        if filters.get(flag) and not any(kw in tags_text for kw in keywords):
+            return False
+    return True
+
+
+def _apply_hard_filters(all_cafes, filters):
+    """
+    套用 Q9 條件；符合的店家不足以湊滿一次推薦時就放寬。
+
+    只有 56 間店，三個條件同時勾選很容易篩到剩兩三間，
+    那時給「不完全符合但夠好」的店，比給一份殘缺的清單有用。
+    """
+    if not filters or not any(filters.values()):
+        return all_cafes, False
+    kept = [c for c in all_cafes if _passes_hard_filters(c, filters)]
+    if len(kept) < TIER1_PICK + TIER2_PICK:
+        return all_cafes, True      # True = 條件放寬了，要告訴使用者
+    return kept, False
 
 
 def _tiered_sample(all_cafes, exclude_idxs=None):
@@ -391,7 +434,7 @@ def recommend_existing_user(user_id, model, data, user2idx, df, cafe_stats, idx2
 # 新用戶路徑（含動態接邊）
 # ══════════════════════════════════════════════════════════
 def recommend_new_user(quiz_scores, model, data, cafe_stats, idx2info,
-                       top_k=NEW_USER_TOP_K):
+                       filters=None, top_k=NEW_USER_TOP_K, verbose=True):
     """
     新用戶完整路徑：
       1. 五維分數 → quiz_projector → projected_384
@@ -399,6 +442,10 @@ def recommend_new_user(quiz_scores, model, data, cafe_stats, idx2info,
       3. 把新用戶（idx = n_users）插入圖，補上 user↔user 雙向邊
       4. 用「含新用戶的臨時圖」跑 HGT → 新用戶真正收到鄰居訊息
       5. 取新用戶的 128 維 embedding → predictor → 對 56 間店打分
+      6. 套用 Q9 的硬條件（寵物／停車／晚間），再分層抽樣
+
+    filters — {'pet': bool, 'parking': bool, 'night': bool}，Q9 的勾選結果。
+    verbose — 印接邊資訊；當成模組被匯入時傳 False，不要污染呼叫端的輸出。
     """
     max_s = max(quiz_scores.values()) if max(quiz_scores.values()) > 0 else 1
     vec   = torch.tensor([[quiz_scores[d] / max_s for d in DIMS]],
@@ -412,6 +459,9 @@ def recommend_new_user(quiz_scores, model, data, cafe_stats, idx2info,
     tmp_data, new_idx, neighbor_idxs, neighbor_sims = insert_new_user_into_graph(
         projected_384, data, top_k=top_k
     )
+    if verbose:
+        print(f"  [接邊] 新用戶與 {len(neighbor_idxs)} 名相似使用者連線")
+        print(f"         相似度範圍：{neighbor_sims[-1]:.4f} ~ {neighbor_sims[0]:.4f}")
 
     with torch.no_grad():
         # Step 4：用臨時圖跑 HGT
@@ -423,7 +473,10 @@ def recommend_new_user(quiz_scores, model, data, cafe_stats, idx2info,
         raw_scores   = model.get_all_cafe_scores(new_user_128, z["cafe"])
 
     all_cafes = _build_cafe_list(raw_scores, cafe_stats, idx2info)
-    return _tiered_sample(all_cafes, exclude_idxs=set())
+    kept, relaxed = _apply_hard_filters(all_cafes, filters)
+    if verbose and relaxed:
+        print("  [條件] 完全符合 Q9 條件的店家不足，已放寬為不限")
+    return _tiered_sample(kept, exclude_idxs=set())
 
 
 # ══════════════════════════════════════════════════════════
@@ -540,7 +593,13 @@ if __name__ == "__main__":
             print(f"  {DIM_NAMES[d]:6s}：{bar} ({quiz_scores[d]})")
         print(f"\n你的咖啡廳人格：{get_title(quiz_scores)}")
 
+        chosen = [name for flag, name in
+                  (("pet", "寵物友善"), ("parking", "好停車"), ("night", "晚間營業"))
+                  if filters[flag]]
+        if chosen:
+            print(f"\n額外條件：{'、'.join(chosen)}")
+
         result, tier1, tier2 = recommend_new_user(
-            quiz_scores, model, data, cafe_stats, idx2info
+            quiz_scores, model, data, cafe_stats, idx2info, filters=filters
         )
         print_recommendations(result, mode_label=f"心理測驗 + GNN（接 top-{NEW_USER_TOP_K} 邊）")

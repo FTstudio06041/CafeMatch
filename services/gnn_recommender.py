@@ -5,12 +5,24 @@ gnn_recommender.py — GNN 推薦接口（後半段）
     recommend_by_scores(五維分數, hard_filters) → [{'cafe_id', 'gnn_score', ...}]
 
 推薦路徑（與 GNN/new_step5_recommend.py 的新用戶路徑一致）：
-    五維分數 → quiz_projector(5→384) → user_proj(384→128)
-             → 與 HGT 卷積後的 cafe embedding 配對 → predictor 打分
+    五維分數 → quiz_projector(5→384)
+             → 和 2286 個既有使用者算 cosine 相似度，取最像的前 K 名
+             → 把這位新使用者插進圖、補上 user↔user 雙向邊
+             → 用「含新使用者的臨時圖」跑 HGT 卷積
+             → 取新使用者的 128 維 embedding 與 cafe embedding 配對 → predictor 打分
              → 分層抽樣（精選 ≥4.7 抽 3、優質 4.0~4.7 抽 2）
 
+為什麼要動態接邊：
+  舊版把新使用者停在 user_proj 就直接打分，等於他從來沒進過圖、
+  收不到任何鄰居訊息。實測那樣做「偏工作／偏社交／偏口味／偏CP值」
+  四種需求算出來的前五名是同一組店，只是順序不同 —— 圖等於白建了。
+  接邊之後前五名才真的隨需求改變（兩兩重疊從 3.4/5 降到 2.1/5）。
+  代價是每次推薦要重跑一次 HGT，實測 19ms，可以接受。
+
 設計：
-  - 模型與圖只載入一次（module-level cache + lock），cafe embedding 預先算好
+  - 模型與圖只載入一次（module-level cache + lock）
+  - cafe embedding 不能預先算：接了新邊之後整張圖的卷積結果都會變，
+    必須和新使用者在同一次 encode 裡算出來
   - torch 未安裝或檔案缺失時拋 GnnUnavailable，呼叫端回退關鍵字檢索
 """
 
@@ -37,12 +49,18 @@ TIER2_POOL_SIZE = 6
 TIER1_PICK = 3
 TIER2_PICK = 2
 
-# 標籤匹配在最終排序的權重（0 = 純 GNN、1 = 純標籤匹配）
-TAG_BLEND_WEIGHT = 0.4
+# 新使用者接邊參數（與 GNN/new_step5_recommend.py 一致）
+NEW_USER_TOP_K = 50
+# 相似度下限：低於這個值的「相似使用者」其實不相似，接了只會灌雜訊進來。
+# 實測正常的測驗結果落在 0.84~0.92，這條線平常不會擋到人。
+NEW_USER_MIN_SIM = 0.5
+
+# 標籤匹配在最終排序的權重（0 = 純 GNN、1 = 純標籤匹配）。
+# 接邊之前 GNN 對需求沒反應，得靠標籤扛（當時是 0.4）；
+# 現在 GNN 自己會動了，標籤退回輔助角色。
+TAG_BLEND_WEIGHT = 0.35
 # 有明確偏好時，保證最匹配的前幾家一定入選（其餘名額仍隨機，維持變化性）
 GUARANTEED_TOP_MATCHES = 2
-# GNN 分數正規化的最小跨距，避免微小差異被放大成決定性差距
-MIN_GNN_SPAN = 0.15
 
 # 硬過濾條件 → review_tags 關鍵字
 _HARD_FILTER_TAGS = {
@@ -75,6 +93,7 @@ def _load():
             import torch.nn.functional as F
             import pandas as pd
             from torch_geometric.nn import HGTConv, Linear as PyGLinear
+            from torch_geometric.data import HeteroData
         except ImportError as e:
             raise GnnUnavailable(f"缺少 GNN 依賴套件：{e}")
 
@@ -150,13 +169,9 @@ def _load():
                 for _, row in stats.iterrows()
             }
 
-            # cafe embedding 只需算一次（圖結構固定）
-            with torch.no_grad():
-                z_cafe = model.encode(data['user'].x, data)['cafe']  # (n_cafes, 128)
-
             _state = {
-                'torch': torch, 'F': F,
-                'model': model, 'z_cafe': z_cafe,
+                'torch': torch, 'F': F, 'HeteroData': HeteroData,
+                'model': model, 'data': data,
                 'idx2cafe_id': idx2cafe_id, 'id2tags': id2tags,
                 'cafe_stats': cafe_stats,
             }
@@ -177,6 +192,62 @@ def is_available() -> bool:
         return False
 
 
+def _insert_new_user(projected_384, state, top_k: int = NEW_USER_TOP_K):
+    """
+    把這位新使用者插進圖，並接上和他最像的 K 位既有使用者。
+
+    只有 user↔user 邊要動（新使用者沒有評論，本來就不該有 user→cafe 邊）。
+    原圖完全不改：新 tensor 用 torch.cat 另建，其餘欄位是參考沿用。
+
+    回傳 (臨時圖, 新使用者的節點索引, 鄰居相似度 list)
+    """
+    torch, F = state['torch'], state['F']
+    data = state['data']
+    HeteroData = state['HeteroData']
+
+    existing = data['user'].x                      # (n_users, 384)
+    n_users = existing.shape[0]
+    new_idx = n_users
+    device = existing.device
+
+    sim = (F.normalize(existing, dim=-1)
+           @ F.normalize(projected_384, dim=-1).T).squeeze(-1)   # (n_users,)
+    vals, idxs = torch.topk(sim, min(top_k, n_users))
+
+    keep = vals >= NEW_USER_MIN_SIM
+    if keep.any():
+        vals, idxs = vals[keep], idxs[keep]
+    else:
+        # 一個夠像的都沒有 → 至少接最相近的那一位。
+        # 完全不接邊會讓新使用者變成孤立節點，HGT 傳不到任何訊息，
+        # 等於退回舊版那條「沒進過圖」的路徑。
+        vals, idxs = vals[:1], idxs[:1]
+    k = idxs.shape[0]
+
+    new_x = torch.cat([existing, projected_384.squeeze(0).unsqueeze(0)], dim=0)
+
+    src = torch.full((k,), new_idx, dtype=torch.long, device=device)
+    dst = idxs.to(device)
+    # 雙向：新→舊 和 舊→新
+    added = torch.stack([torch.cat([src, dst]), torch.cat([dst, src])], dim=0)
+
+    tmp = HeteroData()
+    tmp['user'].x = new_x
+    tmp['user'].num_nodes = n_users + 1
+    tmp['cafe'].x = data['cafe'].x
+    tmp['cafe'].num_nodes = data['cafe'].num_nodes
+    # 掃過所有邊型別而不是逐一列舉：圖以後多一種邊時，
+    # 逐一列舉會靜默漏掉，HGTConv 拿不到那型別的邊也不會報錯。
+    for edge_type in data.edge_types:
+        orig = data[edge_type].edge_index
+        if edge_type == ('user', 'similar_to', 'user'):
+            tmp[edge_type].edge_index = torch.cat([orig, added], dim=1)
+        else:
+            tmp[edge_type].edge_index = orig
+
+    return tmp, new_idx, vals.cpu().tolist()
+
+
 def _passes_hard_filters(cafe_id: int, hard_filters: dict, id2tags: dict) -> bool:
     tags_text = ' '.join(id2tags.get(cafe_id, []))
     for flag, keywords in _HARD_FILTER_TAGS.items():
@@ -189,8 +260,9 @@ def _tag_match_score(cafe_id: int, keywords: list, id2tags: dict) -> float:
     """
     使用者已表達的偏好關鍵字，與店家 review_tags 的匹配比例（0~1）。
 
-    GNN 的 predictor 輸出擠在很窄的區間（實測多在 0.96~0.98），
-    對「這一輪講了什麼」不夠敏感；標籤匹配補上這塊反應度。
+    GNN 認得的是「和你相似的人喜歡什麼」，認不得「你這一句話說了什麼」——
+    測驗五維是粗粒度的，講到「甜點」「插座」這種具體需求時，
+    店家標籤才是直接證據。兩者互補，不是誰取代誰。
     """
     if not keywords:
         return 0.0
@@ -203,22 +275,27 @@ def _tag_match_score(cafe_id: int, keywords: list, id2tags: dict) -> float:
 
 def _blend_scores(candidates: list, keywords: list, id2tags: dict, weight: float) -> None:
     """
-    就地寫入 blended_score = (1-w)·正規化GNN + w·標籤匹配。
+    就地寫入 blended_score = (1-w)·GNN名次分數 + w·標籤匹配。
 
-    GNN 原始分數先做 min-max 正規化，否則它的窄區間會被標籤分數淹沒。
+    GNN 這一側用「名次」而不是分數本身正規化：
+    logit 的值域是 +17 ~ -59，最低的那幾家離群值極遠，
+    做 min-max 會把前二十名全部壓進 0.98~1.00 的窄帶，等於沒有區別。
+    改成第一名 1.0、最後一名 0.0 均勻遞減，混合時兩側的尺度才對得起來。
     """
     if not candidates:
         return
-    raw = [c['gnn_score'] for c in candidates]
-    lo, hi = min(raw), max(raw)
-    # 跨距下限：GNN 分數擠成一團時（常見），純 min-max 會把 0.01 的差距
-    # 放大成滿分差距、壓過標籤匹配。設下限讓微小差異維持微小。
-    span = max(hi - lo, MIN_GNN_SPAN)
+    ranked = sorted(candidates, key=lambda c: c['gnn_logit'], reverse=True)
+    last = max(1, len(ranked) - 1)
+    for rank, c in enumerate(ranked):
+        c['gnn_rank_score'] = 1.0 - rank / last
+
     for c in candidates:
-        norm_gnn = (c['gnn_score'] - lo) / span
         tag = _tag_match_score(c['cafe_id'], keywords, id2tags)
         c['tag_score'] = tag
-        c['blended_score'] = (1 - weight) * norm_gnn + weight * tag if keywords else norm_gnn
+        c['blended_score'] = (
+            (1 - weight) * c['gnn_rank_score'] + weight * tag
+            if keywords else c['gnn_rank_score']
+        )
 
 
 def _tiered_sample(candidates: list, guaranteed: int = 0) -> list:
@@ -229,7 +306,9 @@ def _tiered_sample(candidates: list, guaranteed: int = 0) -> list:
     避免使用者明講的需求（例如寵物友善）被隨機抽樣洗掉；
     其餘名額仍隨機，維持每次推薦的變化性。
     """
-    rank_key = lambda c: c.get('blended_score', c['gnn_score'])
+    # 一律用 blended_score；退而求其次也要用 logit 而不是 gnn_score，
+    # 後者飽和成 1.0 的家數很多，拿來排序等於沒排
+    rank_key = lambda c: c.get('blended_score', c.get('gnn_logit', c['gnn_score']))
 
     locked = []
     if guaranteed > 0:
@@ -285,7 +364,6 @@ def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
     """
     state = _load()
     torch = state['torch']
-    F = state['F']
     model = state['model']
 
     max_s = max(scores.values()) if scores and max(scores.values()) > 0 else 1
@@ -293,13 +371,22 @@ def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
 
     with torch.no_grad():
         projected = model.quiz_projector(vec)                     # (1, 384)
-        user_vec = F.relu(model.user_proj(projected)).squeeze(0)  # (128,)
-        z_cafe = state['z_cafe']
+        # 接邊後跑 HGT：新使用者與 cafe 的 embedding 必須來自同一次 encode，
+        # cafe 那邊的卷積結果也會因為多了這些邊而改變
+        tmp_data, new_idx, _sims = _insert_new_user(projected, state)
+        z = model.encode(tmp_data['user'].x, tmp_data)
+        user_vec = z['user'][new_idx]                             # (128,)
+        z_cafe = z['cafe']                                        # (n_cafes, 128)
         n_cafes = z_cafe.shape[0]
         u_rep = user_vec.unsqueeze(0).expand(n_cafes, -1)
-        raw = torch.sigmoid(model.predictor(
+        # 排序用 logit（sigmoid 之前）。predictor 的 logit 落在 +17 ~ -59，
+        # 接邊之後 56 家有 43 家的 sigmoid 直接飽和成 1.0 —— 前十名 logit
+        # 只差 0.2，套完 sigmoid 全都變成同一個數字，名次資訊整個消失。
+        # sigmoid 是單調的，用 logit 排序名次一樣，但解析度留得住。
+        logits = model.predictor(
             torch.cat([u_rep, z_cafe], dim=-1)
-        )).squeeze(-1).numpy()
+        ).squeeze(-1).numpy()
+        raw = torch.sigmoid(torch.from_numpy(logits)).numpy()
 
     hard_filters = hard_filters or {}
     exclude_ids = exclude_ids or set()
@@ -311,7 +398,8 @@ def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
         avg_score, review_count = state['cafe_stats'].get(idx, (0.0, 0))
         candidates.append({
             'cafe_id': cafe_id,
-            'gnn_score': float(raw[idx]),
+            'gnn_score': float(raw[idx]),     # 顯示用（0~1，好讀）
+            'gnn_logit': float(logits[idx]),  # 排序用（保留解析度）
             'avg_score': avg_score,
             'review_count': review_count,
         })
