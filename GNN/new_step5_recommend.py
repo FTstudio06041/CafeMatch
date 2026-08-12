@@ -190,12 +190,22 @@ class HGTWithQuiz(nn.Module):
         return x_dict
 
     def get_all_cafe_scores(self, user_vec_128, z_cafe):
+        """
+        回傳 (sigmoid 分數, logit)。
+
+        排序一定要用 logit：predictor 的 logit 落在 +17 ~ -59，
+        56 家裡 33 家的 sigmoid 精確等於 1.0、16 家等於 0.0，
+        只剩 9 種不同的值。拿 sigmoid 排序時前段全是同分，
+        抽獎池會退化成「原始順序的前八家」而不是「最match的前八家」。
+        sigmoid 單調遞增，用 logit 排名次結果一樣，但解析度留得住。
+        """
         n_cafes = z_cafe.shape[0]
         u_rep   = user_vec_128.unsqueeze(0).expand(n_cafes, -1)
         concat  = torch.cat([u_rep, z_cafe], dim=-1)
         with torch.no_grad():
-            scores = torch.sigmoid(self.predictor(concat)).squeeze(-1)
-        return scores.cpu().numpy()
+            logits = self.predictor(concat).squeeze(-1)
+            scores = torch.sigmoid(logits)
+        return scores.cpu().numpy(), logits.cpu().numpy()
 
 
 # ══════════════════════════════════════════════════════════
@@ -337,7 +347,7 @@ def load_model(data):
 # ══════════════════════════════════════════════════════════
 # 推薦共用邏輯
 # ══════════════════════════════════════════════════════════
-def _build_cafe_list(raw_scores, cafe_stats, idx2info):
+def _build_cafe_list(raw_scores, logits, cafe_stats, idx2info):
     result = []
     for _, row in cafe_stats.iterrows():
         idx  = int(row["cafe_idx"])
@@ -346,7 +356,8 @@ def _build_cafe_list(raw_scores, cafe_stats, idx2info):
             "cafe_idx"    : idx,
             "avg_score"   : float(row["avg_score"]),
             "review_count": int(row["review_count"]),
-            "gnn_score"   : float(raw_scores[idx]),
+            "gnn_score"   : float(raw_scores[idx]),   # 顯示用（0~1，好讀）
+            "gnn_logit"   : float(logits[idx]),       # 排序用（保留解析度）
             "name"        : info.get("name", f"#{idx}"),
             "address"     : info.get("address", ""),
             "cost"        : info.get("cost", ""),
@@ -371,47 +382,70 @@ def _passes_hard_filters(cafe, filters):
 
 def _apply_hard_filters(all_cafes, filters):
     """
-    套用 Q9 條件；符合的店家不足以湊滿一次推薦時就放寬。
+    套用 Q9 條件。回傳 (候選清單, 保證入選的 idx 集合, 是否放寬)。
 
-    只有 56 間店，三個條件同時勾選很容易篩到剩兩三間，
-    那時給「不完全符合但夠好」的店，比給一份殘缺的清單有用。
+    符合的店家湊不滿一次推薦時要放寬，但不是把條件整個丟掉——
+    真的符合的那幾家仍然保證入選，只用其他好店把名額補滿。
+    直接退回「完全不篩」等於無視使用者勾的條件。
+
+    提醒：這支腳本比對的 review_tags 是從評論抽出來的詞，不是店家屬性
+    （56 家裡只有 2 家含「寵物」、0 家含「停車」與「夜」），
+    所以實務上幾乎一定會走到放寬那條路，Q9 的效果很有限。
+    網站端改從資料庫取（services/cafe_facts.py），寵物友善有 20 家、晚間營業 12 家。
     """
     if not filters or not any(filters.values()):
-        return all_cafes, False
+        return all_cafes, set(), False
     kept = [c for c in all_cafes if _passes_hard_filters(c, filters)]
     if len(kept) < TIER1_PICK + TIER2_PICK:
-        return all_cafes, True      # True = 條件放寬了，要告訴使用者
-    return kept, False
+        return all_cafes, {c["cafe_idx"] for c in kept}, True
+    return kept, set(), False
 
 
-def _tiered_sample(all_cafes, exclude_idxs=None):
-    if exclude_idxs is None:
-        exclude_idxs = set()
+def _tiered_sample(all_cafes, exclude_idxs=None, must_include=None):
+    """
+    分層抽樣：精選（>= TIER1_THRESHOLD）抽 3 + 優質抽 2，不足時互補。
+
+    must_include — 硬條件真的符合的店家，一定入選。
+    """
+    exclude_idxs = exclude_idxs or set()
+    must_include = must_include or set()
 
     candidates = [c for c in all_cafes if c["cafe_idx"] not in exclude_idxs]
 
-    tier1 = sorted(
-        [c for c in candidates if c["avg_score"] >= TIER1_THRESHOLD],
-        key=lambda c: c["gnn_score"], reverse=True
-    )
-    tier2 = sorted(
-        [c for c in candidates if TIER2_MIN <= c["avg_score"] < TIER1_THRESHOLD],
-        key=lambda c: c["gnn_score"], reverse=True
-    )
+    # 用 logit 排序而不是 gnn_score：後者飽和成 1.0 的家數太多，
+    # 排出來的前段全是同分，抽獎池會退化成「原始順序的前八家」
+    rank = lambda c: c["gnn_logit"]
 
-    chosen_t1 = random.sample(tier1[:TIER1_POOL_SIZE],
-                               min(TIER1_PICK, len(tier1[:TIER1_POOL_SIZE])))
-    chosen_t2 = random.sample(tier2[:TIER2_POOL_SIZE],
-                               min(TIER2_PICK, len(tier2[:TIER2_POOL_SIZE])))
-    result = chosen_t1 + chosen_t2
+    locked = sorted([c for c in candidates if c["cafe_idx"] in must_include],
+                    key=rank, reverse=True)[:TIER1_PICK + TIER2_PICK]
+    locked_ids = {c["cafe_idx"] for c in locked}
+    candidates = [c for c in candidates if c["cafe_idx"] not in locked_ids]
 
+    tier1 = sorted([c for c in candidates if c["avg_score"] >= TIER1_THRESHOLD],
+                   key=rank, reverse=True)
+    tier2 = sorted([c for c in candidates
+                    if TIER2_MIN <= c["avg_score"] < TIER1_THRESHOLD],
+                   key=rank, reverse=True)
+
+    remaining = max(0, TIER1_PICK + TIER2_PICK - len(locked))
+    pick1 = min(TIER1_PICK, remaining)
+    pick2 = remaining - pick1
+
+    result = list(locked)
+    result += random.sample(tier1[:TIER1_POOL_SIZE],
+                            min(pick1, len(tier1[:TIER1_POOL_SIZE])))
+    result += random.sample(tier2[:TIER2_POOL_SIZE],
+                            min(pick2, len(tier2[:TIER2_POOL_SIZE])))
+
+    # 補位要把兩層都納入來源：只從 tier1 撈的話，
+    # tier1 太少而 tier2 很多時會回傳不足 5 家（實測 tier1=1、tier2=9 只回 3 家）
     if len(result) < TIER1_PICK + TIER2_PICK:
         chosen_ids = {c["cafe_idx"] for c in result}
-        extra = [c for c in tier1 if c["cafe_idx"] not in chosen_ids]
+        extra = [c for c in tier1 + tier2 if c["cafe_idx"] not in chosen_ids]
         need  = TIER1_PICK + TIER2_PICK - len(result)
-        result.extend(random.sample(extra, min(need, len(extra))))
+        result.extend(extra[:need])
 
-    return result, tier1, tier2
+    return sorted(result, key=rank, reverse=True), tier1, tier2
 
 
 # ══════════════════════════════════════════════════════════
@@ -427,10 +461,10 @@ def recommend_existing_user(user_id, model, data, user2idx, df, cafe_stats, idx2
     with torch.no_grad():
         z            = model.encode(data["user"].x, data)
         user_vec_128 = z["user"][user_idx]
-        raw_scores   = model.get_all_cafe_scores(user_vec_128, z["cafe"])
+        raw_scores, logits = model.get_all_cafe_scores(user_vec_128, z["cafe"])
 
     visited   = set(df[df["user_idx"] == user_idx]["cafe_idx"].tolist())
-    all_cafes = _build_cafe_list(raw_scores, cafe_stats, idx2info)
+    all_cafes = _build_cafe_list(raw_scores, logits, cafe_stats, idx2info)
     return _tiered_sample(all_cafes, exclude_idxs=visited)
 
 
@@ -438,7 +472,8 @@ def recommend_existing_user(user_id, model, data, user2idx, df, cafe_stats, idx2
 # 新用戶路徑（含動態接邊）
 # ══════════════════════════════════════════════════════════
 def recommend_new_user(quiz_scores, model, data, cafe_stats, idx2info,
-                       filters=None, top_k=NEW_USER_TOP_K, verbose=True):
+                       filters=None, exclude_idxs=None,
+                       top_k=NEW_USER_TOP_K, verbose=True):
     """
     新用戶完整路徑：
       1. 五維分數 → quiz_projector → projected_384
@@ -448,8 +483,9 @@ def recommend_new_user(quiz_scores, model, data, cafe_stats, idx2info,
       5. 取新用戶的 128 維 embedding → predictor → 對 56 間店打分
       6. 套用 Q9 的硬條件（寵物／停車／晚間），再分層抽樣
 
-    filters — {'pet': bool, 'parking': bool, 'night': bool}，Q9 的勾選結果。
-    verbose — 印接邊資訊；當成模組被匯入時傳 False，不要污染呼叫端的輸出。
+    filters      — {'pet': bool, 'parking': bool, 'night': bool}，Q9 的勾選結果。
+    exclude_idxs — 要排除的 cafe_idx（例如上一輪推過的，想「換一批」時用）。
+    verbose      — 印接邊資訊；當成模組被匯入時傳 False，不要污染呼叫端的輸出。
     """
     max_s = max(quiz_scores.values()) if max(quiz_scores.values()) > 0 else 1
     vec   = torch.tensor([[quiz_scores[d] / max_s for d in DIMS]],
@@ -474,13 +510,15 @@ def recommend_new_user(quiz_scores, model, data, cafe_stats, idx2info,
 
         # Step 5：取新用戶的 embedding → 對所有咖啡廳打分
         new_user_128 = z["user"][new_idx]                   # (128,)
-        raw_scores   = model.get_all_cafe_scores(new_user_128, z["cafe"])
+        raw_scores, logits = model.get_all_cafe_scores(new_user_128, z["cafe"])
 
-    all_cafes = _build_cafe_list(raw_scores, cafe_stats, idx2info)
-    kept, relaxed = _apply_hard_filters(all_cafes, filters)
+    all_cafes = _build_cafe_list(raw_scores, logits, cafe_stats, idx2info)
+    kept, must_include, relaxed = _apply_hard_filters(all_cafes, filters)
     if verbose and relaxed:
-        print("  [條件] 完全符合 Q9 條件的店家不足，已放寬為不限")
-    return _tiered_sample(kept, exclude_idxs=set())
+        print(f"  [條件] 完全符合 Q9 條件的只有 {len(must_include)} 家，"
+              f"這幾家保證入選，其餘名額放寬")
+    return _tiered_sample(kept, exclude_idxs=exclude_idxs,
+                          must_include=must_include)
 
 
 # ══════════════════════════════════════════════════════════
@@ -582,7 +620,7 @@ if __name__ == "__main__":
 
     if mode == "2":
         user_id = input("請輸入你的使用者 ID：").strip()
-        result, tier1, tier2 = recommend_existing_user(
+        result, _tier1, _tier2 = recommend_existing_user(
             user_id, model, data, user2idx, df, cafe_stats, idx2info
         )
         if result is not None:
@@ -603,7 +641,7 @@ if __name__ == "__main__":
         if chosen:
             print(f"\n額外條件：{'、'.join(chosen)}")
 
-        result, tier1, tier2 = recommend_new_user(
+        result, _tier1, _tier2 = recommend_new_user(
             quiz_scores, model, data, cafe_stats, idx2info, filters=filters
         )
         print_recommendations(result, mode_label=f"心理測驗 + GNN（接 top-{NEW_USER_TOP_K} 邊）")
