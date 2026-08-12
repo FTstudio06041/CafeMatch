@@ -5,22 +5,18 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 統一推薦入口 recommend.py
 ======================================================================
 判斷邏輯：
-  - 有評論的使用者（舊用戶）→ GNN 路徑
+  - 舊用戶（有評論）→ GNN 路徑
       user BERT 向量 → user_proj → HGT卷積 → predictor → 推薦分數
-  - 新使用者（冷啟動）       → 心理測驗 + GNN 路徑（完整圖結構）
-      五維分數 → quiz_projector → user_proj → HGT卷積 → predictor → 推薦分數
 
-兩條路徑都完整跑過 HGT，圖結構資訊都有保留。
-舊用戶版本額外排除已評論過的咖啡廳。
+  - 新用戶（冷啟動）→ 心理測驗 + 動態接邊 + GNN 路徑
+      五維分數 → quiz_projector → projected_384
+      projected_384 和 2286 個 BERT 向量做 cosine sim → 取 top-K 接 user↔user 邊
+      把新用戶插入圖（idx = n_users）→ HGT卷積 → predictor → 推薦分數
 
 ======================================================================
 所需檔案：
-  best_model_with_quiz.pt   （train_with_quiz.py 訓練產出）
-  hetero_graph.pt
-  reviews_clean.csv
-  user2idx.json
-  cafe2idx.json
-  cafes_updated.json
+  best_model_with_quiz.pt / hetero_graph.pt / reviews_clean.csv
+  user2idx.json / cafe2idx.json / cafes_updated.json
 ======================================================================
 """
 
@@ -30,21 +26,23 @@ import torch.nn.functional as F
 import pandas as pd
 import json
 import random
+import copy
 
 DEVICE     = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 HIDDEN_DIM = 128
 NUM_HEADS  = 4
 NUM_LAYERS = 2
 
-# ══════════════════════════════════════════════════════════
-# 分層推薦參數
-# ══════════════════════════════════════════════════════════
+# ── 分層推薦參數 ──────────────────────────────────────────
 TIER1_THRESHOLD = 4.7
 TIER2_MIN       = 4.0
 TIER1_POOL_SIZE = 8
 TIER2_POOL_SIZE = 6
 TIER1_PICK      = 3
 TIER2_PICK      = 2
+
+# ── 新用戶接邊參數 ────────────────────────────────────────
+NEW_USER_TOP_K  = 50    # cosine similarity 取前幾名做連線
 
 DIMS      = ["work", "env", "social", "taste", "cp"]
 DIM_NAMES = {"work":"工作專注","env":"環境美感","social":"社交氛圍","taste":"口味品質","cp":"CP值"}
@@ -126,7 +124,7 @@ Q9_OPTIONS = [
 ]
 
 # ══════════════════════════════════════════════════════════
-# 模型定義（與 train_with_quiz.py 完全一致，才能正確 load 權重）
+# 模型定義（與 train_with_quiz.py 完全一致）
 # ══════════════════════════════════════════════════════════
 class QuizProjector(nn.Module):
     def __init__(self):
@@ -139,14 +137,6 @@ class QuizProjector(nn.Module):
 
 
 class HGTWithQuiz(nn.Module):
-    """
-    完整的 HGT 模型，支援兩條路徑：
-      use_quiz=False：BERT 向量 → user_proj → HGT → predictor（舊用戶）
-      use_quiz=True ：五維分數 → quiz_projector → user_proj → HGT → predictor（新用戶）
-
-    關鍵：兩條路徑在 user_proj 之後完全相同，都會跑完 HGT 卷積，
-          圖結構資訊（user↔user、cafe↔cafe 邊）都有被利用到。
-    """
     def __init__(self, data):
         super().__init__()
         from torch_geometric.nn import HGTConv, Linear as PyGLinear
@@ -164,39 +154,119 @@ class HGTWithQuiz(nn.Module):
 
     def encode(self, user_input, data):
         """
-        user_input : (n_users, 384)  ← 不管是 BERT 還是 quiz_projector 的輸出，
-                                        到這裡形狀都一樣，後面統一跑 HGT
+        user_input : (n_users 或 n_users+1, 384)
+        data       : 原始圖 或 插入新用戶邊後的臨時圖
         """
         x_dict = {
-            "user": self.user_proj(user_input),          # (n_users, 128)
-            "cafe": self.cafe_proj(data["cafe"].x),      # (n_cafes, 128)
+            "user": self.user_proj(user_input),
+            "cafe": self.cafe_proj(data["cafe"].x),
         }
         for conv in self.convs:
             x_dict = {k: F.relu(v)
                       for k, v in conv(x_dict, data.edge_index_dict).items()}
-        return x_dict  # {"user": (n_users,128), "cafe": (n_cafes,128)}
+        return x_dict
 
     def get_all_cafe_scores(self, user_vec_128, z_cafe):
-        """
-        給定單一使用者的 128 維向量，對所有咖啡廳打分
-        user_vec_128 : (128,)
-        z_cafe       : (n_cafes, 128)
-        回傳          : (n_cafes,) numpy array
-        """
         n_cafes = z_cafe.shape[0]
-        # 把使用者向量複製 n_cafes 次和每間咖啡廳配對
-        u_rep  = user_vec_128.unsqueeze(0).expand(n_cafes, -1)  # (n_cafes, 128)
-        concat = torch.cat([u_rep, z_cafe], dim=-1)              # (n_cafes, 256)
+        u_rep   = user_vec_128.unsqueeze(0).expand(n_cafes, -1)
+        concat  = torch.cat([u_rep, z_cafe], dim=-1)
         with torch.no_grad():
-            scores = torch.sigmoid(self.predictor(concat)).squeeze(-1)  # (n_cafes,)
+            scores = torch.sigmoid(self.predictor(concat)).squeeze(-1)
         return scores.cpu().numpy()
 
 
 # ══════════════════════════════════════════════════════════
-# 資料載入（全局，避免重複 IO）
+# 核心：把新用戶插入圖並補邊
+# ══════════════════════════════════════════════════════════
+def insert_new_user_into_graph(projected_384: torch.Tensor,
+                               data,
+                               top_k: int = NEW_USER_TOP_K):
+    """
+    將新用戶插入圖中，步驟：
+      1. 計算 projected_384 與所有 2286 個 user BERT 向量的 cosine similarity
+      2. 取前 top_k 個相似使用者
+      3. 把新用戶的 384 維向量 append 到 data["user"].x 的最後一列
+         → 新用戶的 idx = n_users（原本最後一個 idx + 1）
+      4. 補上 user↔user 雙向邊：(new_idx → top_k_idx) 和 (top_k_idx → new_idx)
+      5. 回傳「暫時修改過的圖」和「新用戶的 idx」
+
+    注意：這裡用 deep copy 不修改原始 data，推薦完後原圖不受影響。
+    """
+    from torch_geometric.data import HeteroData
+
+    n_users    = data["user"].x.shape[0]   # 2286
+    new_idx    = n_users                   # 新用戶的節點 idx
+
+    # ── Step 1：cosine similarity ─────────────────────────
+    existing_bert = data["user"].x          # (n_users, 384)
+    new_vec_norm  = F.normalize(projected_384, dim=-1)           # (1, 384)
+    exist_norm    = F.normalize(existing_bert, dim=-1)            # (n_users, 384)
+    sim_scores    = (exist_norm @ new_vec_norm.T).squeeze(-1)     # (n_users,)
+
+    # ── Step 2：取前 top_k ────────────────────────────────
+    actual_k   = min(top_k, n_users)
+    topk_vals, topk_idxs = torch.topk(sim_scores, actual_k)
+    # topk_idxs: (actual_k,) 品味最相近的使用者 idx
+
+    print(f"  [接邊] 新用戶與前 {actual_k} 名相似使用者連線")
+    print(f"         相似度範圍：{topk_vals[-1].item():.4f} ~ {topk_vals[0].item():.4f}")
+
+    # ── Step 3：把新用戶向量 append 到 user 特徵矩陣 ───────
+    # 注意：用 torch.cat 建立新 tensor，不修改原始 data
+    new_user_feat = projected_384.squeeze(0).unsqueeze(0)         # (1, 384)
+    new_user_x    = torch.cat([existing_bert, new_user_feat], dim=0)  # (n_users+1, 384)
+
+    # ── Step 4：補上新的 user↔user 邊 ────────────────────
+    # 新邊：new_idx → top_k_idx（雙向）
+    new_src = torch.full((actual_k,), new_idx,
+                         dtype=torch.long, device=DEVICE)         # (k,) 全是 new_idx
+    new_dst = topk_idxs.to(DEVICE)                                # (k,) top_k 的舊用戶
+
+    # 雙向：new→old 和 old→new
+    added_src = torch.cat([new_src, new_dst], dim=0)              # (2k,)
+    added_dst = torch.cat([new_dst, new_src], dim=0)              # (2k,)
+    added_edge = torch.stack([added_src, added_dst], dim=0)       # (2, 2k)
+
+    # 把新邊 concat 到原本的 user↔user 邊後面
+    orig_uu_edge = data["user", "similar_to", "user"].edge_index  # (2, orig_k)
+    merged_uu    = torch.cat([orig_uu_edge, added_edge], dim=1)   # (2, orig_k + 2k)
+
+    # ── Step 5：組成臨時圖（不影響原始 data）─────────────
+    # 用淺複製 + 只替換需要修改的欄位，避免 deep copy 整張大圖
+    tmp_data = HeteroData()
+
+    # user 節點：換成包含新用戶的特徵矩陣
+    tmp_data["user"].x         = new_user_x
+    tmp_data["user"].num_nodes = n_users + 1
+
+    # cafe 節點：直接沿用
+    tmp_data["cafe"].x         = data["cafe"].x
+    tmp_data["cafe"].num_nodes = data["cafe"].num_nodes
+
+    # user→cafe 邊：直接沿用（新用戶本來就沒有評論邊，不需要動）
+    tmp_data["user", "reviews",    "cafe"].edge_index = \
+        data["user", "reviews", "cafe"].edge_index
+    tmp_data["cafe", "reviewed_by","user"].edge_index = \
+        data["cafe", "reviewed_by", "user"].edge_index
+
+    # user↔user 邊：換成加了新邊的版本
+    tmp_data["user", "similar_to", "user"].edge_index = merged_uu
+
+    # cafe↔cafe 邊：直接沿用
+    tmp_data["cafe", "similar_to", "cafe"].edge_index = \
+        data["cafe", "similar_to", "cafe"].edge_index
+
+    return tmp_data, new_idx, topk_idxs.cpu().tolist(), topk_vals.cpu().tolist()
+
+
+# ══════════════════════════════════════════════════════════
+# 資料載入
 # ══════════════════════════════════════════════════════════
 def load_all():
-    # hetero_graph.pt 是本地訓練產物，需允許載入 HeteroData 物件。
+    # PyTorch 2.6+ 預設 weights_only=True，但 HeteroData 不是純權重物件，
+    # 需要明確加入信任清單並設 weights_only=False
+    from torch_geometric.data import HeteroData
+    torch.serialization.add_safe_globals([HeteroData])
     data = torch.load("hetero_graph.pt", map_location=DEVICE, weights_only=False)
 
     with open("user2idx.json", encoding="utf-8") as f:
@@ -206,7 +276,6 @@ def load_all():
 
     df = pd.read_csv("reviews_clean.csv")
 
-    # 咖啡廳詳細資訊
     with open("cafes_updated.json", encoding="utf-8") as f:
         cafes_raw = json.load(f)
     idx2cafe_id = {v: k for k, v in cafe2idx.items()}
@@ -228,7 +297,6 @@ def load_all():
             "google_url"  : f"https://maps.app.goo.gl/{url}" if url else "",
         }
 
-    # 每間咖啡廳平均評分 & 評論數
     cafe_stats = df.groupby("cafe_idx")["score"].agg(
         avg_score="mean", review_count="count"
     ).reset_index()
@@ -239,26 +307,25 @@ def load_all():
 def load_model(data):
     model = HGTWithQuiz(data).to(DEVICE)
     model.load_state_dict(
-        torch.load("best_model_with_quiz.pt", map_location=DEVICE)
+        torch.load("best_model_with_quiz.pt", map_location=DEVICE, weights_only=False)
     )
     model.eval()
     return model
 
 
 # ══════════════════════════════════════════════════════════
-# 核心推薦邏輯（兩條路徑統一在這裡）
+# 推薦共用邏輯
 # ══════════════════════════════════════════════════════════
 def _build_cafe_list(raw_scores, cafe_stats, idx2info):
-    """把 numpy 分數陣列組合成帶詳細資訊的 list"""
     result = []
     for _, row in cafe_stats.iterrows():
-        idx = int(row["cafe_idx"])
+        idx  = int(row["cafe_idx"])
         info = idx2info.get(idx, {})
         result.append({
             "cafe_idx"    : idx,
             "avg_score"   : float(row["avg_score"]),
             "review_count": int(row["review_count"]),
-            "gnn_score"   : float(raw_scores[idx]),   # GNN predictor 輸出的分數
+            "gnn_score"   : float(raw_scores[idx]),
             "name"        : info.get("name", f"#{idx}"),
             "address"     : info.get("address", ""),
             "cost"        : info.get("cost", ""),
@@ -270,116 +337,106 @@ def _build_cafe_list(raw_scores, cafe_stats, idx2info):
     return result
 
 
-def _tiered_sample(all_cafes, exclude_idxs=None,
-                   tier1_threshold=TIER1_THRESHOLD,
-                   tier2_min=TIER2_MIN,
-                   tier1_pool=TIER1_POOL_SIZE, tier1_pick=TIER1_PICK,
-                   tier2_pool=TIER2_POOL_SIZE, tier2_pick=TIER2_PICK):
-    """
-    分層隨機抽樣
-    exclude_idxs : set of cafe_idx，已評論過的咖啡廳（舊用戶才需要排除）
-    """
+def _tiered_sample(all_cafes, exclude_idxs=None):
     if exclude_idxs is None:
         exclude_idxs = set()
 
     candidates = [c for c in all_cafes if c["cafe_idx"] not in exclude_idxs]
 
     tier1 = sorted(
-        [c for c in candidates if c["avg_score"] >= tier1_threshold],
+        [c for c in candidates if c["avg_score"] >= TIER1_THRESHOLD],
         key=lambda c: c["gnn_score"], reverse=True
     )
     tier2 = sorted(
-        [c for c in candidates if tier2_min <= c["avg_score"] < tier1_threshold],
+        [c for c in candidates if TIER2_MIN <= c["avg_score"] < TIER1_THRESHOLD],
         key=lambda c: c["gnn_score"], reverse=True
     )
 
-    chosen_t1 = random.sample(tier1[:tier1_pool], min(tier1_pick, len(tier1[:tier1_pool])))
-    chosen_t2 = random.sample(tier2[:tier2_pool], min(tier2_pick, len(tier2[:tier2_pool])))
+    chosen_t1 = random.sample(tier1[:TIER1_POOL_SIZE],
+                               min(TIER1_PICK, len(tier1[:TIER1_POOL_SIZE])))
+    chosen_t2 = random.sample(tier2[:TIER2_POOL_SIZE],
+                               min(TIER2_PICK, len(tier2[:TIER2_POOL_SIZE])))
     result = chosen_t1 + chosen_t2
 
-    # 補充（若 tier2 不足）
-    if len(result) < tier1_pick + tier2_pick:
+    if len(result) < TIER1_PICK + TIER2_PICK:
         chosen_ids = {c["cafe_idx"] for c in result}
         extra = [c for c in tier1 if c["cafe_idx"] not in chosen_ids]
-        need  = tier1_pick + tier2_pick - len(result)
+        need  = TIER1_PICK + TIER2_PICK - len(result)
         result.extend(random.sample(extra, min(need, len(extra))))
 
     return result, tier1, tier2
 
 
-def recommend_existing_user(user_id: str, model, data, user2idx, df,
-                             cafe_stats, idx2info):
-    """
-    舊用戶路徑（有評論）
-    ──────────────────────────────────────────────────────
-    user BERT 向量 → user_proj → HGT卷積（利用完整圖結構）→ predictor
-    """
+# ══════════════════════════════════════════════════════════
+# 舊用戶路徑
+# ══════════════════════════════════════════════════════════
+def recommend_existing_user(user_id, model, data, user2idx, df, cafe_stats, idx2info):
     if user_id not in user2idx:
-        print(f"⚠️  找不到使用者 {user_id}，請改用心理測驗推薦。")
+        print(f"找不到使用者 {user_id}")
         return None, None, None
 
     user_idx = user2idx[user_id]
 
     with torch.no_grad():
-        # 用 BERT 向量（use_quiz=False 路徑）跑完整 GNN
-        user_bert_input = data["user"].x                     # (n_users, 384)
-        z = model.encode(user_bert_input, data)              # {"user":(n,128), "cafe":(m,128)}
-        user_vec_128 = z["user"][user_idx]                   # (128,)
+        z            = model.encode(data["user"].x, data)
+        user_vec_128 = z["user"][user_idx]
         raw_scores   = model.get_all_cafe_scores(user_vec_128, z["cafe"])
 
-    # 排除已評論過的咖啡廳
-    visited = set(df[df["user_idx"] == user_idx]["cafe_idx"].tolist())
-
+    visited   = set(df[df["user_idx"] == user_idx]["cafe_idx"].tolist())
     all_cafes = _build_cafe_list(raw_scores, cafe_stats, idx2info)
-    result, tier1, tier2 = _tiered_sample(all_cafes, exclude_idxs=visited)
-    return result, tier1, tier2
+    return _tiered_sample(all_cafes, exclude_idxs=visited)
 
 
-def recommend_new_user(quiz_scores: dict, model, data, cafe_stats, idx2info):
+# ══════════════════════════════════════════════════════════
+# 新用戶路徑（含動態接邊）
+# ══════════════════════════════════════════════════════════
+def recommend_new_user(quiz_scores, model, data, cafe_stats, idx2info,
+                       top_k=NEW_USER_TOP_K):
     """
-    新用戶路徑（冷啟動）
-    ──────────────────────────────────────────────────────
-    五維分數 → quiz_projector（5→384）→ user_proj（384→128）
-             → HGT卷積（利用完整圖結構）→ predictor
-
-    注意：新用戶沒有節點在圖裡，所以 HGT 卷積時他是「虛擬插入」的：
-    我們把他的 128 維向量當作一個額外使用者，和所有咖啡廳的 GNN embedding 配對打分。
-    咖啡廳的 embedding 已經包含了圖結構（cafe↔cafe、user↔cafe 邊的訊息聚合），
-    所以新用戶仍然間接受益於圖的全局資訊。
+    新用戶完整路徑：
+      1. 五維分數 → quiz_projector → projected_384
+      2. projected_384 和全部 2286 個 BERT 向量做 cosine sim → 取 top_k 接邊
+      3. 把新用戶（idx = n_users）插入圖，補上 user↔user 雙向邊
+      4. 用「含新用戶的臨時圖」跑 HGT → 新用戶真正收到鄰居訊息
+      5. 取新用戶的 128 維 embedding → predictor → 對 56 間店打分
     """
     max_s = max(quiz_scores.values()) if max(quiz_scores.values()) > 0 else 1
     vec   = torch.tensor([[quiz_scores[d] / max_s for d in DIMS]],
                          dtype=torch.float).to(DEVICE)  # (1, 5)
 
     with torch.no_grad():
-        # Step 1：五維 → 384 維（quiz_projector）
-        projected_384 = model.quiz_projector(vec)            # (1, 384)
+        # Step 1：五維 → 384 維
+        projected_384 = model.quiz_projector(vec)           # (1, 384)
 
-        # Step 2：384 → 128（user_proj，和舊用戶路徑完全相同的層）
-        user_vec_128  = F.relu(model.user_proj(projected_384)).squeeze(0)  # (128,)
+    # Step 2+3：計算 cosine sim，補邊，建臨時圖
+    tmp_data, new_idx, neighbor_idxs, neighbor_sims = insert_new_user_into_graph(
+        projected_384, data, top_k=top_k
+    )
 
-        # Step 3：用已訓練好的 cafe GNN embedding 對所有咖啡廳打分
-        #   cafe embedding 是在完整圖結構下訓練出來的，包含所有鄰居訊息
-        #   我們用整張圖的 BERT 輸入跑一次 encode，取出 cafe 的 128 維 embedding
-        z_cafe = model.encode(data["user"].x, data)["cafe"]  # (n_cafes, 128)
-        raw_scores = model.get_all_cafe_scores(user_vec_128, z_cafe)
+    with torch.no_grad():
+        # Step 4：用臨時圖跑 HGT
+        #   new_user_x 已包含新用戶在最後一列，encode 會一起處理
+        z = model.encode(tmp_data["user"].x, tmp_data)     # {"user":(n+1,128), "cafe":(m,128)}
+
+        # Step 5：取新用戶的 embedding → 對所有咖啡廳打分
+        new_user_128 = z["user"][new_idx]                   # (128,)
+        raw_scores   = model.get_all_cafe_scores(new_user_128, z["cafe"])
 
     all_cafes = _build_cafe_list(raw_scores, cafe_stats, idx2info)
-    result, tier1, tier2 = _tiered_sample(all_cafes, exclude_idxs=set())
-    return result, tier1, tier2
+    return _tiered_sample(all_cafes, exclude_idxs=set())
 
 
 # ══════════════════════════════════════════════════════════
-# 輸出函數
+# 輸出
 # ══════════════════════════════════════════════════════════
 def print_recommendations(result, mode_label):
     print(f"\n{'=' * 60}")
-    print(f"☕ 為你推薦的花蓮咖啡廳（{mode_label}，共 {len(result)} 間）")
+    print(f"  為你推薦的花蓮咖啡廳（{mode_label}，共 {len(result)} 間）")
     print("=" * 60)
 
     for rank, cafe in enumerate(result, 1):
         is_top     = cafe["avg_score"] >= TIER1_THRESHOLD
-        tier_label = "⭐ 精選推薦" if is_top else "✨ 優質推薦"
+        tier_label = "精選推薦" if is_top else "優質推薦"
         stars_full = int(round(cafe["avg_score"]))
         stars_str  = "★" * stars_full + "☆" * (5 - stars_full)
         tags       = cafe["review_tags"][:5]
@@ -389,22 +446,18 @@ def print_recommendations(result, mode_label):
         print(f"  {rank}. {cafe['name']}  [{tier_label}]")
         print(f"     {stars_str}  平均 {cafe['avg_score']:.2f} 分（{cafe['review_count']} 則評論）")
         print(f"     GNN 推薦分數：{cafe['gnn_score']:.4f}")
-        if cafe["address"]:   print(f"     📍 {cafe['address']}")
-        if cafe["cost"]:      print(f"     💰 消費：{cafe['cost']}")
-        if cafe["phone"]:     print(f"     📞 {cafe['phone']}")
-        if tags_str:          print(f"     🏷️  #{tags_str}")
-        if cafe["google_url"]:print(f"     🗺️  {cafe['google_url']}")
-        if cafe["website"]:   print(f"     🔗 {cafe['website']}")
+        if cafe["address"]:    print(f"     地址：{cafe['address']}")
+        if cafe["cost"]:       print(f"     消費：{cafe['cost']}")
+        if cafe["phone"]:      print(f"     電話：{cafe['phone']}")
+        if tags_str:           print(f"     標籤：#{tags_str}")
+        if cafe["google_url"]: print(f"     地圖：{cafe['google_url']}")
+        if cafe["website"]:    print(f"     網站：{cafe['website']}")
 
     print(f"\n{'─' * 60}")
-    print(f"  ⭐ 精選（≥{TIER1_THRESHOLD}分）從最高分前{TIER1_POOL_SIZE}間抽{TIER1_PICK}間")
-    print(f"  ✨ 優質（{TIER2_MIN}~{TIER1_THRESHOLD}分）從最高分前{TIER2_POOL_SIZE}間抽{TIER2_PICK}間")
-    print(f"  💡 每次推薦結果略有不同，歡迎多探索！")
+    print(f"  精選（>= {TIER1_THRESHOLD} 分）從最高分前 {TIER1_POOL_SIZE} 間抽 {TIER1_PICK} 間")
+    print(f"  優質（{TIER2_MIN}~{TIER1_THRESHOLD} 分）從最高分前 {TIER2_POOL_SIZE} 間抽 {TIER2_PICK} 間")
 
 
-# ══════════════════════════════════════════════════════════
-# 稱號判斷
-# ══════════════════════════════════════════════════════════
 def get_title(scores):
     sorted_dims = sorted(DIMS, key=lambda d: scores[d], reverse=True)
     top1, top2  = sorted_dims[0], sorted_dims[1]
@@ -424,9 +477,6 @@ def get_title(scores):
     }[top1]
 
 
-# ══════════════════════════════════════════════════════════
-# 心理測驗互動
-# ══════════════════════════════════════════════════════════
 def run_quiz():
     scores  = {d: 0 for d in DIMS}
     filters = {"pet": False, "parking": False, "night": False}
@@ -455,12 +505,11 @@ def run_quiz():
     if "1" in q9: filters["pet"]     = True
     if "2" in q9: filters["parking"] = True
     if "3" in q9: filters["night"]   = True
-
     return scores, filters
 
 
 # ══════════════════════════════════════════════════════════
-# 主程式：統一入口
+# 主程式
 # ══════════════════════════════════════════════════════════
 if __name__ == "__main__":
     print("載入資料與模型...")
@@ -475,16 +524,13 @@ if __name__ == "__main__":
     mode = input("\n請選擇（1/2）：").strip()
 
     if mode == "2":
-        # ── 舊用戶：完整 GNN 路徑 ─────────────────────────
         user_id = input("請輸入你的使用者 ID：").strip()
         result, tier1, tier2 = recommend_existing_user(
             user_id, model, data, user2idx, df, cafe_stats, idx2info
         )
         if result is not None:
             print_recommendations(result, mode_label=f"GNN 路徑｜使用者 {user_id}")
-
     else:
-        # ── 新用戶：心理測驗 + GNN 路徑 ──────────────────
         quiz_scores, filters = run_quiz()
 
         print("\n" + "=" * 60)
@@ -497,4 +543,4 @@ if __name__ == "__main__":
         result, tier1, tier2 = recommend_new_user(
             quiz_scores, model, data, cafe_stats, idx2info
         )
-        print_recommendations(result, mode_label="心理測驗 + GNN 路徑")
+        print_recommendations(result, mode_label=f"心理測驗 + GNN（接 top-{NEW_USER_TOP_K} 邊）")
