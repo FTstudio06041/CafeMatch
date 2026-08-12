@@ -1,5 +1,6 @@
 import json
 import logging
+import requests
 from datetime import datetime
 from config.settings import get_utc_now
 from config.prompts.policy_system_prompt import GLOBAL_POLICY
@@ -123,11 +124,20 @@ def stream_generate(model_name, prompt_text, is_cafe_related, cafe_context, db, 
                     pass  # 非完整 JSON 行（串流中間片段），略過即可
 
     except Exception as e:
-        error_msg = json.dumps(
-            {"error": "系統發生錯誤或連線失敗，請稍後再試", "done": True},
-            ensure_ascii=False
-        )
-        yield error_msg + "\n"
+        # 一定要記下來。這裡原本只吞掉例外、回一句無資訊的錯誤訊息，
+        # 結果模型載不進記憶體時（例如選到遠超過硬體的大模型），
+        # 前後端都只看得到「連線失敗」，完全查不出真正原因。
+        detail = str(e)
+        if isinstance(e, requests.HTTPError) and e.response is not None:
+            detail = f'{e} — {e.response.text[:400]}'
+        logging.exception('[AI] 生成失敗（model=%s）：%s', model_name, detail)
+
+        # 模型載不動是最常見的原因，訊息要指得出下一步該做什麼
+        friendly = "系統發生錯誤或連線失敗，請稍後再試"
+        if 'failed to allocate' in detail or 'startup failed' in detail:
+            friendly = (f"模型「{model_name}」載入失敗，可能超出這台機器的記憶體。"
+                        f"請到管理面板改選較小的模型。")
+        yield json.dumps({"error": friendly, "done": True}, ensure_ascii=False) + "\n"
 
 
 def _save_query_log(db, AiQueryLog, user_id, model_name, prompt_tokens, completion_tokens, total_duration_ns):
