@@ -25,13 +25,20 @@ from datetime import time as dtime
 # 「貓」「狗」多半是店貓店狗，對想帶寵物的人也算正相關。
 PET_TAG_NAMES = ('寵物友善', '寵物', '貓', '狗')
 
+# 「好停車」標籤由 scripts/extract_parking_tag.py 從 24,770 則評論萃取而來
+# ——資料庫原本沒有任何停車欄位，但評論裡一直有這個資訊。
+# 重跑該腳本可更新名單（例如新增評論之後）。
+PARKING_TAG_NAMES = ('好停車',)
+
 # 晚間營業的門檻。實測 20:00 → 12 家、19:00 → 17 家、21:00 → 6 家；
 # 取 20:00 是在「真的算晚」與「候選數夠推薦」之間的折衷。
 NIGHT_CLOSE_AFTER = dtime(20, 0)
 
-# 有資料可以判斷的條件。'parking' 不在裡面 —— 資料庫沒有任何停車欄位，
-# tags 表也沒有相關標籤，硬要比對只會每次都放寬。
-SUPPORTED_FILTERS = ('pet', 'night')
+# 有資料可以判斷的條件。三個都有了：
+#   pet     tags 表既有的「寵物友善」等標籤
+#   night   operatinghours 的實際營業時間
+#   parking 從評論萃取出來的「好停車」標籤
+SUPPORTED_FILTERS = ('pet', 'night', 'parking')
 
 # 店家的標籤與營業時間很少變動，快取一段時間就好（後台改完最多等這麼久）
 _CACHE_TTL_SECONDS = 600
@@ -44,10 +51,12 @@ _lock = threading.Lock()
 def _query_pools():
     from models.cafe import Cafes, Tags, OperatingHours
 
-    pet = {
-        c.id for c in
-        Cafes.query.join(Cafes.tags).filter(Tags.tag_name.in_(PET_TAG_NAMES)).all()
-    }
+    def by_tags(names):
+        return {c.id for c in
+                Cafes.query.join(Cafes.tags).filter(Tags.tag_name.in_(names)).all()}
+
+    pet = by_tags(PET_TAG_NAMES)
+    parking = by_tags(PARKING_TAG_NAMES)
 
     night = set()
     for row in OperatingHours.query.all():
@@ -58,12 +67,12 @@ def _query_pools():
         if crosses_midnight or row.close_time >= NIGHT_CLOSE_AFTER:
             night.add(row.cafe_id)
 
-    return {'pet': pet, 'night': night}
+    return {'pet': pet, 'night': night, 'parking': parking}
 
 
 def filter_pools(force_refresh: bool = False) -> dict:
     """
-    回傳 {'pet': {cafe_id...}, 'night': {cafe_id...}}。
+    回傳 {'pet': {cafe_id...}, 'night': {...}, 'parking': {...}}。
 
     查不到資料庫時回傳空字典 —— 呼叫端會當成「沒有可用的硬條件」，
     推薦照常進行，不會因此整個失敗。
