@@ -645,10 +645,18 @@ def test_relaxing_keeps_qualifying_cafes():
 
 
 def test_unsupported_filters_reported():
-    from services.cafe_facts import unsupported
-    assert unsupported({'pet': True, 'night': True}) == []
-    assert unsupported({'parking': True}) == ['parking']
+    """
+    三個硬條件現在都有資料來源（parking 的標籤由
+    scripts/extract_parking_tag.py 從評論萃取），所以都不該被回報為無法套用。
+    沒有名單可判斷的條件才要回報，免得使用者以為系統有考慮過。
+    """
+    from services.cafe_facts import unsupported, SUPPORTED_FILTERS
+
+    assert set(SUPPORTED_FILTERS) == {'pet', 'night', 'parking'}
+    assert unsupported({'pet': True, 'night': True, 'parking': True}) == []
     assert unsupported({'parking': False}) == []
+    # 未來新增、但還沒有資料來源的條件要被抓出來
+    assert unsupported({'wifi': True}) == ['wifi']
 
 
 def test_off_topic_falls_back_when_embedding_dies():
