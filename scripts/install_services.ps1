@@ -88,6 +88,8 @@ if (-not $npm) { Write-Error '找不到 npm.cmd，請確認 Node.js 已安裝且
 $npm = $npm.Source
 
 # ── 後端 ──────────────────────────────────────────────────
+# 重跑這支腳本時，install 那行會報「already exists」，那是預期的；
+# 後面的 set 仍然會套用，等於更新設定。
 Write-Host "註冊 $BackendName ..." -ForegroundColor Cyan
 & $nssm install $BackendName $python $runner
 & $nssm set $BackendName AppDirectory $ProjectRoot
@@ -102,8 +104,21 @@ Write-Host "註冊 $BackendName ..." -ForegroundColor Cyan
 # 掛掉時自動重啟：等 5 秒再拉起來，避免壞掉時瘋狂重試
 & $nssm set $BackendName AppExit Default Restart
 & $nssm set $BackendName AppRestartDelay 5000
-# MySQL 沒起來的話後端會連不上資料庫，所以要排在它後面
-& $nssm set $BackendName DependOnService MySQL
+# MySQL 沒起來的話後端會連不上資料庫，所以要排在它後面。
+# 服務名不寫死：XAMPP 用核取方塊裝出來的叫 mysql（小寫），
+# MySQL 官方安裝程式則可能是 MySQL80 之類，自動找比較保險。
+$mysqlSvc = Get-Service | Where-Object { $_.Name -match '^mysql' } | Select-Object -First 1
+if ($mysqlSvc) {
+    Write-Host "  找到資料庫服務 $($mysqlSvc.Name)，設為啟動相依" -ForegroundColor DarkGray
+    & $nssm set $BackendName DependOnService $mysqlSvc.Name
+} else {
+    Write-Warning @"
+找不到 MySQL 服務，略過啟動相依設定。
+資料庫若不是以 Windows 服務執行，重開機後後端會起來但連不上資料庫
+（服務不會崩潰，只是查資料的請求會失敗，等資料庫上線就恢復）。
+XAMPP 使用者：以系統管理員開啟控制面板，勾選 MySQL 左邊的 Service 核取方塊。
+"@
+}
 
 # ── 前端 ──────────────────────────────────────────────────
 # 用 preview 而不是 dev：preview 服務的是編譯後的靜態檔，
