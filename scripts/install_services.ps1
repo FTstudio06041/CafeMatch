@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     把 CafeMatch 的後端與前端註冊成 Windows 服務（透過 NSSM）。
 
@@ -25,11 +25,18 @@
 [CmdletBinding()]
 param(
     [string]$NssmPath = 'nssm',
-    [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$ProjectRoot,
     [switch]$Uninstall
 )
 
 $ErrorActionPreference = 'Stop'
+
+# 專案根目錄：不能寫在 param() 的預設值裡，
+# PowerShell 5.1 在參數繫結階段還沒填好 $PSScriptRoot，會拿到空字串。
+if (-not $ProjectRoot) {
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $ProjectRoot = Split-Path -Parent $scriptDir
+}
 
 $BackendName  = 'CafeMatchBackend'
 $FrontendName = 'CafeMatchFrontend'
@@ -118,7 +125,7 @@ Write-Host "註冊 $FrontendName ..." -ForegroundColor Cyan
 Write-Host ''
 Write-Host '註冊完成。啟動之前還有一件事：' -ForegroundColor Yellow
 Write-Host '  前端服務跑的是 preview，需要先有編譯結果：'
-Write-Host '    cd frontend && npm run build'
+Write-Host '    cd frontend; npm run build'
 Write-Host ''
 Write-Host '接著啟動：'
 Write-Host "    nssm start $BackendName"
