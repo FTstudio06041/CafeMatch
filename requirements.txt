@@ -41,3 +41,7 @@ Pillow==12.3.0
 #   ollama pull bge-m3
 # 沒有的話會自動退回純 Python 的字元比對，準度較低但不會壞。
 # 換別顆模型：環境變數 OFF_TOPIC_EMBED_MODEL；強制走字元比對就設成空字串。
+
+# 服務模式的 WSGI 伺服器（scripts/run_backend_service.py）。
+# 缺少時會退回 werkzeug 內建伺服器，仍可運作但不適合長時間掛著跑。
+waitress==3.0.2
