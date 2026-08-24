@@ -49,6 +49,15 @@ export default defineConfig({
     host: true,        // 綁定 0.0.0.0，外部連線才進得來
     allowedHosts,
     proxy,
+    // dev 模式的模組一律不准快取。掛在 Cloudflare 後面時，CF 的 Browser Cache TTL
+    // 會把 max-age=14400 蓋到 /src/** 上（實測如此），訪客的瀏覽器就會抱著最多
+    // 四小時前的模組不放；那些舊模組裡的 import 寫死了過期的 ?v= hash，
+    // 一旦 Vite 重新 optimize 換了 hash，同一次載入就會混到兩份 React，
+    // 掛在 "Cannot read properties of null (reading 'useState')"。
+    // 註：這條只讓來源明確表態，CF 那邊仍要設成 Respect Existing Headers 才會生效。
+    headers: {
+      'Cache-Control': 'no-store',
+    },
   },
   preview: {
     host: true,

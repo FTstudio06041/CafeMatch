@@ -25,14 +25,39 @@ export default class ErrorBoundary extends Component {
     console.error('[ErrorBoundary] 未捕捉的錯誤：', error, info?.componentStack);
   }
 
-  handleHardReload = () => {
-    // 帶上時間戳強制略過快取，順手清掉可能損毀的本機狀態
+  handleHardReload = async () => {
+    // 舊版只在文件 URL 加時間戳（?_r=...），但問題模組是 <script> 子資源，
+    // 各自有獨立的快取項目，不受文件 query 影響 —— 對這個錯完全無效。
+    //
+    // 注意：JS 沒有任何 API 可以清 HTTP disk cache，那是瀏覽器的地盤。
+    // 這裡能清的是 CacheStorage、Service Worker 與本機狀態；HTTP 快取仍要靠
+    // 使用者按 Ctrl+Shift+R（畫面上有寫）。所以這顆按鈕是「儘量」而非保證。
     try {
       sessionStorage.clear();
     } catch {
       // 隱私模式下可能不給存取，忽略
     }
-    window.location.replace(`${window.location.pathname}?_r=${Date.now()}`);
+
+    if (typeof caches !== 'undefined') {
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(key => caches.delete(key)));
+      } catch {
+        // 清不掉就算了，至少還會重新載入
+      }
+    }
+
+    // Service Worker 會攔截並回舊的模組，留著它清快取也沒用
+    if (navigator.serviceWorker) {
+      try {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(reg => reg.unregister()));
+      } catch {
+        // 同上
+      }
+    }
+
+    window.location.reload();
   };
 
   render() {
@@ -49,7 +74,8 @@ export default class ErrorBoundary extends Component {
       }}>
         <h1 style={{ fontSize: 20, marginBottom: 8 }}>頁面載入失敗</h1>
         <p style={{ color: '#7d6c59', marginTop: 0 }}>
-          先試「重新載入（清快取）」。若反覆出現，請把下面的訊息回報給開發者。
+          先試「重新載入（清快取）」。若沒有改善，請按 Ctrl+Shift+R 強制重新載入
+          （瀏覽器的 HTTP 快取只有這樣才清得掉）。若反覆出現，請把下面的訊息回報給開發者。
         </p>
         <button
           onClick={this.handleHardReload}
