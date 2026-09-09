@@ -687,3 +687,95 @@ def test_off_topic_falls_back_when_embedding_dies():
     finally:
         off_topic_rag._embed = original
         off_topic_rag.reload_dataset()
+
+
+# ==========================================
+# 跨輪引導進度（長對話不再重複問同一題）
+# ==========================================
+
+def test_asked_dimension_in_state_is_not_asked_again():
+    """
+    問過的維度記在 state 裡，就算那則訊息早已滑出歷史視窗，
+    下一輪也不會再問同一題（重複提問的直接原因）。
+    """
+    from services.conversation_guide import dimension_key_for_label
+
+    first = analyze_and_guide([], {'preferences': {}}, has_quiz=False)
+    assert kind_of(first) == '確認'
+    first_key = dimension_key_for_label(focus_of(first))
+    assert first_key
+
+    # 歷史完全空白（模擬那一題已被視窗滑掉），只靠 state 記得問過
+    second = analyze_and_guide([], {'preferences': {}}, has_quiz=False,
+                               state={'asked_dimensions': [first_key]})
+    assert kind_of(second) == '確認'
+    assert dimension_key_for_label(focus_of(second)) != first_key
+
+
+def test_question_count_from_state_reaches_the_ceiling():
+    """
+    問答次數累計在 state，長對話才踩得到上限；
+    只靠歷史反推的話計數會隨視窗滑動歸零，永遠問不完。
+    """
+    from services.conversation_guide import _load_config
+    max_questions = _load_config()['strategy']['inaccurate_max_questions']
+
+    assert kind_of(analyze_and_guide([], {'preferences': {}}, has_quiz=False)) == '確認'
+    assert kind_of(analyze_and_guide(
+        [], {'preferences': {}}, has_quiz=False,
+        state={'question_count': max_questions}
+    )) == '邀請按鈕'
+
+
+def test_user_turns_from_state_reaches_the_ceiling():
+    from services.conversation_guide import _load_config
+    max_rounds = _load_config()['strategy']['inaccurate_recommend_after_rounds']
+
+    assert kind_of(analyze_and_guide(
+        [], {'preferences': {}}, has_quiz=False,
+        state={'user_turns': max_rounds}
+    )) == '邀請按鈕'
+
+
+def test_state_counts_never_regress_below_history():
+    """state 與歷史反推取聯集：兩邊誰大用誰，狀態只增不減。"""
+    from services.conversation_guide import _merge_count
+    assert _merge_count(5, {'question_count': 2}, 'question_count') == 5
+    assert _merge_count(2, {'question_count': 5}, 'question_count') == 5
+    assert _merge_count(3, None, 'question_count') == 3
+
+
+def test_is_ready_to_recommend_honours_state():
+    """按鈕能不能按也吃同一份進度，否則問了半天按鈕還是灰的。"""
+    from services.conversation_guide import is_ready_to_recommend, _load_config
+    max_questions = _load_config()['strategy']['inaccurate_max_questions']
+
+    assert is_ready_to_recommend([], 0, has_quiz=False) is False
+    assert is_ready_to_recommend([], 0, has_quiz=False,
+                                 state={'question_count': max_questions}) is True
+
+
+def test_clean_guide_state_rejects_garbage():
+    """state 由前端帶回，髒資料不能污染狀態機。"""
+    from services.conversation_guide import clean_guide_state
+
+    state = clean_guide_state({
+        'asked_dimensions': ['purpose', '不存在的維度', 123],
+        'question_count': -3,
+        'user_turns': 'abc',
+        'preferences': {'purpose': ['工作']},
+    })
+    assert state['asked_dimensions'] == ['purpose']
+    assert state['question_count'] == 0
+    assert state['user_turns'] == 0
+    assert clean_guide_state(None)['asked_dimensions'] == []
+
+
+def test_record_asked_dimension_is_idempotent():
+    from services.conversation_guide import record_asked_dimension, clean_guide_state
+
+    state = clean_guide_state({})
+    record_asked_dimension(state, '造訪目的')
+    record_asked_dimension(state, '造訪目的')
+    record_asked_dimension(state, '不是維度標籤')
+    assert state['asked_dimensions'] == ['purpose']

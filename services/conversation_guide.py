@@ -43,7 +43,7 @@ CONFIG_PATH = os.path.join(
 # ==========================================
 
 def analyze_and_guide(history: list, extracted_data: dict = None,
-                      has_quiz: bool = True) -> str | None:
+                      has_quiz: bool = True, state: dict = None) -> str | None:
     """
     對話引導的唯一入口。
 
@@ -57,6 +57,9 @@ def analyze_and_guide(history: list, extracted_data: dict = None,
         history: list[dict] — 對話歷史
         extracted_data: dict — 透過 LLM 萃取出來的偏好
         has_quiz: bool — 是否有心理測驗基礎分數；沒有時要多問幾題才夠
+        state: dict — 跨輪累積的引導進度（question_count / user_turns /
+            asked_dimensions），由 pipeline 隨 pref_state 存取。
+            與從 history 反推的值取聯集，所以不給也能運作（行為同舊版）。
 
     回傳:
         str — 注入給 AI 的引導指令
@@ -73,8 +76,12 @@ def analyze_and_guide(history: list, extracted_data: dict = None,
     collected_keys = [k for k, v in collected.items() if v]
     collected_count = len(collected_keys)
 
-    question_count = _count_ai_questions(history)
-    user_rounds = sum(1 for m in history if m.get("role") == "user")
+    # 進度計數與 state 取聯集：history 只是最近幾則的滑動視窗，
+    # 長對話單靠反推會讓計數不斷歸零，門檻永遠踩不到（鬼打牆的主因）。
+    question_count = _merge_count(_count_ai_questions(history), state, "question_count")
+    user_rounds = _merge_count(
+        sum(1 for m in history if m.get("role") == "user"), state, "user_turns"
+    )
 
     # 檢查是否已經推薦過了（前端會在附有推薦卡片的 AI 歷史訊息加上標記）
     has_recommended = False
@@ -124,7 +131,9 @@ def analyze_and_guide(history: list, extracted_data: dict = None,
     # 找出「還沒問過、也還沒掌握」的維度。
     # 只看 collected 不夠 —— 使用者可能回答了但沒被萃取到（例如講了很含糊的話），
     # 這時若只依賴 collected，同一個維度會被反覆追問。
-    asked_keys = get_asked_dimensions(history)
+    # 同樣取聯集：get_asked_dimensions 靠 AI 有沒有複述快速選項來反推，
+    # 訊息滑出視窗、或 AI 沒照著複述選項，問過的題目就會被忘記而重問。
+    asked_keys = get_asked_dimensions(history) | _state_asked(state)
     missing = [
         d for d in dimensions
         if d["key"] not in collected_keys and d["key"] not in asked_keys
@@ -323,13 +332,15 @@ def dimensions_needed_to_recommend(history: list, has_quiz: bool = True) -> int:
 
 
 def is_ready_to_recommend(history: list, collected_dims: int,
-                          has_quiz: bool = True) -> bool:
+                          has_quiz: bool = True, state: dict = None) -> bool:
     """
     資料是否足夠推薦。
 
     兩種情況算足夠：
       1. 已確認的維度達到門檻
       2. 狀態機已經問完該問的（問太多次／輪數夠了），再問也問不出東西
+
+    state 與 analyze_and_guide 同一份跨輪進度；不給則只用 history 反推。
     """
     if collected_dims >= dimensions_needed_to_recommend(history, has_quiz):
         return True
@@ -346,8 +357,10 @@ def is_ready_to_recommend(history: list, collected_dims: int,
         max_questions = strategy.get("max_questions", 4)
         max_rounds = strategy.get("recommend_after_rounds", 6)
 
-    question_count = _count_ai_questions(history)
-    user_rounds = sum(1 for m in history if m.get("role") == "user")
+    question_count = _merge_count(_count_ai_questions(history), state, "question_count")
+    user_rounds = _merge_count(
+        sum(1 for m in history if m.get("role") == "user"), state, "user_turns"
+    )
     return question_count >= max_questions or user_rounds >= max_rounds
 
 
@@ -375,6 +388,82 @@ def classify_instruction(instruction: str):
     if '不要再重複那句邀請' in instruction:
         return '邀請後閒聊', None
     return '未知', None
+
+
+# ==========================================
+# 跨輪引導進度（隨 pref_state 存取）
+# ==========================================
+#
+# 為什麼需要這一層：狀態機原本所有進度都從 history 反推，但前端只送最近
+# 幾則，長對話一滑動就把「問過幾次」「問過哪些維度」全部忘光，門檻踩不到、
+# 題目重複問。這裡把進度顯式記下來，與 history 反推值取聯集（只增不減），
+# 因此不帶 state 時行為與舊版完全相同。
+
+GUIDE_STATE_KEYS = ('question_count', 'user_turns', 'asked_dimensions')
+
+_MAX_GUIDE_COUNT = 999
+
+
+def clean_guide_state(raw) -> dict:
+    """從前端帶回的 pref_state 洗出引導進度（不可信輸入，限型別與範圍）。"""
+    state = {"question_count": 0, "user_turns": 0, "asked_dimensions": []}
+    if not isinstance(raw, dict):
+        return state
+
+    valid_keys = {d["key"] for d in _load_config().get("dimensions", [])}
+    asked = raw.get("asked_dimensions")
+    if isinstance(asked, list):
+        state["asked_dimensions"] = [k for k in asked if k in valid_keys]
+
+    for key in ("question_count", "user_turns"):
+        value = raw.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            state[key] = max(0, min(value, _MAX_GUIDE_COUNT))
+
+    return state
+
+
+def record_asked_dimension(state: dict, dimension_label: str) -> dict:
+    """
+    記下這一輪確認的是哪個維度（就地更新並回傳 state）。
+
+    收 label 而非 key，因為 pipeline 是從引導指令反解出維度標籤的。
+    """
+    key = dimension_key_for_label(dimension_label)
+    if not key:
+        return state
+    asked = state.setdefault("asked_dimensions", [])
+    if key not in asked:
+        asked.append(key)
+    return state
+
+
+def dimension_key_for_label(label: str):
+    """維度標籤（造訪目的…）轉回 key（purpose…）；找不到回傳 None。"""
+    if not label:
+        return None
+    for d in _load_config().get("dimensions", []):
+        if d.get("label") == label:
+            return d.get("key")
+    return None
+
+
+def _merge_count(from_history: int, state: dict, key: str) -> int:
+    """history 反推值與累積值取大的那個（狀態只增不減）。"""
+    if not isinstance(state, dict):
+        return from_history
+    recorded = state.get(key)
+    if isinstance(recorded, int) and not isinstance(recorded, bool):
+        return max(from_history, recorded)
+    return from_history
+
+
+def _state_asked(state: dict) -> set:
+    """state 裡記下的已問維度。"""
+    if not isinstance(state, dict):
+        return set()
+    asked = state.get("asked_dimensions")
+    return set(asked) if isinstance(asked, list) else set()
 
 
 def get_asked_dimensions(history: list) -> set:

@@ -6,6 +6,11 @@ import { toast } from '../utils/toast';
 
 const EMPTY_CHAT = { id: null, title: '新對話', messages: [] };
 
+// 送給後端的歷史則數。狀態機會從這段歷史反推「問過幾次」「推薦過沒」，
+// 太短會讓計數不斷歸零、門檻永遠踩不到（同一題重複問）。
+// 餵給 LLM 的上下文另由後端截斷（AI_CHAT_HISTORY_LIMIT），不受這裡影響。
+const GUIDE_HISTORY_LIMIT = 40;
+
 const normalizeMessage = (msg) => {
   if (!msg || typeof msg !== 'object') {
     return { role: 'ai', content: String(msg ?? '') };
@@ -187,7 +192,7 @@ export function useChatLogic(user, navigate) {
     const excludeCount = isHidden ? 1 : 2;
     if (nextMessages.length >= excludeCount) {
       const prevMsgs = nextMessages.slice(0, -excludeCount);
-      historyToSend = prevMsgs.slice(-6).map(m => ({
+      historyToSend = prevMsgs.slice(-GUIDE_HISTORY_LIMIT).map(m => ({
         role: m.role,
         // 附有推薦卡片的 AI 訊息加上標記，讓後端狀態機知道「已經推薦過」
         content: (m.role === 'ai' && Array.isArray(m.cafes) && m.cafes.length > 0)
@@ -273,6 +278,8 @@ export function useChatLogic(user, navigate) {
             ...prev,
             pref_state: {
               ...(prev.pref_state || {}),
+              // 後端回送的整包進度（偏好 + 問過幾次 / 問過哪些維度）
+              ...parsed.pref_state,
               ...(streamTarget ? { progress_target: streamTarget } : {}),
               ...(streamBase !== null ? { progress_base: streamBase } : {}),
               preferences: parsed.pref_state.preferences || {}

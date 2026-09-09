@@ -88,6 +88,11 @@ class ChatPipelineService:
                         (data.get('pref_state') or {}).get('preferences')
                         if isinstance(data.get('pref_state'), dict) else None
                     )
+
+                    # 跨輪引導進度（問過幾次、問過哪些維度）。與偏好一樣隨
+                    # pref_state 往返，不再只靠 6 則歷史視窗反推。
+                    guide_state = conversation_guide.clean_guide_state(data.get('pref_state'))
+                    guide_state['user_turns'] += 1
                     fresh_prefs = (extracted_data or {}).get("preferences") or {}
                     merged_prefs = ChatPipelineService._merge_preferences(base_prefs, fresh_prefs)
 
@@ -121,7 +126,8 @@ class ChatPipelineService:
                     progress_base = conversation_guide.QUIZ_PROGRESS_BASE if has_quiz else 0
                     # 資料太少就推薦等於亂猜，前端據此決定推薦按鈕能不能按
                     ready = conversation_guide.is_ready_to_recommend(
-                        temp_history, collected_dims, has_quiz=has_quiz
+                        temp_history, collected_dims, has_quiz=has_quiz,
+                        state=guide_state
                     )
                     yield json.dumps({
                         "progress_dims": collected_dims,
@@ -131,11 +137,6 @@ class ChatPipelineService:
                         "recommend_needs": conversation_guide.dimensions_needed_to_recommend(
                             temp_history, has_quiz=has_quiz
                         ),
-                    }, ensure_ascii=False) + "\n"
-
-                    yield json.dumps({
-                        "pref_state": {"preferences": merged_prefs},
-                        "dimension_scores": {k: round(v, 1) for k, v in live_scores.items()},
                     }, ensure_ascii=False) + "\n"
 
                     # 資料還不夠就要求推薦 → 擋下來，改成再確認一題。
@@ -156,13 +157,25 @@ class ChatPipelineService:
                     else:
                         # 確認需求 → 結果丟給狀態機（狀態機只負責確認節奏，永不出卡片）
                         guide_instruction = conversation_guide.analyze_and_guide(
-                            temp_history, extracted_data, has_quiz=has_quiz
+                            temp_history, extracted_data, has_quiz=has_quiz,
+                            state=guide_state
                         )
 
                     # 終端除錯輸出：這一輪知道了什麼、決定做什麼
                     decision, focus = ChatPipelineService._describe_decision(
                         guide_instruction, force_recommend
                     )
+
+                    # 這一輪真的問了一題 → 記進進度，下一輪不會再問同一個維度
+                    if decision == '確認':
+                        guide_state['question_count'] += 1
+                        conversation_guide.record_asked_dimension(guide_state, focus)
+
+                    # 偏好與引導進度一起回送前端，隨對話儲存、下一輪原樣帶回
+                    yield json.dumps({
+                        "pref_state": {"preferences": merged_prefs, **guide_state},
+                        "dimension_scores": {k: round(v, 1) for k, v in live_scores.items()},
+                    }, ensure_ascii=False) + "\n"
                     # 上一輪的五維（只用先前累積的偏好算），用來顯示這輪的增減
                     prev_scores, _, _ = build_gnn_input(quiz_scores, history, base_prefs)
                     debug_logger.log_round(
