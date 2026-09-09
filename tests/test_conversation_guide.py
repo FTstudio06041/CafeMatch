@@ -846,3 +846,39 @@ def test_fixed_reply_keeps_the_options_marker_in_the_message():
     plain = [json.loads(c) for c in ChatPipelineService._fixed_reply('只有一句話')]
     assert 'quick_options' not in plain[0]
     assert plain[0]['response'] == '只有一句話'
+
+
+def test_display_text_must_not_be_used_for_branching():
+    """
+    pipeline 的 _describe_decision 回傳的是給終端看的翻譯字串
+    （'確認' → '確認需求'），與 classify_instruction 的原始分類不同。
+    流程判斷誤用顯示字串會讓條件永遠不成立 —— 這個 bug 真的發生過：
+    固定問句、固定邀請文案、record_asked_dimension 全部沒被執行。
+    """
+    from services import conversation_guide as g
+    from services.chat_pipeline_service import ChatPipelineService as P
+
+    for kind in g.ALL_KINDS:
+        assert kind in P._DECISION_TEXT, f'{kind} 沒有對應的顯示字串'
+
+    instruction = g.analyze_and_guide([], {'preferences': {}}, has_quiz=False)
+    assert g.classify_instruction(instruction)[0] == g.KIND_CONFIRM
+    assert P._describe_decision(instruction, False)[0] != g.KIND_CONFIRM, \
+        '顯示字串與原始分類本來就不同，流程判斷只能用後者'
+
+
+def test_confirm_kind_always_resolves_to_a_fixed_question():
+    """狀態機決定確認需求時，一定拿得到固定問句與選項，走不到模型。"""
+    from services import conversation_guide as g
+
+    state = g.clean_guide_state({})
+    for _ in range(len(g._load_config()['dimensions'])):
+        instruction = g.analyze_and_guide([], {'preferences': {}},
+                                          has_quiz=False, state=state)
+        kind, focus = g.classify_instruction(instruction)
+        if kind != g.KIND_CONFIRM:
+            break
+        assert g.confirmation_question_for_label(focus), f'{focus} 沒有固定問句'
+        assert g.quick_options_for_label(focus), f'{focus} 沒有固定選項'
+        state['question_count'] += 1
+        g.record_asked_dimension(state, focus)

@@ -166,9 +166,12 @@ class ChatPipelineService:
                     decision, focus = ChatPipelineService._describe_decision(
                         guide_instruction, force_recommend
                     )
+                    # 流程判斷一律用原始分類，不要用 decision ——
+                    # 那是翻譯給終端看的字串（'確認' → '確認需求'）
+                    guide_kind, _ = conversation_guide.classify_instruction(guide_instruction)
 
                     # 這一輪真的問了一題 → 記進進度，下一輪不會再問同一個維度
-                    if decision == '確認':
+                    if guide_kind == conversation_guide.KIND_CONFIRM:
                         guide_state['question_count'] += 1
                         conversation_guide.record_asked_dimension(guide_state, focus)
 
@@ -198,13 +201,13 @@ class ChatPipelineService:
 
                     # 邀請按推薦按鈕：固定一句話 + 固定選項，不需要生成，
                     # 直接回覆並結束這一輪（交給模型寫會被對話歷史帶偏）
-                    if decision == '邀請按鈕':
+                    if guide_kind == conversation_guide.KIND_INVITE:
                         yield from ChatPipelineService._fixed_reply(
                             READY_TO_RECOMMEND_MESSAGE, READY_TO_RECOMMEND_OPTIONS)
                         return
 
                     # 確認需求：問句與選項都來自設定檔，同樣不經過模型
-                    if decision == '確認':
+                    if guide_kind == conversation_guide.KIND_CONFIRM:
                         question = conversation_guide.confirmation_question_for_label(focus)
                         if question:
                             yield from ChatPipelineService._fixed_reply(

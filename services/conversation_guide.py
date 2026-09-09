@@ -364,6 +364,23 @@ def is_ready_to_recommend(history: list, collected_dims: int,
     return question_count >= max_questions or user_rounds >= max_rounds
 
 
+# 決策類型。呼叫端一律用這些常數判斷流程，不要用 pipeline 那份
+# 翻譯給終端看的顯示字串（'確認' 在那裡會變成 '確認需求'）。
+KIND_CONFIRM = '確認'
+KIND_INVITE = '邀請按鈕'
+KIND_AFTER_RECOMMEND = '推薦後'
+KIND_QUIZ_CONFIRM = '測驗確認'
+KIND_ANSWER_QUESTION = '回答提問'
+KIND_CHAT_AFTER_INVITE = '邀請後閒聊'
+KIND_RECOMMEND = '直接推薦'
+KIND_UNKNOWN = '未知'
+
+ALL_KINDS = (
+    KIND_CONFIRM, KIND_INVITE, KIND_AFTER_RECOMMEND, KIND_QUIZ_CONFIRM,
+    KIND_ANSWER_QUESTION, KIND_CHAT_AFTER_INVITE, KIND_RECOMMEND,
+)
+
+
 def classify_instruction(instruction: str):
     """
     把引導指令歸類成 (決策類型, 針對的維度)。
@@ -374,20 +391,20 @@ def classify_instruction(instruction: str):
     回傳的決策類型：'確認' | '邀請按鈕' | '推薦後' | '測驗確認' | '未知'
     """
     if not instruction:
-        return '直接推薦', None
+        return KIND_RECOMMEND, None
     if '確認「' in instruction:
-        return '確認', instruction.split('確認「')[1].split('」')[0]
+        return KIND_CONFIRM, instruction.split('確認「')[1].split('」')[0]
     if '你先前已推薦過店家' in instruction:
-        return '推薦後', None
+        return KIND_AFTER_RECOMMEND, None
     if '偏好已大致掌握' in instruction:
-        return '邀請按鈕', None
+        return KIND_INVITE, None
     if '剛完成心理測驗' in instruction:
-        return '測驗確認', None
+        return KIND_QUIZ_CONFIRM, None
     if '不是在回答你的問題' in instruction:
-        return '回答提問', None
+        return KIND_ANSWER_QUESTION, None
     if '不要再重複那句邀請' in instruction:
-        return '邀請後閒聊', None
-    return '未知', None
+        return KIND_CHAT_AFTER_INVITE, None
+    return KIND_UNKNOWN, None
 
 
 # ==========================================
