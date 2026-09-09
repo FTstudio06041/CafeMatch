@@ -504,10 +504,7 @@ export default function QuizPage() {
         <QuizLoginPromptModal
           open={showLoginPrompt}
           onLogin={login}
-          onContinue={() => {
-            setShowLoginPrompt(false);
-            goToChatWithResult();
-          }}
+          onClose={() => setShowLoginPrompt(false)}
         />
     </div>
   );
