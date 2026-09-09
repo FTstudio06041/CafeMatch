@@ -438,6 +438,27 @@ def record_asked_dimension(state: dict, dimension_label: str) -> dict:
     return state
 
 
+def confirmation_question_for_label(label: str) -> str:
+    """
+    取某個維度的確認問句（設定檔 example_prompts 裡隨機一句）。
+
+    問句不交給模型生成：指令原本要求它「順著使用者剛剛的話接一句」，
+    小模型會死咬著上一句的關鍵字，把每個維度都硬掰成同一個話題
+    （使用者說想吃甜點，問預算就變成「花多少錢在甜點上」、
+    問特殊需求就變成「挑甜點的考量」），跟選項完全對不上。
+    設定檔裡的問法是人寫的，口語自然且與選項一一對應。
+
+    固定取第一句而不隨機：同一維度的後幾句往往只涵蓋單一面向
+    （特殊需求的第二句只問寵物，選項卻還有插座、不限時），
+    第一句才是涵蓋整組選項的完整問法。反正每個維度只會問一次。
+    """
+    for d in _load_config().get("dimensions", []):
+        if d.get("label") == label:
+            prompts = [p for p in (d.get("example_prompts") or []) if p]
+            return prompts[0] if prompts else ""
+    return ""
+
+
 def quick_options_for_label(label: str) -> list:
     """
     取某個維度的快速選項（造訪目的 → 專心工作讀書、放空放鬆…）。

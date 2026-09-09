@@ -178,15 +178,6 @@ class ChatPipelineService:
                         "dimension_scores": {k: round(v, 1) for k, v in live_scores.items()},
                     }, ensure_ascii=False) + "\n"
 
-                    # 快速選項由後端直送（設定檔裡的固定資料）。
-                    # 指令仍要求模型複述一份，因為 apply_no_preference_answers /
-                    # get_asked_dimensions 是靠訊息內的標記回推維度；但畫面上顯示
-                    # 的以這裡送出的為準，模型漏抄或抄錯都不影響使用者。
-                    if decision == '確認':
-                        options = conversation_guide.quick_options_for_label(focus)
-                        if options:
-                            yield json.dumps(
-                                {"quick_options": options}, ensure_ascii=False) + "\n"
                     # 上一輪的五維（只用先前累積的偏好算），用來顯示這輪的增減
                     prev_scores, _, _ = build_gnn_input(quiz_scores, history, base_prefs)
                     debug_logger.log_round(
@@ -208,15 +199,18 @@ class ChatPipelineService:
                     # 邀請按推薦按鈕：固定一句話 + 固定選項，不需要生成，
                     # 直接回覆並結束這一輪（交給模型寫會被對話歷史帶偏）
                     if decision == '邀請按鈕':
-                        yield json.dumps(
-                            {"quick_options": READY_TO_RECOMMEND_OPTIONS},
-                            ensure_ascii=False) + "\n"
-                        yield json.dumps(
-                            {"response": READY_TO_RECOMMEND_MESSAGE},
-                            ensure_ascii=False) + "\n"
-                        yield json.dumps(
-                            {"response": "", "done": True}, ensure_ascii=False) + "\n"
+                        yield from ChatPipelineService._fixed_reply(
+                            READY_TO_RECOMMEND_MESSAGE, READY_TO_RECOMMEND_OPTIONS)
                         return
+
+                    # 確認需求：問句與選項都來自設定檔，同樣不經過模型
+                    if decision == '確認':
+                        question = conversation_guide.confirmation_question_for_label(focus)
+                        if question:
+                            yield from ChatPipelineService._fixed_reply(
+                                question,
+                                conversation_guide.quick_options_for_label(focus))
+                            return
 
             # 推薦（出卡片）只發生在使用者按下「直接推薦咖啡廳」按鈕的那一輪
             cafe_context = ""
@@ -351,6 +345,23 @@ class ChatPipelineService:
 
     # 偏好維度白名單（與 guide_dimensions.json / 萃取格式對齊）
     _ALLOWED_PREF_DIMS = ('purpose', 'vibe', 'taste', 'budget', 'special')
+
+    @staticmethod
+    def _fixed_reply(message, options=None):
+        """
+        後端直接回一段固定文字並結束這一輪，完全不呼叫模型。
+
+        選項標記會一起寫進訊息內容：前端顯示時會把標記剝掉，
+        而 get_asked_dimensions / apply_no_preference_answers 是靠訊息裡的
+        標記回推「這題問的是哪個維度」，兩邊都要拿得到。
+        """
+        options = [o for o in (options or []) if o]
+        text = message
+        if options:
+            text += "\n[QUICK_OPTIONS] " + " | ".join(options)
+            yield json.dumps({"quick_options": options}, ensure_ascii=False) + "\n"
+        yield json.dumps({"response": text}, ensure_ascii=False) + "\n"
+        yield json.dumps({"response": "", "done": True}, ensure_ascii=False) + "\n"
 
     @staticmethod
     def _respond_only(instruction, user_message, history, is_debug_requested=False):

@@ -805,3 +805,44 @@ def test_invite_turn_has_a_fixed_message_and_single_option():
     # 這個選項送出後，後端要能認得它等同按下推薦按鈕
     from services.conversation_guide import wants_recommendation
     assert wants_recommendation(READY_TO_RECOMMEND_OPTIONS[0])
+
+
+def test_every_dimension_has_a_fixed_question_covering_its_options():
+    """
+    每個維度的確認問句都取自設定檔的第一句 —— 那句才涵蓋整組選項。
+    （後幾句常只問單一面向，例如特殊需求的第二句只問寵物。）
+    """
+    from services.conversation_guide import (
+        _load_config, confirmation_question_for_label, quick_options_for_label,
+    )
+
+    for d in _load_config()['dimensions']:
+        label = d['label']
+        question = confirmation_question_for_label(label)
+        options = quick_options_for_label(label)
+        assert question, f'{label} 沒有問句'
+        assert len(options) >= 2, f'{label} 沒有足夠的快速選項'
+        assert question == d['example_prompts'][0], f'{label} 應該取第一句'
+
+    assert confirmation_question_for_label('不是維度標籤') == ''
+
+
+def test_fixed_reply_keeps_the_options_marker_in_the_message():
+    """
+    後端直接回覆時，選項標記要留在訊息內容裡：
+    前端顯示會剝掉它，但 get_asked_dimensions / apply_no_preference_answers
+    是靠這個標記回推「這題問的是哪個維度」。
+    """
+    import json
+    from services.chat_pipeline_service import ChatPipelineService
+
+    chunks = [json.loads(c) for c in ChatPipelineService._fixed_reply('問題？', ['甲', '乙'])]
+    assert chunks[0]['quick_options'] == ['甲', '乙']
+    assert chunks[1]['response'].startswith('問題？')
+    assert '[QUICK_OPTIONS] 甲 | 乙' in chunks[1]['response']
+    assert chunks[-1]['done'] is True
+
+    # 沒有選項時不送空的選項包，也不加標記
+    plain = [json.loads(c) for c in ChatPipelineService._fixed_reply('只有一句話')]
+    assert 'quick_options' not in plain[0]
+    assert plain[0]['response'] == '只有一句話'
