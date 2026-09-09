@@ -26,6 +26,7 @@ export const SIDEBAR_UI_TEXTS = {
   newChat: '新增對話',
   chatHistory: '對話紀錄',
   noHistory: '尚無對話紀錄',
+  guestNoHistory: '登入後可保存對話紀錄',
   appTitle: 'CafeMatch',
   reportBug: '回報問題 / 建議',
   bugReportTitle: '提出反饋',

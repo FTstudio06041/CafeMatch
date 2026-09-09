@@ -157,7 +157,12 @@ export default function Sidebar() {
       <div className="history-label text-label">{SIDEBAR_UI_TEXTS.chatHistory}</div>
       <div className="chat-list">
         {sessions.length === 0 ? (
-          <div className="empty-sidebar-msg">{SIDEBAR_UI_TEXTS.noHistory}</div>
+          <div className="empty-sidebar-msg">
+            {/* 訪客的對話本來就不會被保存，講「尚無紀錄」會讓人以為之後會有 */}
+            {(!user || user.isGuest)
+              ? SIDEBAR_UI_TEXTS.guestNoHistory
+              : SIDEBAR_UI_TEXTS.noHistory}
+          </div>
         ) : (
           sessions.map(chat => (
             <div 
