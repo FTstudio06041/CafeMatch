@@ -208,9 +208,7 @@ export default function ChatPage() {
               <div className="pref-progress-labels">
                 <span className="pref-progress-percent">偏好掌握度 {progressPercent}%</span>
                 <span className="pref-progress-hint">
-                  {recommendGate.ready
-                    ? '越接近 100%，推薦結果越準確'
-                    : `再確認 ${missingDims} 項需求就能推薦`}
+                  越接近 100%，推薦結果越準確
                 </span>
               </div>
               <div className="pref-progress-track" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100} aria-label="偏好掌握度">
@@ -225,7 +223,11 @@ export default function ChatPage() {
                 ? '以目前掌握的偏好推薦咖啡廳'
                 : `還不夠了解你的需求，再確認 ${missingDims} 項就能推薦`}
             >
-              直接推薦咖啡廳
+              {/* 還不能按時，按鈕本身就說明還差幾項
+                  （原本只寫在 title，要 hover 才看得到，觸控裝置看不到） */}
+              {recommendGate.ready
+                ? '直接推薦咖啡廳'
+                : `再確認 ${missingDims} 項就能推薦`}
             </button>
           </div>
         )}

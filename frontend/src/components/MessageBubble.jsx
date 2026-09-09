@@ -40,16 +40,22 @@ export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handl
     safeContent = safeContent.replace('[SHOW_QUIZ_CARD]', '').trim();
   }
 
-  // 解析 AI 附帶的快速回覆選項標記：[QUICK_OPTIONS] 選項一 | 選項二
-  let quickOptions = [];
+  // 快速回覆選項：以後端直送的為準（設定檔的固定資料，永遠完整且對應當輪的維度）。
+  // 模型自己複述的 [QUICK_OPTIONS] 標記只在後端沒送時當後備（例如舊的對話紀錄），
+  // 但標記本身一律要從顯示文字裡拿掉。
+  let quickOptions = Array.isArray(msg.quick_options)
+    ? msg.quick_options.filter((s) => typeof s === 'string' && s.trim()).slice(0, 4)
+    : [];
   const qoIdx = safeContent.indexOf('[QUICK_OPTIONS]');
   if (qoIdx !== -1) {
-    quickOptions = safeContent
-      .slice(qoIdx + '[QUICK_OPTIONS]'.length)
-      .split(/[|｜]/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .slice(0, 4);
+    if (quickOptions.length === 0) {
+      quickOptions = safeContent
+        .slice(qoIdx + '[QUICK_OPTIONS]'.length)
+        .split(/[|｜]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 4);
+    }
     safeContent = safeContent.slice(0, qoIdx).trim();
   } else {
     // 串流中標記尚未傳完時，先隱藏結尾的不完整標記片段

@@ -687,3 +687,198 @@ def test_off_topic_falls_back_when_embedding_dies():
     finally:
         off_topic_rag._embed = original
         off_topic_rag.reload_dataset()
+
+
+# ==========================================
+# 跨輪引導進度（長對話不再重複問同一題）
+# ==========================================
+
+def test_asked_dimension_in_state_is_not_asked_again():
+    """
+    問過的維度記在 state 裡，就算那則訊息早已滑出歷史視窗，
+    下一輪也不會再問同一題（重複提問的直接原因）。
+    """
+    from services.conversation_guide import dimension_key_for_label
+
+    first = analyze_and_guide([], {'preferences': {}}, has_quiz=False)
+    assert kind_of(first) == '確認'
+    first_key = dimension_key_for_label(focus_of(first))
+    assert first_key
+
+    # 歷史完全空白（模擬那一題已被視窗滑掉），只靠 state 記得問過
+    second = analyze_and_guide([], {'preferences': {}}, has_quiz=False,
+                               state={'asked_dimensions': [first_key]})
+    assert kind_of(second) == '確認'
+    assert dimension_key_for_label(focus_of(second)) != first_key
+
+
+def test_question_count_from_state_reaches_the_ceiling():
+    """
+    問答次數累計在 state，長對話才踩得到上限；
+    只靠歷史反推的話計數會隨視窗滑動歸零，永遠問不完。
+    """
+    from services.conversation_guide import _load_config
+    max_questions = _load_config()['strategy']['inaccurate_max_questions']
+
+    assert kind_of(analyze_and_guide([], {'preferences': {}}, has_quiz=False)) == '確認'
+    assert kind_of(analyze_and_guide(
+        [], {'preferences': {}}, has_quiz=False,
+        state={'question_count': max_questions}
+    )) == '邀請按鈕'
+
+
+def test_user_turns_from_state_reaches_the_ceiling():
+    from services.conversation_guide import _load_config
+    max_rounds = _load_config()['strategy']['inaccurate_recommend_after_rounds']
+
+    assert kind_of(analyze_and_guide(
+        [], {'preferences': {}}, has_quiz=False,
+        state={'user_turns': max_rounds}
+    )) == '邀請按鈕'
+
+
+def test_state_counts_never_regress_below_history():
+    """state 與歷史反推取聯集：兩邊誰大用誰，狀態只增不減。"""
+    from services.conversation_guide import _merge_count
+    assert _merge_count(5, {'question_count': 2}, 'question_count') == 5
+    assert _merge_count(2, {'question_count': 5}, 'question_count') == 5
+    assert _merge_count(3, None, 'question_count') == 3
+
+
+def test_is_ready_to_recommend_honours_state():
+    """按鈕能不能按也吃同一份進度，否則問了半天按鈕還是灰的。"""
+    from services.conversation_guide import is_ready_to_recommend, _load_config
+    max_questions = _load_config()['strategy']['inaccurate_max_questions']
+
+    assert is_ready_to_recommend([], 0, has_quiz=False) is False
+    assert is_ready_to_recommend([], 0, has_quiz=False,
+                                 state={'question_count': max_questions}) is True
+
+
+def test_clean_guide_state_rejects_garbage():
+    """state 由前端帶回，髒資料不能污染狀態機。"""
+    from services.conversation_guide import clean_guide_state
+
+    state = clean_guide_state({
+        'asked_dimensions': ['purpose', '不存在的維度', 123],
+        'question_count': -3,
+        'user_turns': 'abc',
+        'preferences': {'purpose': ['工作']},
+    })
+    assert state['asked_dimensions'] == ['purpose']
+    assert state['question_count'] == 0
+    assert state['user_turns'] == 0
+    assert clean_guide_state(None)['asked_dimensions'] == []
+
+
+def test_record_asked_dimension_is_idempotent():
+    from services.conversation_guide import record_asked_dimension, clean_guide_state
+
+    state = clean_guide_state({})
+    record_asked_dimension(state, '造訪目的')
+    record_asked_dimension(state, '造訪目的')
+    record_asked_dimension(state, '不是維度標籤')
+    assert state['asked_dimensions'] == ['purpose']
+
+
+def test_quick_options_come_from_config_not_the_model():
+    """
+    快速選項是設定檔的固定資料，後端直接送給前端；
+    不靠模型在回覆末尾複述（實測它會漏抄、或抄成使用者上一句話）。
+    """
+    from services.conversation_guide import quick_options_for_label
+
+    opts = quick_options_for_label('特殊需求')
+    assert len(opts) >= 2, '維度應該有多個快速選項'
+    assert '要有插座' in opts
+    assert quick_options_for_label('不是維度標籤') == []
+    assert quick_options_for_label(None) == []
+
+
+def test_invite_turn_has_a_fixed_message_and_single_option():
+    """邀請按推薦按鈕那一輪是固定文案，不經過模型生成。"""
+    from config.prompts import READY_TO_RECOMMEND_MESSAGE, READY_TO_RECOMMEND_OPTIONS
+
+    assert READY_TO_RECOMMEND_MESSAGE.endswith('？')
+    assert READY_TO_RECOMMEND_OPTIONS == ['直接推薦']
+
+    # 這個選項送出後，後端要能認得它等同按下推薦按鈕
+    from services.conversation_guide import wants_recommendation
+    assert wants_recommendation(READY_TO_RECOMMEND_OPTIONS[0])
+
+
+def test_every_dimension_has_a_fixed_question_covering_its_options():
+    """
+    每個維度的確認問句都取自設定檔的第一句 —— 那句才涵蓋整組選項。
+    （後幾句常只問單一面向，例如特殊需求的第二句只問寵物。）
+    """
+    from services.conversation_guide import (
+        _load_config, confirmation_question_for_label, quick_options_for_label,
+    )
+
+    for d in _load_config()['dimensions']:
+        label = d['label']
+        question = confirmation_question_for_label(label)
+        options = quick_options_for_label(label)
+        assert question, f'{label} 沒有問句'
+        assert len(options) >= 2, f'{label} 沒有足夠的快速選項'
+        assert question == d['example_prompts'][0], f'{label} 應該取第一句'
+
+    assert confirmation_question_for_label('不是維度標籤') == ''
+
+
+def test_fixed_reply_keeps_the_options_marker_in_the_message():
+    """
+    後端直接回覆時，選項標記要留在訊息內容裡：
+    前端顯示會剝掉它，但 get_asked_dimensions / apply_no_preference_answers
+    是靠這個標記回推「這題問的是哪個維度」。
+    """
+    import json
+    from services.chat_pipeline_service import ChatPipelineService
+
+    chunks = [json.loads(c) for c in ChatPipelineService._fixed_reply('問題？', ['甲', '乙'])]
+    assert chunks[0]['quick_options'] == ['甲', '乙']
+    assert chunks[1]['response'].startswith('問題？')
+    assert '[QUICK_OPTIONS] 甲 | 乙' in chunks[1]['response']
+    assert chunks[-1]['done'] is True
+
+    # 沒有選項時不送空的選項包，也不加標記
+    plain = [json.loads(c) for c in ChatPipelineService._fixed_reply('只有一句話')]
+    assert 'quick_options' not in plain[0]
+    assert plain[0]['response'] == '只有一句話'
+
+
+def test_display_text_must_not_be_used_for_branching():
+    """
+    pipeline 的 _describe_decision 回傳的是給終端看的翻譯字串
+    （'確認' → '確認需求'），與 classify_instruction 的原始分類不同。
+    流程判斷誤用顯示字串會讓條件永遠不成立 —— 這個 bug 真的發生過：
+    固定問句、固定邀請文案、record_asked_dimension 全部沒被執行。
+    """
+    from services import conversation_guide as g
+    from services.chat_pipeline_service import ChatPipelineService as P
+
+    for kind in g.ALL_KINDS:
+        assert kind in P._DECISION_TEXT, f'{kind} 沒有對應的顯示字串'
+
+    instruction = g.analyze_and_guide([], {'preferences': {}}, has_quiz=False)
+    assert g.classify_instruction(instruction)[0] == g.KIND_CONFIRM
+    assert P._describe_decision(instruction, False)[0] != g.KIND_CONFIRM, \
+        '顯示字串與原始分類本來就不同，流程判斷只能用後者'
+
+
+def test_confirm_kind_always_resolves_to_a_fixed_question():
+    """狀態機決定確認需求時，一定拿得到固定問句與選項，走不到模型。"""
+    from services import conversation_guide as g
+
+    state = g.clean_guide_state({})
+    for _ in range(len(g._load_config()['dimensions'])):
+        instruction = g.analyze_and_guide([], {'preferences': {}},
+                                          has_quiz=False, state=state)
+        kind, focus = g.classify_instruction(instruction)
+        if kind != g.KIND_CONFIRM:
+            break
+        assert g.confirmation_question_for_label(focus), f'{focus} 沒有固定問句'
+        assert g.quick_options_for_label(focus), f'{focus} 沒有固定選項'
+        state['question_count'] += 1
+        g.record_asked_dimension(state, focus)

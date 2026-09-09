@@ -11,6 +11,7 @@ from services.cafe_retriever import retrieve_cafe_data, format_cafe_context, ser
 from services.ollama_admin_service import check_health, get_default_model
 from services.settings_service import get_selected_model
 from config.ai_constants import CHAT_EXIT_KEYWORDS
+from config.prompts import READY_TO_RECOMMEND_MESSAGE, READY_TO_RECOMMEND_OPTIONS
 
 class ChatPipelineService:
     @staticmethod
@@ -88,6 +89,11 @@ class ChatPipelineService:
                         (data.get('pref_state') or {}).get('preferences')
                         if isinstance(data.get('pref_state'), dict) else None
                     )
+
+                    # 跨輪引導進度（問過幾次、問過哪些維度）。與偏好一樣隨
+                    # pref_state 往返，不再只靠 6 則歷史視窗反推。
+                    guide_state = conversation_guide.clean_guide_state(data.get('pref_state'))
+                    guide_state['user_turns'] += 1
                     fresh_prefs = (extracted_data or {}).get("preferences") or {}
                     merged_prefs = ChatPipelineService._merge_preferences(base_prefs, fresh_prefs)
 
@@ -121,7 +127,8 @@ class ChatPipelineService:
                     progress_base = conversation_guide.QUIZ_PROGRESS_BASE if has_quiz else 0
                     # 資料太少就推薦等於亂猜，前端據此決定推薦按鈕能不能按
                     ready = conversation_guide.is_ready_to_recommend(
-                        temp_history, collected_dims, has_quiz=has_quiz
+                        temp_history, collected_dims, has_quiz=has_quiz,
+                        state=guide_state
                     )
                     yield json.dumps({
                         "progress_dims": collected_dims,
@@ -131,11 +138,6 @@ class ChatPipelineService:
                         "recommend_needs": conversation_guide.dimensions_needed_to_recommend(
                             temp_history, has_quiz=has_quiz
                         ),
-                    }, ensure_ascii=False) + "\n"
-
-                    yield json.dumps({
-                        "pref_state": {"preferences": merged_prefs},
-                        "dimension_scores": {k: round(v, 1) for k, v in live_scores.items()},
                     }, ensure_ascii=False) + "\n"
 
                     # 資料還不夠就要求推薦 → 擋下來，改成再確認一題。
@@ -156,13 +158,29 @@ class ChatPipelineService:
                     else:
                         # 確認需求 → 結果丟給狀態機（狀態機只負責確認節奏，永不出卡片）
                         guide_instruction = conversation_guide.analyze_and_guide(
-                            temp_history, extracted_data, has_quiz=has_quiz
+                            temp_history, extracted_data, has_quiz=has_quiz,
+                            state=guide_state
                         )
 
                     # 終端除錯輸出：這一輪知道了什麼、決定做什麼
                     decision, focus = ChatPipelineService._describe_decision(
                         guide_instruction, force_recommend
                     )
+                    # 流程判斷一律用原始分類，不要用 decision ——
+                    # 那是翻譯給終端看的字串（'確認' → '確認需求'）
+                    guide_kind, _ = conversation_guide.classify_instruction(guide_instruction)
+
+                    # 這一輪真的問了一題 → 記進進度，下一輪不會再問同一個維度
+                    if guide_kind == conversation_guide.KIND_CONFIRM:
+                        guide_state['question_count'] += 1
+                        conversation_guide.record_asked_dimension(guide_state, focus)
+
+                    # 偏好與引導進度一起回送前端，隨對話儲存、下一輪原樣帶回
+                    yield json.dumps({
+                        "pref_state": {"preferences": merged_prefs, **guide_state},
+                        "dimension_scores": {k: round(v, 1) for k, v in live_scores.items()},
+                    }, ensure_ascii=False) + "\n"
+
                     # 上一輪的五維（只用先前累積的偏好算），用來顯示這輪的增減
                     prev_scores, _, _ = build_gnn_input(quiz_scores, history, base_prefs)
                     debug_logger.log_round(
@@ -176,8 +194,26 @@ class ChatPipelineService:
                         fast_path=bool((extracted_raw or {}).get('fast_path')),
                         scores=live_scores,
                         prev_scores=prev_scores,
-                        asked=conversation_guide.get_asked_dimensions(temp_history),
+                        # 與狀態機實際採用的依據一致（歷史反推 ∪ 跨輪累積）
+                        asked=(conversation_guide.get_asked_dimensions(temp_history)
+                               | set(guide_state.get('asked_dimensions') or [])),
                     )
+
+                    # 邀請按推薦按鈕：固定一句話 + 固定選項，不需要生成，
+                    # 直接回覆並結束這一輪（交給模型寫會被對話歷史帶偏）
+                    if guide_kind == conversation_guide.KIND_INVITE:
+                        yield from ChatPipelineService._fixed_reply(
+                            READY_TO_RECOMMEND_MESSAGE, READY_TO_RECOMMEND_OPTIONS)
+                        return
+
+                    # 確認需求：問句與選項都來自設定檔，同樣不經過模型
+                    if guide_kind == conversation_guide.KIND_CONFIRM:
+                        question = conversation_guide.confirmation_question_for_label(focus)
+                        if question:
+                            yield from ChatPipelineService._fixed_reply(
+                                question,
+                                conversation_guide.quick_options_for_label(focus))
+                            return
 
             # 推薦（出卡片）只發生在使用者按下「直接推薦咖啡廳」按鈕的那一輪
             cafe_context = ""
@@ -312,6 +348,23 @@ class ChatPipelineService:
 
     # 偏好維度白名單（與 guide_dimensions.json / 萃取格式對齊）
     _ALLOWED_PREF_DIMS = ('purpose', 'vibe', 'taste', 'budget', 'special')
+
+    @staticmethod
+    def _fixed_reply(message, options=None):
+        """
+        後端直接回一段固定文字並結束這一輪，完全不呼叫模型。
+
+        選項標記會一起寫進訊息內容：前端顯示時會把標記剝掉，
+        而 get_asked_dimensions / apply_no_preference_answers 是靠訊息裡的
+        標記回推「這題問的是哪個維度」，兩邊都要拿得到。
+        """
+        options = [o for o in (options or []) if o]
+        text = message
+        if options:
+            text += "\n[QUICK_OPTIONS] " + " | ".join(options)
+            yield json.dumps({"quick_options": options}, ensure_ascii=False) + "\n"
+        yield json.dumps({"response": text}, ensure_ascii=False) + "\n"
+        yield json.dumps({"response": "", "done": True}, ensure_ascii=False) + "\n"
 
     @staticmethod
     def _respond_only(instruction, user_message, history, is_debug_requested=False):

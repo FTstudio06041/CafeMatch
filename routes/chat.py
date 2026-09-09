@@ -58,7 +58,8 @@ def save_chat_session(user):
         return error_response("訊息數量過多", 413)
 
     allowed_roles = {'user', 'ai', 'system'}
-    allowed_keys = {'role', 'content', 'feedback', 'debug_info', 'status', 'cafes'}
+    allowed_keys = {'role', 'content', 'feedback', 'debug_info', 'status', 'cafes',
+                    'quick_options'}
     cleaned_messages = []
     for msg in messages:
         if not isinstance(msg, dict):
@@ -74,7 +75,8 @@ def save_chat_session(user):
     if isinstance(pref_state, dict):
         pref_state = {
             k: v for k, v in pref_state.items()
-            if k in ('preferences', 'progress_base', 'progress_target')
+            if k in ('preferences', 'progress_base', 'progress_target',
+                     'question_count', 'user_turns', 'asked_dimensions')
         }
         if len(json.dumps(pref_state, ensure_ascii=False)) > 20000:
             pref_state = None
