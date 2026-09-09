@@ -27,11 +27,15 @@ ALREADY_RECOMMENDED_NO_DATA_INSTRUCTION = (
 # 確認完成：邀請使用者按下「直接推薦咖啡廳」按鈕（推薦只能由按鈕觸發）
 READY_TO_RECOMMEND_INSTRUCTION = (
     "【任務】偏好已大致掌握。這一輪絕對不要推薦店家、不要提任何店名、不要再問需求。\n"
-    "回覆就只有這一句，一字不差地輸出，不要加開場白也不要補充說明：\n"
-    "還有要補充的細節嗎？還是要我直接推薦咖啡廳呢？\n"
-    "【選項格式】回覆的最後請另起一行，原封不動加上這一行：\n"
-    "[QUICK_OPTIONS] 直接推薦"
+    "只需告訴使用者：可以直接推薦了，也歡迎再補充細節。\n"
+    + BREVITY_RULE
 )
+
+# 這一輪的回覆完全不需要生成（固定一句話 + 固定選項），所以後端直接回，
+# 不繞去讓模型寫 —— 實測模型會改去抄對話歷史裡上一輪的問句。
+# 指令本身保留，供 classify_instruction 判讀決策類型。
+READY_TO_RECOMMEND_MESSAGE = "還有要補充的細節嗎？還是要我直接推薦咖啡廳呢？"
+READY_TO_RECOMMEND_OPTIONS = ["直接推薦"]
 
 # 使用者要求與咖啡廳無關的事：明確婉拒並說明本系統的用途
 OFF_TOPIC_INSTRUCTION = (

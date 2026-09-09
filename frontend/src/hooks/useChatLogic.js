@@ -162,6 +162,7 @@ export function useChatLogic(user, navigate) {
     let currentDebugInfo = null;
     let currentStatus = null;
     let currentCafes = null;
+    let currentQuickOptions = null;
 
     const syncStreamState = async (content, debugInfo, appendText = '', isFinal = false, status = null) => {
       if (status) currentStatus = status;
@@ -176,7 +177,8 @@ export function useChatLogic(user, navigate) {
           content: finalContent,
           debug_info: debugInfo ? { ...debugInfo } : last.debug_info,
           status: currentStatus || last.status,
-          cafes: currentCafes || last.cafes
+          cafes: currentCafes || last.cafes,
+          quick_options: currentQuickOptions || last.quick_options
         };
       }
 
@@ -289,6 +291,10 @@ export function useChatLogic(user, navigate) {
           await syncStreamState(currentAiContent, currentDebugInfo, '', false, parsed.status);
         } else if (parsed.debug_info || parsed.type === 'debug_info') {
           currentDebugInfo = parsed.debug_info || parsed;
+          await syncStreamState(currentAiContent, currentDebugInfo, '', false, currentStatus);
+        } else if (parsed.quick_options) {
+          // 後端直送的快速選項（設定檔的固定資料），比模型自己複述的可靠
+          currentQuickOptions = parsed.quick_options;
           await syncStreamState(currentAiContent, currentDebugInfo, '', false, currentStatus);
         } else if (parsed.cafes) {
           currentCafes = parsed.cafes;

@@ -438,6 +438,19 @@ def record_asked_dimension(state: dict, dimension_label: str) -> dict:
     return state
 
 
+def quick_options_for_label(label: str) -> list:
+    """
+    取某個維度的快速選項（造訪目的 → 專心工作讀書、放空放鬆…）。
+
+    選項是設定檔裡的固定資料，由後端直接送給前端渲染；
+    不靠模型在回覆末尾複述 —— 實測它會漏抄、或抄成使用者上一句話。
+    """
+    for d in _load_config().get("dimensions", []):
+        if d.get("label") == label:
+            return list(d.get("quick_options") or [])
+    return []
+
+
 def dimension_key_for_label(label: str):
     """維度標籤（造訪目的…）轉回 key（purpose…）；找不到回傳 None。"""
     if not label:

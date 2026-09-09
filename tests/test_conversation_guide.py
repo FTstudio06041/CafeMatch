@@ -779,3 +779,29 @@ def test_record_asked_dimension_is_idempotent():
     record_asked_dimension(state, '造訪目的')
     record_asked_dimension(state, '不是維度標籤')
     assert state['asked_dimensions'] == ['purpose']
+
+
+def test_quick_options_come_from_config_not_the_model():
+    """
+    快速選項是設定檔的固定資料，後端直接送給前端；
+    不靠模型在回覆末尾複述（實測它會漏抄、或抄成使用者上一句話）。
+    """
+    from services.conversation_guide import quick_options_for_label
+
+    opts = quick_options_for_label('特殊需求')
+    assert len(opts) >= 2, '維度應該有多個快速選項'
+    assert '要有插座' in opts
+    assert quick_options_for_label('不是維度標籤') == []
+    assert quick_options_for_label(None) == []
+
+
+def test_invite_turn_has_a_fixed_message_and_single_option():
+    """邀請按推薦按鈕那一輪是固定文案，不經過模型生成。"""
+    from config.prompts import READY_TO_RECOMMEND_MESSAGE, READY_TO_RECOMMEND_OPTIONS
+
+    assert READY_TO_RECOMMEND_MESSAGE.endswith('？')
+    assert READY_TO_RECOMMEND_OPTIONS == ['直接推薦']
+
+    # 這個選項送出後，後端要能認得它等同按下推薦按鈕
+    from services.conversation_guide import wants_recommendation
+    assert wants_recommendation(READY_TO_RECOMMEND_OPTIONS[0])

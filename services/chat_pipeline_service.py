@@ -11,6 +11,7 @@ from services.cafe_retriever import retrieve_cafe_data, format_cafe_context, ser
 from services.ollama_admin_service import check_health, get_default_model
 from services.settings_service import get_selected_model
 from config.ai_constants import CHAT_EXIT_KEYWORDS
+from config.prompts import READY_TO_RECOMMEND_MESSAGE, READY_TO_RECOMMEND_OPTIONS
 
 class ChatPipelineService:
     @staticmethod
@@ -176,6 +177,16 @@ class ChatPipelineService:
                         "pref_state": {"preferences": merged_prefs, **guide_state},
                         "dimension_scores": {k: round(v, 1) for k, v in live_scores.items()},
                     }, ensure_ascii=False) + "\n"
+
+                    # 快速選項由後端直送（設定檔裡的固定資料）。
+                    # 指令仍要求模型複述一份，因為 apply_no_preference_answers /
+                    # get_asked_dimensions 是靠訊息內的標記回推維度；但畫面上顯示
+                    # 的以這裡送出的為準，模型漏抄或抄錯都不影響使用者。
+                    if decision == '確認':
+                        options = conversation_guide.quick_options_for_label(focus)
+                        if options:
+                            yield json.dumps(
+                                {"quick_options": options}, ensure_ascii=False) + "\n"
                     # 上一輪的五維（只用先前累積的偏好算），用來顯示這輪的增減
                     prev_scores, _, _ = build_gnn_input(quiz_scores, history, base_prefs)
                     debug_logger.log_round(
@@ -193,6 +204,19 @@ class ChatPipelineService:
                         asked=(conversation_guide.get_asked_dimensions(temp_history)
                                | set(guide_state.get('asked_dimensions') or [])),
                     )
+
+                    # 邀請按推薦按鈕：固定一句話 + 固定選項，不需要生成，
+                    # 直接回覆並結束這一輪（交給模型寫會被對話歷史帶偏）
+                    if decision == '邀請按鈕':
+                        yield json.dumps(
+                            {"quick_options": READY_TO_RECOMMEND_OPTIONS},
+                            ensure_ascii=False) + "\n"
+                        yield json.dumps(
+                            {"response": READY_TO_RECOMMEND_MESSAGE},
+                            ensure_ascii=False) + "\n"
+                        yield json.dumps(
+                            {"response": "", "done": True}, ensure_ascii=False) + "\n"
+                        return
 
             # 推薦（出卡片）只發生在使用者按下「直接推薦咖啡廳」按鈕的那一輪
             cafe_context = ""
