@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ClipboardList, BarChart3, MapPin, Play, Store, ArrowLeft } from 'lucide-react';
 import RadarChart from '../components/RadarChart';
+import QuizLoginPromptModal from '../components/QuizLoginPromptModal';
 import { quizService } from '../services/quizService';
 import '../QuizPage.css';
 
@@ -22,7 +23,6 @@ const getPersonalityImage = (typeKey) => {
   return null;
 };
 
-import { toast } from '../utils/toast';
 import { logger } from '../utils/logger';
 // sessionStorage key — 用來在頁面切換時保留測驗結果
 const QUIZ_RESULT_CACHE_KEY = 'quizResultCache';
@@ -44,6 +44,7 @@ export default function QuizPage() {
   const [selectedAnswers, setSelectedAnswers] = useState({});   // {questionId: optionId} 或多選 {questionId: [optionId, ...]}
   const [quizResult, setQuizResult] = useState(null);           // 後端回傳的結果物件
   const [errorMsg, setErrorMsg] = useState('');                 // 錯誤訊息
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false); // 訪客要帶結果去諮詢前的登入詢問
 
   // 動畫過渡狀態
   const [isFading, setIsFading] = useState(false);
@@ -207,13 +208,16 @@ export default function QuizPage() {
     sessionStorage.removeItem(QUIZ_RESULT_CACHE_KEY);
   };
 
-  // 帶著結果去諮詢 AI
+  // 帶著結果去諮詢 AI：訪客先問要不要登入，不直接把人丟去登入頁
   const handleConsultAI = () => {
     if (user?.isGuest) {
-      toast.info("請先登入才能將測驗結果帶去詢問 AI 喔！");
-      login();
+      setShowLoginPrompt(true);
       return;
     }
+    goToChatWithResult();
+  };
+
+  const goToChatWithResult = () => {
     if (quizResult) {
       // 將完整測驗結果存入 localStorage，供 ChatPage 讀取
       const quizData = {
@@ -496,6 +500,15 @@ export default function QuizPage() {
             </div>
           )}
         </div>
+
+        <QuizLoginPromptModal
+          open={showLoginPrompt}
+          onLogin={login}
+          onContinue={() => {
+            setShowLoginPrompt(false);
+            goToChatWithResult();
+          }}
+        />
     </div>
   );
 }
