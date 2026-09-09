@@ -189,7 +189,9 @@ class ChatPipelineService:
                         fast_path=bool((extracted_raw or {}).get('fast_path')),
                         scores=live_scores,
                         prev_scores=prev_scores,
-                        asked=conversation_guide.get_asked_dimensions(temp_history),
+                        # 與狀態機實際採用的依據一致（歷史反推 ∪ 跨輪累積）
+                        asked=(conversation_guide.get_asked_dimensions(temp_history)
+                               | set(guide_state.get('asked_dimensions') or [])),
                     )
 
             # 推薦（出卡片）只發生在使用者按下「直接推薦咖啡廳」按鈕的那一輪
