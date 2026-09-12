@@ -1,7 +1,7 @@
 .chat-floating-btn {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  bottom: var(--space-5);
+  right: var(--space-5);
   padding: 15px 20px;
   border-radius: 30px;
   background-color: #4E342E;
@@ -13,8 +13,8 @@
 
 .chat-window {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  bottom: var(--space-5);
+  right: var(--space-5);
   width: 300px;
   height: 400px;
   background-color: white;
@@ -57,14 +57,14 @@
 .chat-window-user-msg {
   align-self: flex-end;
   background-color: #DCF8C6;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   border-radius: 15px;
 }
 
 .chat-window-ai-msg {
   align-self: flex-start;
   background-color: #E0E0E0;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   border-radius: 15px;
 }
 
@@ -76,8 +76,8 @@
 
 .chat-window-input {
   flex: 1;
-  padding: 8px;
-  border-radius: 4px;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
   border: 1px solid #ccc;
 }
 
@@ -87,6 +87,6 @@
   background-color: #4E342E;
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
