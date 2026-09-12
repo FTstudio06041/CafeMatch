@@ -76,7 +76,7 @@ def save_chat_session(user):
         pref_state = {
             k: v for k, v in pref_state.items()
             if k in ('preferences', 'progress_base', 'progress_target',
-                     'question_count', 'user_turns', 'asked_dimensions')
+                     'question_count', 'user_turns', 'asked_dimensions', 'quiz_scores')
         }
         if len(json.dumps(pref_state, ensure_ascii=False)) > 20000:
             pref_state = None

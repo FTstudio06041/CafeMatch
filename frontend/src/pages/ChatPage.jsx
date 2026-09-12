@@ -9,6 +9,7 @@ import ChatInputArea from '../components/chat/ChatInputArea';
 import { logger } from '../utils/logger';
 import { useChat } from '../context/ChatContext';
 import { chatService } from '../services/chatService';
+import { resumeQuizConsultation } from '../utils/quizHandoff';
 
 export default function ChatPage() {
   const { user } = useContext(AuthContext);
@@ -38,7 +39,7 @@ export default function ChatPage() {
   // 同步 ref
   useEffect(() => {
     currentChatRef.current = currentChat;
-  }, [currentChat]);
+  }, [currentChat, currentChatRef]);
 
   // 自動捲動到底部
   useEffect(() => {
@@ -51,6 +52,7 @@ export default function ChatPage() {
 
   // 初始化與載入特定對話
   useEffect(() => {
+    resumeQuizConsultation(user);
     // 新用戶強制測驗：完成心理測驗前不得進入聊天
     if (localStorage.getItem('forceQuiz') === 'true') {
       navigate('/quiz', { replace: true });
@@ -65,8 +67,10 @@ export default function ChatPage() {
     if (rawQuizContext) {
       localStorage.removeItem('targetQuizContext');
       let promptText = '';
+      let quizScores;
       try {
         const quizData = JSON.parse(rawQuizContext);
+        quizScores = quizData.scores;
         const scoreParts = [];
         const scoreLabels = { work: '工作讀書', env: '空間氛圍', social: '社交舒適', taste: '餐飲口味', cp: 'CP值' };
         if (quizData.scores) {
@@ -94,6 +98,7 @@ export default function ChatPage() {
           customTitle: '測驗結果諮詢',
           hiddenPrompt: true,
           isQuizResult: true,
+          quizScores,
         });
       }, 0);
       return;
@@ -159,10 +164,11 @@ export default function ChatPage() {
 
   // 還差幾項需求才允許推薦（資料太少就推薦等於亂猜，按鈕在此之前鎖住）
   const missingDims = Math.max(0, recommendGate.needs - chatProgress.dims);
+  const canRecommend = recommendGate.ready || missingDims === 0;
 
   // 「直接推薦」：跳過確認需求，立刻以目前掌握的偏好推薦
   const handleForceRecommend = () => {
-    if (isTyping || !recommendGate.ready) return;
+    if (isTyping || !canRecommend) return;
     executeChatStream('請直接根據目前的資訊推薦咖啡廳', {
       customTitle: '直接推薦',
       forceRecommend: true,
@@ -218,14 +224,14 @@ export default function ChatPage() {
             <button
               className="pref-recommend-btn"
               onClick={handleForceRecommend}
-              disabled={isTyping || !recommendGate.ready}
-              title={recommendGate.ready
+              disabled={isTyping || !canRecommend}
+              title={canRecommend
                 ? '以目前掌握的偏好推薦咖啡廳'
                 : `還不夠了解你的需求，再確認 ${missingDims} 項就能推薦`}
             >
               {/* 還不能按時，按鈕本身就說明還差幾項
                   （原本只寫在 title，要 hover 才看得到，觸控裝置看不到） */}
-              {recommendGate.ready
+              {canRecommend
                 ? '直接推薦咖啡廳'
                 : `再確認 ${missingDims} 項就能推薦`}
             </button>
