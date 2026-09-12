@@ -10,6 +10,8 @@ preference_adjuster.py — 心理測驗分數 × 對話確認結果 → GNN 輸�
 設計原則：純 Python 規則，不依賴 torch / Flask，可獨立單元測試。
 """
 
+from services.preference_service import is_negative_preference
+
 DIMS = ["work", "env", "social", "taste", "cp"]
 
 # 「什麼都還不知道」時的中性基準：各維度等權。
@@ -28,26 +30,40 @@ _ACCURACY_WEIGHTS = {
 }
 
 # 對話偏好關鍵字 → 五維加分（子字串比對，涵蓋「工作寫作業」這類選項文字）
+#
+# 這張表同時是「系統對這個需求做得了什麼」的判準（見 cafe_facts.classify_conditions）：
+# 詞在這裡，代表它真的會改變推薦向量；不在這裡、標籤表也查不到的需求，
+# 系統其實完全使不上力，會被如實回報給使用者。所以引導設定檔
+# （data/guide_dimensions.json）認得的詞，這裡也要跟上，否則「氣氛要好」
+# 這種再普通不過的說法會被誤判成「我們沒有這項資料」。
 _KEYWORD_BOOSTS = {
     # 造訪目的
     '工作': {'work': 3}, '讀書': {'work': 3}, '辦公': {'work': 3},
+    '論文': {'work': 3}, '報告': {'work': 3}, '作業': {'work': 3},
+    '唸書': {'work': 3}, '念書': {'work': 3},
+    '筆電': {'work': 2}, '電腦': {'work': 2},
     '聚會': {'social': 3}, '朋友': {'social': 3}, '約會': {'social': 3},
+    '同事': {'social': 2}, '家人': {'social': 2}, '聚聚': {'social': 3},
     '放鬆': {'env': 2}, '放空': {'env': 2}, '發呆': {'env': 2},
-    '一個人': {'work': 1, 'env': 1},
+    '一個人': {'work': 1, 'env': 1}, '獨處': {'work': 1, 'env': 1},
     # 氛圍
     '安靜': {'work': 2, 'env': 1}, '熱鬧': {'social': 2},
     '文青': {'env': 3}, '老宅': {'env': 3}, '日式': {'env': 3},
     '網美': {'env': 3}, '懷舊': {'env': 3}, '拍照': {'env': 2}, '打卡': {'env': 2},
     '氛圍': {'env': 2}, '環境': {'env': 2}, '舒服': {'env': 2}, '慵懶': {'env': 2},
     '綠意': {'env': 2}, '採光': {'env': 2},
+    '氣氛': {'env': 2}, '清幽': {'work': 2, 'env': 1}, '工業風': {'env': 3},
     # 口味
     '手沖': {'taste': 3}, '單品': {'taste': 3}, '拿鐵': {'taste': 2},
     '特調': {'taste': 2}, '甜點': {'taste': 3}, '蛋糕': {'taste': 2},
     '早午餐': {'taste': 2}, '可頌': {'taste': 2}, '司康': {'taste': 2},
     '鬆餅': {'taste': 2}, '美式': {'taste': 2},
+    '冰': {'taste': 1}, '熱': {'taste': 1}, '奶': {'taste': 1},
+    '苦': {'taste': 1}, '酸': {'taste': 1},
     # 預算
     '平價': {'cp': 3}, '便宜': {'cp': 3}, '百元': {'cp': 3}, 'CP值': {'cp': 3},
     '學生': {'cp': 2}, '預算': {'cp': 2}, '低消': {'cp': 2},
+    '消費': {'cp': 2}, '貴': {'cp': 2},
     # 特殊需求（利於工作型場域）
     '插座': {'work': 2}, '不限時': {'work': 2}, 'wifi': {'work': 1},
 }
@@ -56,7 +72,10 @@ _KEYWORD_BOOSTS = {
 _HARD_FILTER_KEYWORDS = {
     'pet': ('寵物', '貓', '狗', '毛孩'),
     'parking': ('停車',),
-    'night': ('深夜', '晚間', '宵夜'),
+    # 「營業到很晚」是最自然的講法，原本卻不在名單裡 —— 硬過濾完全沒被觸發。
+    # 不收「晚上」：「晚上想喝咖啡」只是在講時段，不是要求營業到深夜，
+    # 收進來會把 44 家正常店全部濾掉。
+    'night': ('深夜', '晚間', '宵夜', '夜間', '很晚', '晚一點', '到晚'),
 }
 
 
@@ -106,6 +125,8 @@ def build_gnn_input(quiz_scores: dict | None, history: list, preferences: dict |
             continue
         for kw in values:
             if not isinstance(kw, str):
+                continue
+            if is_negative_preference(kw):
                 continue
             for flag, signals in _HARD_FILTER_KEYWORDS.items():
                 if any(sig in kw for sig in signals):

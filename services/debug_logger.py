@@ -189,3 +189,26 @@ def log_recommendation(accuracy, base_scores, adjusted_scores, hard_filters,
     _line('推薦引擎', engine_text)
     _line('推薦結果', names or '（無）')
     _bottom()
+
+
+def log_coverage(coverage):
+    """
+    出卡片前的需求覆蓋核對：哪些條件資料庫真的查得到、哪些完全沒有著落。
+
+    沒有 uncovered 就不印 —— 每次推薦都印一塊「全部都查得到」只會洗版。
+    """
+    if not enabled() or not coverage:
+        return
+    uncovered = coverage.get('uncovered') or []
+    if not uncovered:
+        return
+    _top('需求覆蓋核對')
+    total = coverage.get('total_cafes') or 0
+    _line('查無資料', '、'.join(uncovered) + (f'（{total} 家店都沒有這項資料）' if total else ''))
+    verifiable = coverage.get('verifiable') or []
+    if verifiable:
+        _line('查得到', '、'.join(f"{v['text']}（{v['count']} 家）" for v in verifiable))
+    soft = coverage.get('soft') or []
+    if soft:
+        _line('僅影響排序', '、'.join(soft))
+    _bottom()
