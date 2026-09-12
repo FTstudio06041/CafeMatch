@@ -42,3 +42,7 @@ data/off_topic_vectors.json
 
 # 服務模式的日誌
 logs/
+
+# 本機的 GNN 模型備份（權重 .pt、embedding .npy、評論 CSV，共 23MB）
+# 訓練產物與資料備份，不進版控
+GNN_local_backup/

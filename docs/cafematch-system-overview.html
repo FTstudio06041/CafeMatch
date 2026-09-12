@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>啡你莫屬 推薦系統架構與整合說明</title>
+<style>
+  :root{
+    --bg:#131416; --panel:#1c1e21; --card:#222528; --card2:#26292c;
+    --line:#33373b; --line2:#383c40;
+    --ink:#f0f1f3; --ink2:#eceef0; --muted:#9aa1a8; --muted2:#b7bcc1;
+    --accent:#d3a76a; --accent-soft:#8a6b45;
+    --ok:#4fd393; --warn:#e0b25f; --info:#6fb2e0; --neutral:#8b9096;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Segoe UI","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+    line-height:1.65;}
+  .wrap{max-width:1080px;margin:0 auto;padding:44px 22px 90px;}
+
+  header{margin-bottom:26px;}
+  header h1{font-size:1.95rem;margin:0 0 8px;color:var(--ink);}
+  header .lede{color:var(--muted2);margin:4px 0;font-size:1.02rem;max-width:780px;}
+  .tag-note{display:inline-block;margin-top:12px;font-size:.82rem;color:var(--muted);
+    background:var(--card2);border:1px solid var(--line);padding:5px 14px;border-radius:20px;}
+
+  .toc{display:flex;flex-wrap:wrap;gap:10px;margin:22px 0 4px;}
+  .toc a{font-size:.86rem;color:var(--muted2);text-decoration:none;
+    background:var(--card);border:1px solid var(--line);border-radius:20px;padding:6px 14px;transition:.15s;}
+  .toc a:hover{border-color:var(--accent-soft);color:var(--ink);}
+
+  section{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:26px 28px;margin:20px 0;}
+  section h2{margin:0 0 6px;font-size:1.4rem;display:flex;align-items:center;gap:11px;}
+  section h2 .n{background:var(--accent);color:#1b1206;width:32px;height:32px;border-radius:50%;
+    display:inline-flex;align-items:center;justify-content:center;font-size:1rem;font-weight:700;flex:0 0 auto;}
+  section .intro{color:var(--muted2);margin:0 0 18px;font-size:1rem;}
+
+  h3{font-size:1.08rem;margin:0 0 8px;color:var(--ink);}
+  .muted{color:var(--muted);}
+  .small{font-size:.9rem;}
+  code{background:var(--card2);border:1px solid var(--line);padding:1px 7px;border-radius:5px;
+    font-size:.85em;color:var(--accent);}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:720px){.cols{grid-template-columns:1fr}}
+
+  /* 三系統總覽卡 */
+  .sysgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+  @media(max-width:820px){.sysgrid{grid-template-columns:1fr}}
+  .sys{background:var(--card);border:1px solid var(--line);border-radius:13px;
+    padding:18px 18px 20px;border-top-width:5px;}
+  .sys.sA{border-top-color:var(--neutral);}
+  .sys.sB{border-top-color:var(--info);}
+  .sys.sC{border-top-color:var(--ok);}
+  .sys .tag{display:inline-flex;width:28px;height:28px;border-radius:50%;background:var(--card2);
+    color:var(--muted2);align-items:center;justify-content:center;font-weight:700;font-size:.9rem;margin-bottom:10px;}
+  .sys h3{margin:0 0 3px;}
+  .sys .role{font-size:.82rem;color:var(--muted);margin-bottom:12px;}
+  .sys dl{margin:0;font-size:.9rem;}
+  .sys dt{color:var(--muted);font-size:.74rem;text-transform:uppercase;letter-spacing:.05em;margin-top:9px;}
+  .sys dd{margin:2px 0 0;color:var(--ink2);}
+  .status{display:inline-block;margin-top:14px;font-size:.8rem;padding:4px 11px;border-radius:20px;font-weight:600;}
+  .status.live{background:rgba(79,211,147,0.16);color:var(--ok);}
+  .status.idle{background:rgba(139,144,150,0.18);color:var(--muted2);}
+  .status.part{background:rgba(111,178,224,0.16);color:var(--info);}
+
+  /* 流程步驟 */
+  .flow{display:flex;flex-direction:column;gap:11px;}
+  .step{display:flex;gap:13px;align-items:flex-start;}
+  .step .b{flex:0 0 auto;width:28px;height:28px;border-radius:50%;background:var(--accent-soft);
+    color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.88rem;}
+  .step .body strong{color:var(--ink);}
+  .step .body .small{color:var(--muted);}
+
+  .dim-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;}
+  @media(max-width:720px){.dim-grid{grid-template-columns:1fr}}
+  .dim{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:13px 15px;}
+  .dim .k{font-size:.72rem;letter-spacing:.05em;color:var(--muted);text-transform:uppercase;}
+  .dim .t{font-weight:700;margin:3px 0 5px;color:var(--ink);}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:16px 18px;}
+  .card.edge-a{border-left:4px solid var(--accent);}
+  .card.edge-b{border-left:4px solid var(--accent-soft);}
+
+  /* 映射對照 */
+  .maprow{display:flex;gap:12px;align-items:baseline;padding:8px 0;border-bottom:1px dashed var(--line2);}
+  .maprow:last-child{border-bottom:none;}
+  .maprow .dimtag{flex:0 0 auto;min-width:132px;font-weight:700;color:var(--accent);font-size:.92rem;}
+  .maprow .src{color:var(--muted2);font-size:.9rem;}
+
+  /* 整合流程專用 */
+  .mini{display:inline-block;font-size:.72rem;padding:2px 9px;border-radius:20px;margin-left:8px;vertical-align:middle;font-weight:600;}
+  .mini.keep{background:rgba(79,211,147,0.15);color:var(--ok);}
+  .mini.new{background:rgba(211,167,106,0.20);color:var(--accent);}
+  .parallel{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px;}
+  @media(max-width:640px){.parallel{grid-template-columns:1fr}}
+  .sig{background:var(--card2);border:1px solid var(--line2);border-radius:9px;padding:11px 13px;}
+  .sig .t{font-weight:600;font-size:.92rem;color:var(--ink);}
+  .splitnote,.samenote{font-size:.85rem;color:var(--muted2);line-height:1.5;}
+  .splitnote{margin:8px 0 2px;}
+  .splitnote b{color:var(--ink);}
+  .samenote{margin-top:12px;padding:9px 12px;background:rgba(211,167,106,0.10);border-radius:8px;}
+  .chain{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin-top:8px;display:flex;flex-direction:column;gap:3px;}
+  .chain span{font-size:.8rem;color:var(--muted);line-height:1.4;}
+  .chain .a{color:var(--ink);font-weight:600;font-size:.86rem;}
+  .defnote{margin-top:12px;background:rgba(111,178,224,0.09);border:1px solid var(--line2);
+    border-left:3px solid var(--info);border-radius:8px;padding:10px 13px;font-size:.88rem;color:var(--muted2);line-height:1.55;}
+  .defnote b{color:var(--info);}
+  .fallback{margin-top:16px;background:rgba(111,178,224,0.10);border:1px solid var(--info);
+    border-radius:10px;padding:13px 16px;font-size:.92rem;color:var(--muted2);line-height:1.55;}
+  .fallback b{color:var(--info);}
+  .scope{margin-top:20px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:14px 18px;}
+  .scope h3{margin:0 0 6px;color:var(--accent);font-size:1.02rem;}
+  .scope p{margin:0;color:var(--muted2);font-size:.92rem;line-height:1.55;}
+
+  /* 流程圖 */
+  .fchart{display:flex;flex-direction:column;align-items:center;gap:0;margin-top:8px;}
+  .fbox{width:100%;max-width:470px;background:var(--card);border:1px solid var(--line2);border-radius:10px;padding:12px 16px;}
+  .fbox.wide{max-width:680px;}
+  .fbox.accent{border-color:var(--accent-soft);background:rgba(211,167,106,0.07);}
+  .fbox .ft{font-weight:600;font-size:.95rem;color:var(--ink);display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+  .fbox .ft .num{flex:0 0 auto;width:22px;height:22px;border-radius:50%;background:var(--accent-soft);color:#fff;font-size:.78rem;display:inline-flex;align-items:center;justify-content:center;font-weight:700;}
+  .fbox .fd{font-size:.85rem;color:var(--muted);margin-top:6px;line-height:1.5;}
+  .farrow{width:2px;height:24px;background:var(--line2);position:relative;flex:0 0 auto;}
+  .farrow::after{content:"";position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid var(--line2);}
+  footer{text-align:center;color:var(--muted);font-size:.82rem;margin-top:34px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>啡你莫屬 推薦系統架構與整合說明</h1>
+    <p class="lede">說明推薦相關的三個子系統——GNN 推薦模型、Quiz 人格測驗、Chat 情境配對元件——各自的功能與實際運作方式，以及三者整合後的推薦決策完整流程。</p>
+    <span class="tag-note">系統說明文件 · 供團隊討論與新成員上手 · 整理日期 2026-07-02</span>
+    <div class="toc">
+      <a href="#overview">① 子系統功能總覽</a>
+      <a href="#gnn">② GNN 運作流程</a>
+      <a href="#quiz">③ 人格測驗</a>
+      <a href="#chat">④ Chat 情境元件</a>
+      <a href="#current">⑤ 目前推薦流程</a>
+      <a href="#pipeline">⑥ 整合後推薦流程</a>
+    </div>
+  </header>
+
+  <!-- ============ 1. 三系統總覽 ============ -->
+  <section id="overview">
+    <h2><span class="n">1</span>三個子系統功能總覽</h2>
+    <p class="intro">三者的共同目標都是推薦花蓮咖啡廳，差別在於各自負責的環節與輸入輸出的形式。</p>
+    <div class="sysgrid">
+
+      <div class="sys sA">
+        <span class="tag">A</span>
+        <h3>GNN 推薦模型</h3>
+        <div class="role">位於 <code>GNN/</code> 資料夾</div>
+        <dl>
+          <dt>負責什麼</dt><dd>依使用者偏好，為每家店評估適合度</dd>
+          <dt>需要的輸入</dt><dd>五維偏好分數（可代表當下需求或長期輪廓）</dd>
+          <dt>產出</dt><dd>每家店一個 0~1 的適合度分數</dd>
+        </dl>
+        <span class="status idle">模型已訓練完成</span>
+      </div>
+
+      <div class="sys sB">
+        <span class="tag">B</span>
+        <h3>Quiz 人格測驗</h3>
+        <div class="role">app 現有，位於 Quiz 頁</div>
+        <dl>
+          <dt>負責什麼</dt><dd>產出使用者的偏好側寫</dd>
+          <dt>需要的輸入</dt><dd>8 題作答（選填、一次性）</dd>
+          <dt>產出</dt><dd>五維分數與 8 種人格原型</dd>
+        </dl>
+        <span class="status part">運作中</span>
+      </div>
+
+      <div class="sys sC">
+        <span class="tag">C</span>
+        <h3>Chat 情境配對元件</h3>
+        <div class="role">app 現有，位於聊天頁</div>
+        <dl>
+          <dt>負責什麼</dt><dd>收集使用者這一次的需求</dd>
+          <dt>需要的輸入</dt><dd>6 個情境維度（每次對話收集）</dd>
+          <dt>產出</dt><dd>五維偏好、標籤權重與硬過濾條件</dd>
+        </dl>
+        <span class="status live">目前線上推薦的實際來源</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============ 2. GNN 運作流程 ============ -->
+  <section id="gnn">
+    <h2><span class="n">2</span>GNN 推薦模型的實際運作流程</h2>
+    <p class="intro">實際推薦時，GNN 就是一個「五維偏好 → 每家店適合度分」的計算。五維代表使用者的偏好，可以是當下需求、也可以是長期輪廓，GNN 只依五維打分，不區分來源。</p>
+    <div class="fchart">
+      <div class="fbox"><div class="ft"><span class="num">1</span>取得五維偏好</div><div class="fd">work／env／social／taste／cp 五個數字，來自 Chat 情境映射或 Quiz 人格測驗。</div></div>
+      <div class="farrow"></div>
+      <div class="fbox"><div class="ft"><span class="num">2</span>翻譯成使用者向量</div><div class="fd">五維經投影層轉為代表「這個人」的 128 維向量（5 → 384 → 128）。</div></div>
+      <div class="farrow"></div>
+      <div class="fbox"><div class="ft"><span class="num">3</span>對每家店打分</div><div class="fd">使用者向量與每家店預先算好的向量逐一比對，經預測層算出分數。</div></div>
+      <div class="farrow"></div>
+      <div class="fbox accent"><div class="ft"><span class="num">4</span>輸出</div><div class="fd">每家店得到一個 0~1 的適合度分數。</div></div>
+    </div>
+    <p class="small muted" style="margin-top:16px">上述所需的「店家向量」與「投影層」，是離線訓練（以 2,286 位公開評論者的評論與店家關聯建圖學習）一次性產生的成果，訓練已完成、不需每次重算。因此實際推薦時只需「單一使用者的五維」，不需要其他使用者的資料，計算量很小（毫秒級）。</p>
+  </section>
+
+  <!-- ============ 3. 人格測驗 ============ -->
+  <section id="quiz">
+    <h2><span class="n">3</span>Quiz 人格測驗的架構與流程</h2>
+    <p class="intro">app 現有功能，偏向自我認同與分享性質，同時產出可供推薦使用的五維偏好。</p>
+    <div class="fchart">
+      <div class="fbox"><div class="ft"><span class="num">1</span>8 題情境作答</div><div class="fd">每題三個選項，各選項對五個維度給 0~3 分。</div></div>
+      <div class="farrow"></div>
+      <div class="fbox"><div class="ft"><span class="num">2</span>五維加總</div><div class="fd">work（工作專注）、env（環境美感）、social（社交氛圍）、taste（口味品質）、cp（CP值）各自累加。</div></div>
+      <div class="farrow"></div>
+      <div class="fbox accent"><div class="ft"><span class="num">3</span>判定人格原型</div><div class="fd">依分數分布對應 8 種人格，結果寫入 <code>UserQuizResult</code>。</div></div>
+    </div>
+    <p class="small muted" style="margin-top:16px">這裡算出的五維，正是 GNN 需要的五維偏好，可作為 GNN 的其中一個輸入來源。</p>
+  </section>
+
+  <!-- ============ 4. Chat 情境元件 ============ -->
+  <section id="chat">
+    <h2><span class="n">4</span>Chat 情境配對元件的架構與流程</h2>
+    <p class="intro">收集使用者單次到訪的需求，轉為結構化偏好後提供給推薦流程。它的六題與 GNN 的五維並不衝突，反而互為表裡（見下方對照）。</p>
+
+    <h3 style="margin-top:8px">六個情境維度</h3>
+    <div class="dim-grid" style="margin-bottom:20px">
+      <div class="dim"><div class="k">time</div><div class="t">時間</div><div class="small muted">清晨／早午餐／午後／傍晚／深夜，對應營業時間過濾</div></div>
+      <div class="dim"><div class="k">purpose</div><div class="t">活動＋同行</div><div class="small muted">工作／放鬆／聊天／拍照／外帶，加上單獨或結伴</div></div>
+      <div class="dim"><div class="k">vibe</div><div class="t">氛圍</div><div class="small muted">在意程度 0–4，加上風格（老宅／綠意／工業／日系／網美）</div></div>
+      <div class="dim"><div class="k">taste</div><div class="t">餐飲</div><div class="small muted">講究程度 0–4，加上偏好（手沖／甜點／鹹食／特調／在地）</div></div>
+      <div class="dim"><div class="k">budget</div><div class="t">預算</div><div class="small muted">$1–200／$200–400／不限，或自訂金額，對應價位過濾</div></div>
+      <div class="dim"><div class="k">special</div><div class="t">特殊需求</div><div class="small muted">插座／安靜／沙發／戶外／寵物／久坐／停車（可複選）</div></div>
+    </div>
+
+    <h3>六題與五維的對應關係</h3>
+    <p class="small muted" style="margin-bottom:12px">情境六題收集的「軟性偏好」，恰好覆蓋 GNN 的五個維度；其餘屬「硬性條件」的部分（時間、價位、寵物…）走過濾。因此情境答案可依下列對應映射成五維，供 GNN 使用。</p>
+    <div class="card edge-a" style="margin-bottom:22px">
+      <div class="maprow"><span class="dimtag">work 工作專注</span><span class="src">← 活動（工作／讀書）、特殊需求（安靜／久坐／插座）</span></div>
+      <div class="maprow"><span class="dimtag">env 環境美感</span><span class="src">← 氛圍（風格偏好）、活動（拍照）</span></div>
+      <div class="maprow"><span class="dimtag">social 社交氛圍</span><span class="src">← 活動（聊天）、同行（結伴、家庭）</span></div>
+      <div class="maprow"><span class="dimtag">taste 口味品質</span><span class="src">← 餐飲（講究程度與偏好）</span></div>
+      <div class="maprow"><span class="dimtag">cp CP值</span><span class="src">← 預算（平價取向）</span></div>
+      <div class="maprow"><span class="dimtag" style="color:var(--muted2)">（走硬過濾）</span><span class="src">時間 → 營業時間；預算金額 → 價位；寵物／停車 → 條件過濾</span></div>
+    </div>
+
+    <h3>從作答到推薦的流程</h3>
+    <div class="fchart">
+      <div class="fbox"><div class="ft"><span class="num">1</span>使用者完成情境作答</div><div class="fd">前端僅傳送選項 value，不直接傳送標籤。</div></div>
+      <div class="farrow"></div>
+      <div class="fbox"><div class="ft"><span class="num">2</span>situational_service 解析</div><div class="fd">轉出五維偏好、加權標籤、營業時間窗、價位範圍、軟提示與自然語言摘要。</div></div>
+      <div class="farrow"></div>
+      <div class="fbox"><div class="ft"><span class="num">3</span>cafe_retriever 檢索</div><div class="fd">先以營業時間與價位硬過濾，再依標籤權重評分排序，取前 5 家。</div></div>
+      <div class="farrow"></div>
+      <div class="fbox"><div class="ft"><span class="num">4</span>組成 LLM 輸入</div><div class="fd">以摘要作為使用者訊息，附上候選店家（卡片模式下不含店名）。</div></div>
+      <div class="farrow"></div>
+      <div class="fbox accent"><div class="ft"><span class="num">5</span>輸出</div><div class="fd">LLM 說明推薦理由，前端將店家渲染為圖文卡片。</div></div>
+    </div>
+
+    <div class="cols" style="margin-top:22px">
+      <div class="card">
+        <h3>卡片模式</h3>
+        <p class="small muted">推薦時不將店名交給 LLM，僅由其說明推薦理由；店名與詳細資訊由資料庫渲染的圖文卡片呈現，確保資訊一致。</p>
+      </div>
+      <div class="card">
+        <h3>邀請時機判斷</h3>
+        <p class="small muted">當訊息較籠統時才邀請填寫情境卡；訊息已含具體需求時直接進入推薦。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 5. 目前推薦流程（現況） ============ -->
+  <section id="current">
+    <h2><span class="n">5</span>目前的推薦決策流程（現況，尚未整合 GNN）</h2>
+    <p class="intro">這是目前線上實際運作的流程，只使用 Chat 情境元件、尚未接入 GNN。使用者現在收到的推薦，就是由這條路徑產生。</p>
+    <div class="fchart">
+      <div class="fbox"><div class="ft"><span class="num">1</span>收集輸入</div><div class="fd">Chat 情境元件收集：時段／活動＋同行／氛圍／餐飲／預算／特殊需求。</div></div>
+      <div class="farrow"></div>
+      <div class="fbox"><div class="ft"><span class="num">2</span>解析</div><div class="fd">situational_service 產生標籤權重、營業時間窗、價位範圍、軟提示與摘要。<b style="color:var(--muted2)">（此時不計算五維。）</b></div></div>
+      <div class="farrow"></div>
+      <div class="fbox"><div class="ft"><span class="num">3</span>硬過濾</div><div class="fd">cafe_retriever 依營業時間、價位刷掉不符店家，得到候選店家清單。</div></div>
+      <div class="farrow"></div>
+      <div class="fbox"><div class="ft"><span class="num">4</span>評分（單一評分器）</div>
+        <div class="chain" style="margin-top:10px">
+          <span class="a">情境 6 題答案</span>
+          <span>↓ 解析成加權標籤清單</span>
+          <span>↓ 比對每家店的標籤</span>
+          <span class="a">每家店 → 一個分數（標籤加權分）</span>
+        </div>
+      </div>
+      <div class="farrow"></div>
+      <div class="fbox"><div class="ft"><span class="num">5</span>排序</div><div class="fd">依標籤加權分排序，取前 5 家。</div></div>
+      <div class="farrow"></div>
+      <div class="fbox accent"><div class="ft"><span class="num">6</span>輸出</div><div class="fd">LLM 說明推薦理由（卡片模式下不含店名），前端渲染圖文卡片。</div></div>
+    </div>
+  </section>
+
+  <!-- ============ 6. 整合後完整流程 ============ -->
+  <section id="pipeline">
+    <h2><span class="n">6</span>整合 GNN 後的推薦決策流程</h2>
+    <p class="intro">與上一節的現況相比，整合 GNN 只改變兩處：<b style="color:var(--accent)">解析</b>多算一組五維、<b style="color:var(--accent)">評分</b>多一個 GNN 評分器並與標籤分混合排序；其餘環節完全沿用。<span class="mini keep">現況已有</span>與<span class="mini new">整合新增</span>標示改動範圍。</p>
+
+    <div class="fchart">
+      <div class="fbox"><div class="ft"><span class="num">1</span>收集輸入<span class="mini keep">現況已有</span></div><div class="fd">Chat 情境元件收集：時段／活動＋同行／氛圍／餐飲／預算／特殊需求。</div></div>
+      <div class="farrow"></div>
+      <div class="fbox accent"><div class="ft"><span class="num">2</span>解析<span class="mini keep">現況已有</span><span class="mini new">整合新增</span></div><div class="fd">situational_service 產生標籤權重、營業時間窗、價位範圍；新增依「情境選項 → 五維」對應表算出五維（做過人格測驗者可改用其 <code>UserQuizResult</code> 五維）。</div></div>
+      <div class="farrow"></div>
+      <div class="fbox"><div class="ft"><span class="num">3</span>硬過濾<span class="mini keep">現況已有</span></div><div class="fd">cafe_retriever 依營業時間、價位刷掉不符店家，得到候選店家清單。</div></div>
+      <div class="farrow"></div>
+      <div class="fbox wide accent"><div class="ft"><span class="num">4</span>評分：兩個評分器並行<span class="mini keep">標籤器沿用</span><span class="mini new">GNN 器新增</span></div>
+        <div class="splitnote">↓ 對硬過濾後的<b>同一批候選店家</b>，兩個評分器各打一輪分</div>
+        <div class="parallel">
+          <div class="sig"><div class="t">標籤加權分</div>
+            <div class="chain">
+              <span class="a">情境 6 題答案</span>
+              <span>↓ 解析成加權標籤清單</span>
+              <span>↓ 比對每家店的標籤</span>
+              <span class="a">每家店 → 一個分數</span>
+            </div>
+          </div>
+          <div class="sig"><div class="t">GNN 偏好分</div>
+            <div class="chain">
+              <span class="a">五維偏好</span>
+              <span>↓ 送入 GNN score() 介面</span>
+              <span>↓ 對每家店打分</span>
+              <span class="a">每家店 → 一個分數</span>
+            </div>
+          </div>
+        </div>
+        <div class="samenote">兩者形狀相同——都是「偏好表達 → 對每家店打一輪分」，因此最後能合併。</div>
+      </div>
+      <div class="farrow"></div>
+      <div class="fbox"><div class="ft"><span class="num">5</span>混合排序<span class="mini new">整合新增</span></div><div class="fd">兩組分數各自正規化後，加權合併（初期各半，上線後再調整），取前 5 家。</div>
+        <div class="defnote"><b>正規化＝</b>把兩邊範圍不同的分數，換算到同一個共同範圍（例如都壓到 0~1）。標籤加權分可能是 0~10、GNN 偏好分是 0~1，範圍不同無法直接相加；換算到相同範圍後，兩者才能對等地加權合併，不會有一邊因為數字天生較大而主導排序。</div>
+      </div>
+      <div class="farrow"></div>
+      <div class="fbox accent"><div class="ft"><span class="num">6</span>輸出<span class="mini keep">現況已有</span></div><div class="fd">LLM 說明推薦理由（卡片模式下不含店名），前端渲染圖文卡片。</div></div>
+    </div>
+
+    <div class="fallback"><b>退回機制：</b>當 GNN 分暫時無法取得時，第 4 步僅保留標籤加權分，其餘流程不變——即等同目前線上的推薦行為，不會中斷。</div>
+
+    <div class="scope">
+      <h3>方向已收斂，尚待團隊定案者</h3>
+      <p>上述流程，以及「標籤分 ‖ GNN 分並行混合」的排序架構，已確定。仍待團隊選擇的，是 GNN 以何種方式提供 <code>score()</code>：離線匯出權重（主系統以 numpy 推論）或獨立服務（HTTP 呼叫）——兩者對上述流程而言可互換，不影響其餘環節。</p>
+    </div>
+  </section>
+
+  <footer>啡你莫屬 系統說明文件 · 供內部討論用途</footer>
+</div>
+</body>
+</html>
