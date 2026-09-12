@@ -14,6 +14,7 @@ conversation_guide.py — 對話引導狀態機
 import json
 import os
 import random
+import re
 
 from config.prompts import (
     ALREADY_RECOMMENDED_INSTRUCTION,
@@ -102,8 +103,18 @@ def analyze_and_guide(history: list, extracted_data: dict = None,
 
     # 使用者在提問而不是回答 → 先正面回答他，這一輪不追問。
     # （防鬼打牆：原本一律當成答案來萃取，使用者反問時仍被硬推下一題。）
-    if is_user_question(latest_user_msg):
+    dialogue_act = extracted_data.get('dialogue_act')
+    if dialogue_act == 'question' or (
+        dialogue_act not in ('preferences', 'recommend')
+        and is_user_question(latest_user_msg)
+    ):
         return ANSWER_USER_QUESTION_INSTRUCTION
+
+    if extracted_data.get('extraction_failed'):
+        return (
+            "【任務】這輪需求未能可靠解析，先根據最新訊息確認你理解的重點，"
+            "只釐清一個真正不清楚的地方。不要假裝已記住條件，也不要切換到下一道問卷題目。"
+        )
 
     # 使用者對測驗結果的回饋 → 三級確認門檻：
     #   覺得準       → 基本門檻
@@ -144,6 +155,12 @@ def analyze_and_guide(history: list, extracted_data: dict = None,
         or user_rounds >= max_rounds           # 對話輪數已夠多
         or collected_count >= min_dimensions   # 已蒐集到足夠維度
         or not missing                         # 所有維度都已蒐集
+        or (
+            'next_dimension' in extracted_data
+            and extracted_data['next_dimension'] is None
+            and dialogue_act == 'preferences'
+            and is_ready_to_recommend(history, collected_count, has_quiz, state)
+        )
     ):
         # 上一輪已經邀請過就別再重複同一句，改成自然聊天
         # （否則使用者每講一句都收到一模一樣的「請按按鈕」）
@@ -163,7 +180,17 @@ def analyze_and_guide(history: list, extracted_data: dict = None,
     summary = "；".join(summary_parts) if summary_parts else "尚無明確偏好"
 
     # 一次只針對下一個不確定的維度確認（不逐項盤問）
-    next_dim = missing[0]
+    suggested = extracted_data.get('next_dimension')
+    next_dim = next((d for d in missing if d['key'] == suggested), None)
+    if next_dim is None:
+        # 工作、久坐情境先確認實用需求，比先問飲品口味更有幫助。
+        purpose = ' '.join(collected.get('purpose', []))
+        priority = ('special', 'budget', 'vibe', 'taste') if any(
+            word in purpose for word in ('工作', '讀書', '辦公', '論文', '筆電')
+        ) else ()
+        next_dim = next(
+            (d for key in priority for d in missing if d['key'] == key), missing[0]
+        )
     example_prompts = next_dim.get("example_prompts") or []
     examples = random.sample(example_prompts, min(2, len(example_prompts)))
 
@@ -177,14 +204,17 @@ def analyze_and_guide(history: list, extracted_data: dict = None,
         next_dim_label=next_dim["label"],
         question_count=question_count,
         max_questions=max_questions,
-        latest_user_msg=latest_user_msg[:80],
+        latest_user_msg=latest_user_msg[:1000],
         examples=examples,
         quick_options=next_dim.get("quick_options")
     )
 
 
 # 「明確表示沒有偏好」的訊號：這也是一種明確回答，該維度視為已確認
-_NO_PREFERENCE_SIGNALS = ('都可以', '沒有', '沒特別', '隨便', '不限', '沒差', '皆可', '不用', 'ok', '可以')
+_NO_PREFERENCE_SIGNALS = (
+    '都可以', '都可以啊', '都好', '沒有', '沒特別', '沒特別需求', '沒有特別需求',
+    '沒有特別偏好', '隨便', '不限', '沒差', '皆可', '不用',
+)
 
 
 def apply_no_preference_answers(history: list, preferences: dict) -> dict:
@@ -208,7 +238,8 @@ def apply_no_preference_answers(history: list, preferences: dict) -> dict:
         reply = (user_msg.get("content", "") or "").strip()
 
         # 使用者的回答必須是簡短且明確的「沒偏好」表述
-        if len(reply) > 12 or not any(sig in reply.lower() for sig in _NO_PREFERENCE_SIGNALS):
+        normalized = re.sub(r'[\s，。！？!?.,~～]', '', reply.lower())
+        if normalized not in _NO_PREFERENCE_SIGNALS:
             continue
 
         # 比對 AI 這一題問的是哪個維度（訊息中帶有該維度的快速選項）
@@ -255,6 +286,8 @@ def _already_invited(history: list) -> bool:
 def wants_recommendation(user_message: str) -> bool:
     """使用者是否明確要求現在就推薦（口頭版的「直接推薦」按鈕）。"""
     text = (user_message or '').strip()
+    if re.search(r'(?:不要|不用|先別|先不|別急著|還不想)(?:直接|馬上|現在|急著)?推薦', text):
+        return False
     return any(sig in text for sig in _RECOMMEND_REQUESTS)
 
 
@@ -457,17 +490,7 @@ def record_asked_dimension(state: dict, dimension_label: str) -> dict:
 
 def confirmation_question_for_label(label: str) -> str:
     """
-    取某個維度的確認問句（設定檔 example_prompts 裡隨機一句）。
-
-    問句不交給模型生成：指令原本要求它「順著使用者剛剛的話接一句」，
-    小模型會死咬著上一句的關鍵字，把每個維度都硬掰成同一個話題
-    （使用者說想吃甜點，問預算就變成「花多少錢在甜點上」、
-    問特殊需求就變成「挑甜點的考量」），跟選項完全對不上。
-    設定檔裡的問法是人寫的，口語自然且與選項一一對應。
-
-    固定取第一句而不隨機：同一維度的後幾句往往只涵蓋單一面向
-    （特殊需求的第二句只問寵物，選項卻還有插座、不限時），
-    第一句才是涵蓋整組選項的完整問法。反正每個維度只會問一次。
+    模型回空白時的保底問句，取設定檔中涵蓋整組選項的第一句。
     """
     for d in _load_config().get("dimensions", []):
         if d.get("label") == label:
