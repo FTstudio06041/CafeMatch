@@ -126,6 +126,49 @@ def test_question_about_current_preference_does_not_change_its_meaning(monkeypat
     assert merged == base
 
 
+def test_question_is_not_stored_as_a_preference_when_model_says_otherwise(monkeypatch):
+    """真模型會把「你是不是把X當成Y了？」判成 preferences，不能因此吃掉舊偏好。
+
+    既有的 test_question_about_current_preference_does_not_change_its_meaning
+    是 mock 成 dialogue_act='question' 才綠的；gemma3:4b 實測回的是
+    'preferences'，那層保護根本沒被觸發：整句問句被存成 taste，原本的
+    「不要太酸」被刪掉。
+    """
+    base = {'taste': ['不要太酸']}
+    message = '你是不是把不要太酸當成喜歡酸了？'
+    mock_extraction(monkeypatch, {
+        'preferences': {'taste': ['你是不是把不要太酸當成喜歡酸了']},
+        'evidence': {'taste': message},
+        'remove_preferences': {'taste': ['不要太酸']},
+        'dialogue_act': 'preferences',
+    })
+    result = preference_service.extract_preferences([], message, 'test-model', base)
+    merged = ChatPipelineService._merge_preferences(
+        base, result['preferences'], result['replace_dimensions'], result['remove_preferences']
+    )
+    assert result['preferences'] == {}
+    assert result['dialogue_act'] == 'question'
+    assert merged == base
+
+
+def test_preference_phrased_as_a_question_still_counts(monkeypatch):
+    """收緊之後，用問句講出來的偏好仍然要收得到。"""
+    base = {'budget': ['200元內']}
+    message = '可以把預算改成300元嗎？'
+    mock_extraction(monkeypatch, {
+        'preferences': {'budget': ['300元']},
+        'evidence': {'budget': '可以把預算改成300元嗎'},
+        'dialogue_act': 'preferences',
+    })
+    result = preference_service.extract_preferences([], message, 'test-model', base)
+    merged = ChatPipelineService._merge_preferences(
+        base, result['preferences'], result['replace_dimensions'], result['remove_preferences']
+    )
+    assert result['dialogue_act'] == 'preferences'
+    assert '300' in merged['budget'][0]
+    assert '200元內' not in merged['budget']
+
+
 def test_one_quote_cannot_launder_a_whole_dimension(monkeypatch):
     """一句佐證只證得了一個條件，模型多寫的沒講過條件不能跟著過關。"""
     message = '不要太吵，可以待久一點'

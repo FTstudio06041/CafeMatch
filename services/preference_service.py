@@ -92,6 +92,8 @@ def _sanitize_preferences(prefs, user_text, ai_text, evidence=None, base=None):
         而且只在該維度完全抄不到原文時才收
       - 沒有佐證時只接受使用者原文或已確認偏好，不採用助手的推測
     """
+    from services.conversation_guide import is_user_question
+
     clean = {}
     if not isinstance(prefs, dict):
         return clean
@@ -113,6 +115,10 @@ def _sanitize_preferences(prefs, user_text, ai_text, evidence=None, base=None):
             if not v or len(v) > 100:
                 continue
             if v.lower() in _GENERIC_STOPWORDS and not (grounded and v == '不限'):
+                continue
+            # 問句不是偏好。使用者反問「你是不是把不要太酸當成喜歡酸了？」時，
+            # 模型常把整句照抄成 taste 的值 —— 原文照抄反而讓它通過了驗證。
+            if is_user_question(v):
                 continue
             if v in user_text:
                 kept.append(v)
@@ -147,7 +153,9 @@ def extract_preferences(history, user_message, model_name, base_preferences=None
     只有完整命中已知選項才快篩；自由輸入用語意理解更新累積偏好。
     這是一個純粹的萃取服務，嚴禁生成推薦結果或使用 RAG。
     """
-    from services.conversation_guide import _load_config, get_known_keywords
+    from services.conversation_guide import (
+        _load_config, get_known_keywords, is_user_question,
+    )
     base_preferences = base_preferences or {}
     text = (user_message or '').strip()
     options = {
@@ -216,6 +224,11 @@ def extract_preferences(history, user_message, model_name, base_preferences=None
                 result['preferences'], user_message, ai_text, evidence, base_preferences
             )
             act = result.get('dialogue_act')
+            # 模型常把「你是不是把X當成Y了？」判成 preferences。萃取完什麼都
+            # 沒留下、句法上又明顯是提問時，以句法為準 —— 否則狀態機會把這輪
+            # 當成回答，繼續追問下一個維度。真的在講偏好的話 prefs 不會是空的。
+            if act == 'preferences' and not prefs and is_user_question(user_message):
+                act = 'question'
             if act in ('question', 'chat'):
                 return {
                     'preferences': {}, 'remove_preferences': {},
@@ -225,6 +238,8 @@ def extract_preferences(history, user_message, model_name, base_preferences=None
                 literal = {}
                 for clause in re.split(r'[，,。！？!?；;\n]', user_message):
                     clause = clause.strip()
+                    if is_user_question(clause):
+                        continue
                     dims = _clause_dimensions(clause)
                     if len(dims) == 1 and len(clause) <= 100:
                         dim = next(iter(dims))
@@ -244,6 +259,7 @@ def extract_preferences(history, user_message, model_name, base_preferences=None
                 if dim in PREFERENCE_DIMS and isinstance(values, list)
                 and isinstance(evidence.get(dim), str) and evidence[dim].strip()
                 and evidence[dim] in user_message
+                and not is_user_question(evidence[dim])
                 and (not _clause_dimensions(evidence[dim]) or dim in _clause_dimensions(evidence[dim]))
             }
             # 預算改口及明確取消整個維度可直接取代；其他條件逐筆增刪。
