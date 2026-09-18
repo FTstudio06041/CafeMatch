@@ -87,7 +87,9 @@ def _sanitize_preferences(prefs, user_text, ai_text, evidence=None, base=None):
     """
     驗證 LLM 萃取出的偏好關鍵字，防止憑空捏造或錯誤歸因：
       - 過濾泛用詞／佔位詞
-      - 有本輪原文佐證時，接受語意正規化及仍有效的舊條件
+      - 原文照抄的值一律接受
+      - 一句佐證只證得了一個條件：沒有原文可對的「正規化」值最多收一個，
+        而且只在該維度完全抄不到原文時才收
       - 沒有佐證時只接受使用者原文或已確認偏好，不採用助手的推測
     """
     clean = {}
@@ -103,6 +105,7 @@ def _sanitize_preferences(prefs, user_text, ai_text, evidence=None, base=None):
         if quote_dims and dim not in quote_dims:
             continue
         kept = []
+        normalized = []
         for v in values:
             if not isinstance(v, str):
                 continue
@@ -111,8 +114,14 @@ def _sanitize_preferences(prefs, user_text, ai_text, evidence=None, base=None):
                 continue
             if v.lower() in _GENERIC_STOPWORDS and not (grounded and v == '不限'):
                 continue
-            if grounded or v in user_text:
+            if v in user_text:
                 kept.append(v)
+            elif grounded:
+                normalized.append(v)
+        # 佐證是本輪的一句話，只證得了一個條件。原本整個維度跟著一句佐證放行，
+        # 模型多寫幾個沒講過的條件也會照收，髒偏好再往下送進覆蓋率檢查。
+        if not kept:
+            kept = normalized[:1]
         if kept:
             clean[dim] = list(dict.fromkeys(kept))[:6]
     return clean
@@ -220,7 +229,9 @@ def extract_preferences(history, user_message, model_name, base_preferences=None
                     if len(dims) == 1 and len(clause) <= 100:
                         dim = next(iter(dims))
                         literal.setdefault(dim, []).append(clause)
-                        evidence[dim] = user_message
+                        # 佐證記這一句，不是整段訊息：後面 remove_preferences 與
+                        # replace_dimensions 要靠它核對維度，整段訊息形同免驗。
+                        evidence[dim] = clause
                 # 清楚屬於單一維度的子句以原文為準，避免小模型把「太酸」縮成「酸」。
                 for dim, clauses in literal.items():
                     if prefs.get(dim) != ['不限']:
