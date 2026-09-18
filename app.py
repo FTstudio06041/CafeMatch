@@ -83,6 +83,7 @@ oauth.register(
 # --- 匯入模型與註冊路由 ---
 import models
 from routes import register_blueprints
+from utils.schema_sync import sync_adhoc_columns
 
 register_blueprints(app)
 
@@ -91,55 +92,13 @@ def init_db():
     """初始化資料庫與管理員"""
     db.create_all()
 
-    try:
-        db.session.execute(db.text("ALTER TABLE user ADD COLUMN is_admin TINYINT(1) DEFAULT 0"))
-        db.session.commit()
-        print('[INIT] 已為 user 表新增 is_admin 欄位')
-    except Exception:
-        db.session.rollback()
-        
-    try:
-        db.session.execute(db.text("ALTER TABLE user ADD COLUMN last_read_announcement_id INT DEFAULT 0"))
-        db.session.commit()
-        print('[INIT] 已為 user 表新增 last_read_announcement_id 欄位')
-    except Exception:
-        db.session.rollback()
-        
-    try:
-        db.session.execute(db.text("ALTER TABLE cafes ADD COLUMN image LONGTEXT"))
-        db.session.commit()
-        print('[INIT] 已為 cafes 表新增 image 欄位')
-    except Exception:
-        db.session.rollback()
-        
-    try:
-        db.session.execute(db.text("ALTER TABLE cafes ADD COLUMN google_place_id VARCHAR(255) DEFAULT NULL"))
-        db.session.commit()
-        print('[INIT] 已為 cafes 表新增 google_place_id 欄位')
-    except Exception:
-        db.session.rollback()
-        
-    try:
-        db.session.execute(db.text("ALTER TABLE cafes ADD COLUMN google_photo_attribution TEXT"))
-        db.session.commit()
-        print('[INIT] 已為 cafes 表新增 google_photo_attribution 欄位')
-    except Exception:
-        db.session.rollback()
-        
-    try:
-        db.session.execute(db.text("ALTER TABLE community_posts ADD COLUMN original_post_id INT DEFAULT NULL"))
-        db.session.commit()
-        print('[INIT] 已為 community_posts 表新增 original_post_id 欄位')
-    except Exception:
-        db.session.rollback()
+    # 這些欄位歷史上是在這裡用裸 ALTER TABLE 加的，Alembic 並不知道它們存在。
+    # 清單已移到 utils/schema_sync.py，與遷移共用同一份，兩邊不會漂開。
+    added = sync_adhoc_columns(db.session.connection())
+    db.session.commit()
+    for name in added:
+        print(f'[INIT] 已新增欄位 {name}')
 
-    try:
-        db.session.execute(db.text("ALTER TABLE chat_sessions ADD COLUMN pref_state JSON NULL"))
-        db.session.commit()
-        print('[INIT] 已為 chat_sessions 表新增 pref_state 欄位')
-    except Exception:
-        db.session.rollback()
-        
     # 初始化管理員帳號
     admin_emails = os.getenv('ADMIN_EMAILS', 'wjy28396@gmail.com').split(',')
     for admin_email in admin_emails:
