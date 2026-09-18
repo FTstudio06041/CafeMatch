@@ -126,6 +126,39 @@ def test_question_about_current_preference_does_not_change_its_meaning(monkeypat
     assert merged == base
 
 
+def test_one_quote_cannot_launder_a_whole_dimension(monkeypatch):
+    """一句佐證只證得了一個條件，模型多寫的沒講過條件不能跟著過關。"""
+    message = '不要太吵，可以待久一點'
+    mock_extraction(monkeypatch, {
+        'preferences': {'vibe': ['安靜', '有插座', '手沖好喝', '網美牆']},
+        'evidence': {'vibe': '不要太吵'}, 'dialogue_act': 'preferences',
+    })
+    result = preference_service.extract_preferences([], message, 'test-model')
+    assert result['preferences']['vibe'] == ['安靜']
+
+
+def test_semantic_normalization_still_survives(monkeypatch):
+    """收緊之後，原文沒有的說法仍要能被正規化成偏好。"""
+    mock_extraction(monkeypatch, {
+        'preferences': {'vibe': ['安靜']},
+        'evidence': {'vibe': '不要太吵'}, 'dialogue_act': 'preferences',
+    })
+    result = preference_service.extract_preferences([], '不要太吵', 'test-model')
+    assert result['preferences'] == {'vibe': ['安靜']}
+
+
+def test_literal_values_are_not_capped_by_the_normalization_limit(monkeypatch):
+    """原文照抄的值有幾個收幾個，配額只約束沒有原文可對的值。"""
+    message = '安靜、有插座、不限時'
+    mock_extraction(monkeypatch, {
+        'preferences': {'special': ['插座', '不限時'], 'vibe': ['安靜']},
+        'evidence': {'special': message, 'vibe': message}, 'dialogue_act': 'preferences',
+    })
+    result = preference_service.extract_preferences([], message, 'test-model')
+    assert result['preferences']['special'] == ['插座', '不限時']
+    assert result['preferences']['vibe'] == ['安靜']
+
+
 @pytest.mark.parametrize('response', [[], {'preferences': []}, None])
 def test_bad_extraction_does_not_erase_saved_preferences(monkeypatch, response):
     mock_extraction(monkeypatch, response)
