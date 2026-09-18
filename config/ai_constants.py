@@ -1,7 +1,7 @@
 # HTTP Client and Service Timeouts
 OLLAMA_CLIENT_TIMEOUT = 300      # 串流生成超時
 OLLAMA_HEALTH_TIMEOUT = 3        # 健康檢查超時
-PREFERENCE_EXTRACTION_TIMEOUT = 10 # 偏好萃取超時
+PREFERENCE_EXTRACTION_TIMEOUT = 60 # 包含本機模型冷啟動與完整語意萃取
 
 # Database Search Limits
 CAFE_TAG_MATCH_LIMIT = 5         # 標籤匹配最多取幾家

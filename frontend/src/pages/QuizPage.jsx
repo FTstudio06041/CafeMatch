@@ -1,10 +1,11 @@
-import { useState, useEffect, useContext, useCallback } from 'react';
+import { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import { ClipboardList, BarChart3, MapPin, Play, Store, ArrowLeft } from 'lucide-react';
 import RadarChart from '../components/RadarChart';
 import QuizLoginPromptModal from '../components/QuizLoginPromptModal';
 import { quizService } from '../services/quizService';
+import { queueQuizConsultation, resumeQuizConsultation } from '../utils/quizHandoff';
 import '../QuizPage.css';
 
 // 咖啡人格插畫：檔名 = 人格類型 key（work / env / social / taste / cp /
@@ -36,6 +37,7 @@ export default function QuizPage() {
   const { user, API_BASE_URL, login } = useContext(AuthContext);
   const navigate = useNavigate();
   const location = useLocation();
+  const resumedQuizRef = useRef(false);
 
   // --- 測驗核心狀態 ---
   const [quizState, setQuizState] = useState('intro');        // 'intro' | 'loading' | 'question' | 'submitting' | 'result'
@@ -54,6 +56,13 @@ export default function QuizPage() {
   const [isForced, setIsForced] = useState(() => localStorage.getItem(FORCE_QUIZ_KEY) === 'true');
 
   useEffect(() => {
+    if (resumedQuizRef.current) return;
+    // 首次註冊也可能是帶著已完成的訪客測驗回來，先接回諮詢。
+    if (resumeQuizConsultation(user)) {
+      resumedQuizRef.current = true;
+      navigate('/chat?id=new', { replace: true });
+      return;
+    }
     const params = new URLSearchParams(location.search);
     if (params.get('welcome') === 'true') {
       localStorage.setItem(FORCE_QUIZ_KEY, 'true');
@@ -61,7 +70,7 @@ export default function QuizPage() {
       setIsForced(true);
       navigate('/quiz', { replace: true });
     }
-  }, [location.search, navigate]);
+  }, [location.search, navigate, user]);
 
   // 初始化：恢復測驗結果快取
   useEffect(() => {
@@ -210,7 +219,7 @@ export default function QuizPage() {
 
   // 帶著結果去諮詢 AI：訪客先問要不要登入，不直接把人丟去登入頁
   const handleConsultAI = () => {
-    if (user?.isGuest) {
+    if (!user || user.isGuest) {
       setShowLoginPrompt(true);
       return;
     }
@@ -218,18 +227,13 @@ export default function QuizPage() {
   };
 
   const goToChatWithResult = () => {
-    if (quizResult) {
-      // 將完整測驗結果存入 localStorage，供 ChatPage 讀取
-      const quizData = {
-        title: quizResult.result?.title || '',
-        inner_voice: quizResult.result?.inner_voice || '',
-        profile: quizResult.result?.profile || '',
-        cafe_match: quizResult.result?.cafe_match || '',
-        scores: quizResult.scores || {},
-      };
-      localStorage.setItem('targetQuizContext', JSON.stringify(quizData));
-    }
+    queueQuizConsultation(quizResult);
     navigate('/chat?id=new');
+  };
+
+  const handleLoginWithResult = () => {
+    if (!queueQuizConsultation(quizResult, true)) return;
+    login();
   };
 
   // =============================================
@@ -503,7 +507,7 @@ export default function QuizPage() {
 
         <QuizLoginPromptModal
           open={showLoginPrompt}
-          onLogin={login}
+          onLogin={handleLoginWithResult}
           onClose={() => setShowLoginPrompt(false)}
         />
     </div>

@@ -20,16 +20,30 @@ CAFE_RECOMMENDATION_FORMAT_CARDS = """【輸出格式】
 
 PREFERENCE_EXTRACTION_FORMAT = """【輸出格式】
 你必須「只」輸出一段合法的 JSON 字串，不可以包含任何 Markdown 標記（例如 ```json）或其他文字解釋。
-若對話中沒有提及該維度的偏好，請一律填入空陣列 []。
-（如果真的有提及偏好，例如讀書或安靜，才填入對應的陣列中，如 ["讀書"]）
+preferences 與 evidence 逐一檢查五個維度，沒有更新的維度用空陣列和空字串。
+維度：purpose（目的）、vibe（氛圍）、taste（餐飲）、budget（消費）、special（地點、時間、設備等限制）。
+每個維度最多 6 個條件，各條件用簡短且語意完整的字串。
 請輸出如以下格式的 JSON 結構：
 {
-  "preferences": {
-    "purpose": [],
-    "vibe": [],
-    "taste": [],
-    "budget": [],
-    "special": []
-  }
+  "remove_preferences": {"purpose": [], "vibe": [], "taste": [], "budget": [], "special": []},
+  "evidence": {"purpose": "", "vibe": "", "taste": "", "budget": "", "special": ""},
+  "preferences": {"purpose": [], "vibe": [], "taste": [], "budget": [], "special": []},
+  "dialogue_act": "preferences",
+  "next_dimension": "purpose"
 }
+"""
+
+# 需求覆蓋揭露：資料庫查不到的條件必須講出來。
+#
+# 【任務規範】第 6 條已經要求「只有資料明確支持時才能說店家符合」，但那是
+# 叫模型自己判斷 —— 而它看到的 <KNOWLEDGE_BASE> 在完美命中與零命中時長得
+# 一模一樣，沒有任何線索可以判斷。這段規則要搭配 <REQUEST_COVERAGE>
+# 一起注入：系統先核對過資料庫，把結論直接告訴模型，規則才咬得住。
+COVERAGE_DISCLOSURE_RULE = """【必須誠實揭露】
+<REQUEST_COVERAGE> 是系統核對資料庫後的結論，不是參考資訊，你必須照它講：
+1. 開場第一句就先說那項條件沒有著落，用自己的話講、講得像在跟朋友說實話，
+   然後才介紹下面這幾家。不可以跳過，也不可以擺到最後一句補一下。
+2. 不可以說「可能有」「也許有提供」「建議去電詢問」這類暗示它存在的話。
+3. 介紹店家時只能說它們在其他方面為什麼適合，不得暗示任何一家滿足了
+   那項條件。
 """

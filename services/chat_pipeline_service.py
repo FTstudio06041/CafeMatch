@@ -11,7 +11,6 @@ from services.cafe_retriever import retrieve_cafe_data, format_cafe_context, ser
 from services.ollama_admin_service import check_health, get_default_model
 from services.settings_service import get_selected_model
 from config.ai_constants import CHAT_EXIT_KEYWORDS
-from config.prompts import READY_TO_RECOMMEND_MESSAGE, READY_TO_RECOMMEND_OPTIONS
 
 class ChatPipelineService:
     @staticmethod
@@ -58,7 +57,7 @@ class ChatPipelineService:
                 yield json.dumps({"done": True}, ensure_ascii=False) + "\n"
                 return
 
-            if not is_cafe_related and len(history) > 0:
+            if not is_cafe_related:
                 lower_msg = user_message.lower()
                 if not any(kw in lower_msg for kw in CHAT_EXIT_KEYWORDS):
                     is_cafe_related = True
@@ -77,9 +76,6 @@ class ChatPipelineService:
                 else:
                     yield json.dumps({"status": "extracting_preferences"}, ensure_ascii=False) + "\n"
                     model_name = get_selected_model() or get_default_model()
-                    extracted_raw = preference_service.extract_preferences(history, user_message, model_name)
-                    extracted_data = extracted_raw
-
                     temp_history = history.copy()
                     temp_history.append({"role": "user", "content": user_message})
 
@@ -89,25 +85,32 @@ class ChatPipelineService:
                         (data.get('pref_state') or {}).get('preferences')
                         if isinstance(data.get('pref_state'), dict) else None
                     )
+                    extracted_raw = preference_service.extract_preferences(
+                        history, user_message, model_name, base_preferences=base_prefs
+                    )
+                    extracted_data = extracted_raw
 
                     # 跨輪引導進度（問過幾次、問過哪些維度）。與偏好一樣隨
                     # pref_state 往返，不再只靠 6 則歷史視窗反推。
                     guide_state = conversation_guide.clean_guide_state(data.get('pref_state'))
                     guide_state['user_turns'] += 1
                     fresh_prefs = (extracted_data or {}).get("preferences") or {}
-                    merged_prefs = ChatPipelineService._merge_preferences(base_prefs, fresh_prefs)
+                    merged_prefs = ChatPipelineService._merge_preferences(
+                        base_prefs, fresh_prefs,
+                        (extracted_data or {}).get('replace_dimensions'),
+                        (extracted_data or {}).get('remove_preferences'),
+                    )
 
                     # 「都可以／沒特別需求」這類明確回答也計入維度：
                     # 使用者明說沒偏好，等同回答了該維度，百分比要照實反映
                     merged_prefs = conversation_guide.apply_no_preference_answers(
                         temp_history, merged_prefs
                     )
-                    extracted_data = {"preferences": merged_prefs}
+                    extracted_data = {**(extracted_raw or {}), "preferences": merged_prefs}
 
-                    all_keywords = []
-                    for vals in merged_prefs.values():
-                        all_keywords.extend(v for v in vals if v != '不限')
-                    matched_keywords = list(set(matched_keywords + all_keywords))
+                    matched_keywords = preference_service.positive_keywords(merged_prefs)
+                    if extracted_data.get('dialogue_act') == 'recommend':
+                        force_recommend = True
 
                     # 每一輪都重算五維向量：使用者的回答會即時改變推薦的權重，
                     # 不必等到按下推薦按鈕才知道自己的回答造成什麼影響
@@ -199,22 +202,6 @@ class ChatPipelineService:
                                | set(guide_state.get('asked_dimensions') or [])),
                     )
 
-                    # 邀請按推薦按鈕：固定一句話 + 固定選項，不需要生成，
-                    # 直接回覆並結束這一輪（交給模型寫會被對話歷史帶偏）
-                    if guide_kind == conversation_guide.KIND_INVITE:
-                        yield from ChatPipelineService._fixed_reply(
-                            READY_TO_RECOMMEND_MESSAGE, READY_TO_RECOMMEND_OPTIONS)
-                        return
-
-                    # 確認需求：問句與選項都來自設定檔，同樣不經過模型
-                    if guide_kind == conversation_guide.KIND_CONFIRM:
-                        question = conversation_guide.confirmation_question_for_label(focus)
-                        if question:
-                            yield from ChatPipelineService._fixed_reply(
-                                question,
-                                conversation_guide.quick_options_for_label(focus))
-                            return
-
             # 推薦（出卡片）只發生在使用者按下「直接推薦咖啡廳」按鈕的那一輪
             cafe_context = ""
             cafes = []
@@ -273,18 +260,36 @@ class ChatPipelineService:
                     # 拿不到資料就換一版指令，明確禁止模型編造店名與地址
                     guide_instruction = _POST_REC_NO_DATA
 
-            # 有卡片時：店名交給卡片呈現，不把知識庫店名餵給 LLM，並改用「卡片模式」格式（不准講店名）
+            # 卡片顯示店名；模型仍需實際店家資料，才能判斷哪些需求有依據。
             has_cards = bool(cafes)
             extracted_prefs = extracted_data.get("preferences") if extracted_data else None
+
+            # 出卡片這一輪核對需求覆蓋：使用者講得出口的條件遠多於系統認得的，
+            # 「水菸」這種需求會一路穿過硬過濾與標籤比對，最後被放寬機制補滿名額，
+            # 推出一批毫不相干的店。模型看到的店家清單在零命中與完美命中時
+            # 長得一模一樣，不先告訴它，它沒有任何線索可以判斷。
+            coverage = None
+            if has_cards:
+                from services import cafe_facts as _cafe_facts
+                coverage = _cafe_facts.classify_conditions(extracted_prefs)
+                debug_logger.log_coverage(coverage)
+                if coverage.get('uncovered'):
+                    # 讓前端／測試驗證得到這一輪有哪些條件沒有著落
+                    yield json.dumps({"coverage": {
+                        "uncovered": coverage['uncovered'],
+                        "verifiable": [v['text'] for v in coverage.get('verifiable') or []],
+                    }}, ensure_ascii=False) + "\n"
+
             model_name = get_selected_model() or get_default_model()
             prompt_text = ai_service.build_prompt(
                 user_message=user_message,
                 history=history,
                 is_cafe_related=is_cafe_related,
-                cafe_context=("" if has_cards else cafe_context),
+                cafe_context=cafe_context,
                 guide_instruction=guide_instruction,
                 extracted_preferences=extracted_prefs,
-                cards_mode=has_cards
+                cards_mode=has_cards,
+                coverage=coverage
             )
 
             user_id = None
@@ -335,7 +340,7 @@ class ChatPipelineService:
                             {"response": ChatPipelineService._fallback_reply(guide_instruction)},
                             ensure_ascii=False
                         ) + "\n"
-                    elif expected_options_line and "[QUICK_OPTIONS]" not in generated_text:
+                    if expected_options_line and "[QUICK_OPTIONS]" not in generated_text:
                         yield json.dumps(
                             {"response": "\n\n" + expected_options_line},
                             ensure_ascii=False
@@ -419,7 +424,9 @@ class ChatPipelineService:
     @staticmethod
     def _fallback_reply(guide_instruction):
         """模型回空白時的兜底句子（依當下狀態給合理回應）。"""
-        kind, _ = conversation_guide.classify_instruction(guide_instruction)
+        kind, focus = conversation_guide.classify_instruction(guide_instruction)
+        if kind == conversation_guide.KIND_CONFIRM:
+            return conversation_guide.confirmation_question_for_label(focus)
         return {
             '邀請後閒聊': '好的，隨時可以按下方的「直接推薦咖啡廳」按鈕。',
             '邀請按鈕': '需求我大致掌握了，可以按下方的「直接推薦咖啡廳」按鈕。',
@@ -483,15 +490,19 @@ class ChatPipelineService:
         return clean
 
     @staticmethod
-    def _merge_preferences(base, fresh):
+    def _merge_preferences(base, fresh, replace_dimensions=None, remove_preferences=None):
         """
         合併累積偏好與本輪萃取結果（去重、保序、每維度上限 6）。
         若某維度原本是「不限」而本輪出現真實偏好，以真實偏好取代。
+        有本輪原文佐證的完整更新可取代該維度，支援取消及改口。
         """
         merged = {}
         for dim in ChatPipelineService._ALLOWED_PREF_DIMS:
             vals = []
-            for v in (base.get(dim) or []) + (fresh.get(dim) or []):
+            previous = [] if dim in (replace_dimensions or []) else (base.get(dim) or [])
+            removed = (remove_preferences or {}).get(dim) or []
+            previous = [value for value in previous if value not in removed]
+            for v in previous + [v for v in (fresh.get(dim) or []) if v not in removed]:
                 if isinstance(v, str) and v and v not in vals:
                     vals.append(v)
             real = [v for v in vals if v != '不限']
@@ -525,9 +536,7 @@ class ChatPipelineService:
                 quiz_scores, temp_history, preferences
             )
             # 已表達的偏好關鍵字：與店家標籤混合排序，補足 GNN 對當輪需求的反應度
-            pref_keywords = []
-            for vals in (preferences or {}).values():
-                pref_keywords.extend(v for v in vals if isinstance(v, str) and v != '不限')
+            pref_keywords = preference_service.positive_keywords(preferences)
 
             # 硬條件的合格名單從資料庫取（tags 表 + 營業時間），
             # 不是拿評論抽出來的 review_tags 比對——那份 56 家只認得 2 家寵物友善

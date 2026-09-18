@@ -53,6 +53,8 @@ export function useChatLogic(user, navigate) {
   });
   const abortControllerRef = useRef(null);
   const currentChatRef = useRef(currentChat);
+  const chatProgressRef = useRef(chatProgress);
+  const recommendGateRef = useRef(recommendGate);
 
   const progressPercent = Math.min(
     100,
@@ -64,9 +66,13 @@ export function useChatLogic(user, navigate) {
 
   const resetProgress = useCallback((base = 0, dims = 0, target = DEFAULT_PREF_TARGET) => {
     const safeTarget = target || DEFAULT_PREF_TARGET;
-    setChatProgress({ base, dims, target: safeTarget });
+    const nextProgress = { base, dims, target: safeTarget };
+    chatProgressRef.current = nextProgress;
+    setChatProgress(nextProgress);
     const needs = Math.max(1, Math.ceil(safeTarget / 2));
-    setRecommendGate({ ready: dims >= needs, needs });
+    const nextGate = { ready: dims >= needs, needs };
+    recommendGateRef.current = nextGate;
+    setRecommendGate(nextGate);
   }, []);
 
   const setNormalizedCurrentChat = useCallback((updater) => {
@@ -116,17 +122,19 @@ export function useChatLogic(user, navigate) {
     } catch (e) {
       logger.error('Failed to save session:', e);
     }
-  }, [user?.isGuest, navigate]);
+  }, [user?.isGuest, navigate, setNormalizedCurrentChat]);
 
   const executeChatStream = useCallback(async (messageText, options = {}) => {
-    const { customTitle = null, hiddenPrompt = false, isQuizResult = false, replaceMsgIdx = null, forceRecommend = false } = options;
+    const { customTitle = null, hiddenPrompt = false, isQuizResult = false, replaceMsgIdx = null, forceRecommend = false, quizScores: suppliedQuizScores } = options;
     if (isTyping) return;
     if (!messageText.trim()) return;
     const isHidden = hiddenPrompt;
 
     // 心理測驗結果進場：偏好掌握度從 50% 起跳
     if (isQuizResult) {
-      setChatProgress({ base: 50, dims: 0 });
+      const nextProgress = { ...chatProgressRef.current, base: 50, dims: 0 };
+      chatProgressRef.current = nextProgress;
+      setChatProgress(nextProgress);
     }
     
     setIsTyping(true);
@@ -150,7 +158,11 @@ export function useChatLogic(user, navigate) {
       ...currentChatRef.current,
       // 測驗流程進場：把 50% 起始值記進對話狀態，重開對話也能還原
       ...(isQuizResult
-        ? { pref_state: { ...(currentChatRef.current.pref_state || {}), progress_base: 50 } }
+        ? { pref_state: {
+          ...(currentChatRef.current.pref_state || {}),
+          progress_base: 50,
+          ...(suppliedQuizScores ? { quiz_scores: suppliedQuizScores } : {}),
+        } }
         : {}),
       title: chatTitle,
       messages: nextMessages
@@ -206,10 +218,10 @@ export function useChatLogic(user, navigate) {
     try {
       // 「直接推薦」時附上最近一次心理測驗五維分數，作為 GNN 推薦的基礎向量；
       // 並收集本對話已推薦過的店家 id，讓「換一批」真的換一批
-      let quizScores;
+      let quizScores = currentChatRef.current.pref_state?.quiz_scores;
       let excludeCafeIds;
       // 測驗結果進場那輪也帶上分數，後端終端除錯輸出才看得到原始五維
-      if (forceRecommend || isQuizResult) {
+      if (!quizScores && (forceRecommend || isQuizResult)) {
         try {
           quizScores = JSON.parse(localStorage.getItem('latestQuizScores') || 'null') || undefined;
         } catch {
@@ -263,16 +275,24 @@ export function useChatLogic(user, navigate) {
           //   沒測驗 → base 0、目標 5 維（系統對他一無所知，要問滿）
           if (parsed.progress_target) streamTarget = parsed.progress_target;
           if (parsed.progress_base !== undefined) streamBase = parsed.progress_base;
-          setChatProgress((prev) => ({
-            base: parsed.progress_base !== undefined ? parsed.progress_base : prev.base,
-            dims: Math.max(prev.dims, parsed.progress_dims),
-            target: parsed.progress_target || prev.target,
-          }));
+          const prevProgress = chatProgressRef.current;
+          const nextDims = Math.max(prevProgress.dims, parsed.progress_dims);
+          const nextProgress = {
+            base: parsed.progress_base !== undefined ? parsed.progress_base : prevProgress.base,
+            dims: nextDims,
+            target: parsed.progress_target || prevProgress.target,
+          };
+          chatProgressRef.current = nextProgress;
+          setChatProgress(nextProgress);
           if (parsed.recommend_ready !== undefined) {
-            setRecommendGate((prev) => ({
-              ready: parsed.recommend_ready,
-              needs: parsed.recommend_needs || prev.needs,
-            }));
+            const prevGate = recommendGateRef.current;
+            const needs = parsed.recommend_needs || prevGate.needs;
+            const nextGate = {
+              ready: Boolean(parsed.recommend_ready) || nextDims >= needs,
+              needs,
+            };
+            recommendGateRef.current = nextGate;
+            setRecommendGate(nextGate);
           }
         } else if (parsed.pref_state) {
           // 後端合併後的累積偏好：掛在對話物件上，隨對話儲存、重開可還原

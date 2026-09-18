@@ -29,3 +29,20 @@ def test_api_cafes_route(client):
     assert response.status_code == 200
     data = response.get_json()
     assert isinstance(data, list)
+
+
+def test_chat_preserves_guest_quiz_scores_after_login(client):
+    from models import User
+    with app.app_context():
+        db.session.add(User(email='quiz-handoff@example.test', name='Quiz User', picture=''))
+        db.session.commit()
+    with client.session_transaction() as session:
+        session['user_email'] = 'quiz-handoff@example.test'
+    scores = {'work': 10, 'env': 8, 'social': 2, 'taste': 4, 'cp': 6}
+    response = client.post('/api/chat/sessions', json={
+        'title': 'Quiz consultation', 'messages': [{'role': 'ai', 'content': 'Hello'}],
+        'pref_state': {'progress_base': 50, 'quiz_scores': scores},
+    })
+    assert response.status_code == 200
+    saved = client.get('/api/chat/sessions/' + response.get_json()['id']).get_json()
+    assert saved['pref_state']['quiz_scores'] == scores

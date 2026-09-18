@@ -1,15 +1,15 @@
 .cafe-card-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-top: 12px;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
 }
 
 .cafe-card {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   border: 1px solid color-mix(in srgb, var(--text-main) 30%, transparent);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   background-color: color-mix(in srgb, var(--text-main) 4%, transparent);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -56,12 +56,12 @@
   padding: 10px 12px 10px 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .cafe-card-name {
   font-weight: bold;
-  font-size: 1rem;
+  font-size: var(--text-base);
   color: var(--text-main);
   margin-bottom: 2px;
 }
@@ -76,7 +76,7 @@
 }
 
 .cafe-card-hours {
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   opacity: 0.85;
 }
 
@@ -84,7 +84,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 .cafe-card-tag {
@@ -105,7 +105,7 @@
 .cafe-card-link {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-1);
   font-size: 0.82rem;
   color: var(--text-main);
   text-decoration: underline;
