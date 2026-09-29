@@ -30,3 +30,4 @@ docs/
 assets/
 tests/
 SYSTEM_HEALTHCHECK_FIX_PLAN.md
+docker/ollama-transfer/

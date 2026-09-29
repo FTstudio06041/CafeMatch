@@ -8,7 +8,8 @@ const BACKEND = process.env.BACKEND_ORIGIN || 'http://127.0.0.1:5000'
 // 否則會回「Blocked request. This host is not allowed.」
 // 多個網域用逗號分隔寫在 ALLOWED_HOSTS 環境變數即可。
 const allowedHosts = [
-  'cafematch.sumo0711.top',
+  'cafematch.net',
+  'www.cafematch.net',
   ...(process.env.ALLOWED_HOSTS || '').split(',').map(h => h.trim()).filter(Boolean),
 ]
 

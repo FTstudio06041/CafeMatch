@@ -1,5 +1,5 @@
 # 1. 使用輕量級的 Python 映像
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 # 2. 設定工作目錄
 WORKDIR /app
@@ -23,4 +23,4 @@ EXPOSE 5000
 
 # 7. 啟動指令 (使用 Gunicorn 作為生產環境的伺服器，比 Flask 自帶的更穩定)
 # 如果你還沒安裝 gunicorn，記得把它加進 requirements.txt
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--timeout", "300", "app:app"]

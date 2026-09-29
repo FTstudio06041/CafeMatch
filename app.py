@@ -55,6 +55,9 @@ app.config['GOOGLE_MAPS_API_KEY'] = os.getenv('GOOGLE_MAPS_API_KEY')
 local_db_uri = 'mysql+pymysql://root:@localhost/cafematch'
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DB_URI', local_db_uri)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# MariaDB wait_timeout 為 600 秒，閒置連線會被伺服器切斷；
+# 取用前先 ping、並在逾時前回收，避免 "MySQL server has gone away"
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True, 'pool_recycle': 280}
 
 # 啟用 CORS
 cors_origins = [o.strip() for o in os.getenv('CORS_ORIGINS', os.getenv('FRONTEND_URL', 'http://localhost:5173')).split(',') if o.strip()]
