@@ -1,5 +1,5 @@
-import React, { createContext, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useContext } from 'react';
 import { AuthContext } from './AuthContext';
 import { useChatLogic } from '../hooks/useChatLogic';
 
@@ -7,9 +7,7 @@ const ChatContext = createContext(null);
 
 export const ChatProvider = ({ children }) => {
   const { user } = useContext(AuthContext);
-  const navigate = useNavigate();
-  
-  const chatLogic = useChatLogic(user, navigate);
+  const chatLogic = useChatLogic(user);
 
   return (
     <ChatContext.Provider value={chatLogic}>

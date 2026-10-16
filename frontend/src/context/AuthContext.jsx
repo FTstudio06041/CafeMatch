@@ -52,13 +52,11 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuthStatus = useCallback(async () => {
     const handleGuestFallback = () => {
-      // 訪客與未登入都算「沒有身分」，與上一個登入者不同就會清掉他的暫存
+      // 首頁公開，未登入就是 user = null（不再有「訪客模式」）。
+      // 沒有身分與上一個登入者不同，一樣要清掉他的暫存
       syncPersonalCache('');
-      if (localStorage.getItem('guestMode') === 'true') {
-        setUser({ isGuest: true, name: "訪客", email: "", picture: "", is_admin: false, is_logged_in: true });
-      } else {
-        setUser(null);
-      }
+      localStorage.removeItem('guestMode');
+      setUser(null);
     };
 
     try {
@@ -97,14 +95,11 @@ export const AuthProvider = ({ children }) => {
     window.location.href = `${API_BASE_URL}/logout`;
   };
 
-  const loginAsGuest = () => {
-    localStorage.setItem('guestMode', 'true');
-    setUser({ isGuest: true, name: "訪客", email: "", picture: "", is_admin: false, is_logged_in: true });
-    window.location.href = '/chat';
-  };
+  // 改名、換頭像後就地更新，不必整頁重新整理
+  const updateUser = (patch) => setUser((prev) => (prev ? { ...prev, ...patch } : prev));
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, loginAsGuest, API_BASE_URL }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout, updateUser, API_BASE_URL }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,56 +1,49 @@
-import { useContext, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { useContext, useEffect, lazy } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthContext, AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { ChatProvider } from './context/ChatContext';
 import './App.css';
 import GlobalAnnouncementModal from './components/GlobalAnnouncementModal';
-import MainLayout from './layouts/MainLayout';
+import AppShell from './components/layout/AppShell';
 
 // 延遲載入 (Lazy Loading) 頁面元件
-const LandingPage = lazy(() => import('./pages/LandingPage'));
-const ChatPage = lazy(() => import('./pages/ChatPage'));
-const CommunityPage = lazy(() => import('./pages/CommunityPage'));
-const ExplorePage = lazy(() => import('./pages/ExplorePage'));
-const ProfilePage = lazy(() => import('./pages/ProfilePage'));
-const QuizPage = lazy(() => import('./pages/QuizPage'));
+const loadHomePage = () => import('./pages/HomePage');
+const loadQuizPage = () => import('./pages/QuizPage');
+const HomePage = lazy(loadHomePage);
+const QuizPage = lazy(loadQuizPage);
 const AdminPage = lazy(() => import('./pages/AdminPage'));
-const PostViewPage = lazy(() => import('./pages/PostViewPage'));
-
-
-function MainLayoutWrapper() {
-  return (
-    <MainLayout>
-      <Outlet />
-    </MainLayout>
-  );
-}
 
 function AppContent() {
   const { user, isLoading } = useContext(AuthContext);
+
+  // 首頁與測驗頁在閒置時先載好：切頁動畫才不會卡在「載入頁面中」
+  useEffect(() => {
+    const preload = () => { loadHomePage(); loadQuizPage(); };
+    if ('requestIdleCallback' in window) {
+      const id = window.requestIdleCallback(preload, { timeout: 3000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const timer = setTimeout(preload, 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   if (isLoading) return <div style={{ padding: '2rem' }}>載入中...</div>;
 
   return (
     <Router>
       <ChatProvider>
-      <Suspense fallback={<div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100dvh', color: 'var(--text-color)' }}>載入頁面中...</div>}>
         <Routes>
-          <Route path="/" element={!user ? <LandingPage /> : <Navigate to="/chat" />} />
-          
-          {/* 需要 MainLayout 的路由群組 */}
-          <Route element={user ? <MainLayoutWrapper /> : <Navigate to="/" />}>
-            <Route path="/post/:id" element={<PostViewPage />} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/community" element={<CommunityPage />} />
-            <Route path="/explore" element={<ExplorePage />} />
-            <Route path="/profile" element={<ProfilePage />} />
+          {/* 首頁公開：不登入也能看地圖、店家、和 AI 聊天 */}
+          <Route element={<AppShell />}>
+            <Route path="/" element={<HomePage />} />
             <Route path="/quiz" element={<QuizPage />} />
-            <Route path="/admin" element={user?.is_admin ? <AdminPage /> : <Navigate to="/" />} />
+            <Route path="/admin" element={user?.is_admin ? <AdminPage /> : <Navigate to="/" replace />} />
           </Route>
+          {/* 舊網址（/chat、/explore、/community、/profile、/post/:id…）一律回首頁 */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </Suspense>
-      <GlobalAnnouncementModal />
+        <GlobalAnnouncementModal />
       </ChatProvider>
     </Router>
   );

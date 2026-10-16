@@ -1,10 +1,10 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
-import CafeCard from './chat/CafeCard';
+import { MapPin } from 'lucide-react';
 import { THINKING_TEXTS } from '../utils/thinkingTexts';
 import { CHAT_UI_TEXTS } from '../utils/constants';
 
-export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handleRetry, handleFeedback, isDebugMode, onQuickReply }) {
+export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handleRetry, handleFeedback, isDebugMode, onQuickReply, onSelectCafe }) {
   const role = msg?.role === 'user' ? 'user' : 'ai';
   let content = msg?.content ?? msg?.text ?? '';
   let safeContent = typeof content === 'string' ? content : String(content ?? '');
@@ -79,9 +79,21 @@ export default function MessageBubble({ msg, idx, isTyping, isLastMessage, handl
             {!safeContent && role === 'ai' && (
                <div className="message-text" style={{ color: '#aaa', fontStyle: 'italic' }}>生成中斷或無回應</div>
             )}
+            {/* 推薦的店已經標在地圖上、也排進「為你推薦」，這裡只放可點的店名 */}
             {role === 'ai' && Array.isArray(msg?.cafes) && msg.cafes.length > 0 && (
-              <div className="cafe-card-list">
-                {msg.cafes.map((c) => <CafeCard key={c.id} cafe={c} />)}
+              <div className="chat-cafe-chips">
+                {msg.cafes.map((c, i) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className="chat-cafe-chip"
+                    onClick={() => onSelectCafe && onSelectCafe(c.id)}
+                  >
+                    <span className="chat-cafe-chip-num">{i + 1}</span>
+                    <span className="chat-cafe-chip-name">{c.name}</span>
+                    <MapPin size={14} aria-hidden="true" />
+                  </button>
+                ))}
               </div>
             )}
             {role === 'ai' && quickOptions.length > 0 && isLastMessage && !isTyping && (

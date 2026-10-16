@@ -1,6 +1,6 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { queueQuizConsultation, resumeQuizConsultation } from '../src/utils/quizHandoff.js';
+import { queueQuizConsultation, resumeQuizConsultation, takeQueuedQuizConsultation } from '../src/utils/quizHandoff.js';
 
 const result = {
   result: { title: 'Work', inner_voice: 'Focus', profile: 'Quiet', cafe_match: 'Desk' },
@@ -51,4 +51,15 @@ test('a newer consultation replaces a pending result', () => {
   queueQuizConsultation({ ...result, scores: { ...result.scores, work: 12 } });
   assert.equal(sessionStorage.getItem('pendingQuizConsultation'), null);
   assert.equal(JSON.parse(localStorage.getItem('targetQuizContext')).scores.work, 12);
+});
+
+test('homepage takes a queued consultation exactly once and keeps the scores for recommendations', () => {
+  queueQuizConsultation(result);
+  const first = takeQueuedQuizConsultation();
+  assert.match(first.promptText, /【咖啡人格】Work/);
+  assert.match(first.promptText, /工作讀書：10/);
+  assert.deepEqual(first.quizScores, result.scores);
+  assert.deepEqual(JSON.parse(localStorage.getItem('latestQuizScores')), result.scores);
+  // StrictMode 會讓 effect 跑兩次：第二次不能再送一次
+  assert.equal(takeQueuedQuizConsultation(), null);
 });

@@ -1,0 +1,133 @@
+/* 回報問題 / 建議彈窗（原本寄放在 Sidebar.css，側欄拿掉後獨立出來） */
+.bug-report-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  background: rgba(43, 27, 8, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+  animation: bugFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.bug-report-modal {
+  background: rgba(255, 253, 250, 0.88);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(139, 90, 43, 0.15);
+  border-radius: var(--radius-2xl);
+  width: 90%;
+  max-width: 440px;
+  padding: 28px;
+  box-shadow: 0 20px 50px rgba(43, 27, 8, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: bugModalUp 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.bug-report-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--brand-secondary);
+}
+.bug-report-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.bug-report-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.bug-report-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.bug-report-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(139, 90, 43, 0.8);
+}
+.bug-report-select {
+  padding: 10px 14px;
+  border: 1.5px solid rgba(139, 90, 43, 0.15);
+  border-radius: var(--radius-lg);
+  font-size: 0.92rem;
+  color: var(--brand-secondary-text);
+  background: #fffdfa;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.bug-report-select:focus {
+  border-color: var(--brand-secondary);
+}
+.bug-report-textarea {
+  padding: 12px 14px;
+  border: 1.5px solid rgba(139, 90, 43, 0.15);
+  border-radius: var(--radius-lg);
+  font-size: 0.92rem;
+  line-height: var(--leading-normal);
+  color: var(--brand-secondary-text);
+  background: #fffdfa;
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+  transition: all 0.25s ease;
+}
+.bug-report-textarea:focus {
+  border-color: var(--brand-secondary);
+  box-shadow: 0 0 8px rgba(139, 90, 43, 0.05);
+}
+.bug-report-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: 6px;
+}
+.bug-report-btn {
+  padding: 10px 20px;
+  border-radius: var(--radius-lg);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+.bug-report-btn.cancel {
+  background: rgba(139, 90, 43, 0.08);
+  color: var(--brand-secondary-text);
+}
+.bug-report-btn.cancel:hover {
+  background: rgba(139, 90, 43, 0.14);
+}
+.bug-report-btn.submit {
+  background: var(--brand-secondary);
+  color: #fffdfa;
+  box-shadow: 0 4px 12px rgba(139, 90, 43, 0.25);
+}
+.bug-report-btn.submit:hover:not(:disabled) {
+  background: var(--brand-secondary-dark);
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 16px rgba(139, 90, 43, 0.35);
+}
+.bug-report-btn.submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+@keyframes bugFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes bugModalUp {
+  from { transform: scale(0.92) translateY(30px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}

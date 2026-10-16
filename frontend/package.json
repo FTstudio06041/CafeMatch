@@ -14,6 +14,7 @@
     "cropperjs": "^2.1.1",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.17.0",
+    "maplibre-gl": "^5.24.0",
     "radix-ui": "^1.4.3",
     "react": "^19.2.5",
     "react-cropper": "^2.3.3",
