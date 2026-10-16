@@ -38,6 +38,19 @@ def test_only_the_missing_column_is_touched():
     assert 'cafes.google_place_id' in added
 
 
+def test_init_db_also_adds_homepage_columns():
+    """init-db 用 sync_all_columns，首頁改版的新欄位也要一起對齊。"""
+    from utils.schema_sync import HOMEPAGE_COLUMNS, sync_all_columns
+
+    engine = sa.create_engine('sqlite:///:memory:')
+    conn = engine.connect()
+    for table in {t for t, _, _ in ADHOC_COLUMNS + HOMEPAGE_COLUMNS}:
+        conn.execute(sa.text(f'CREATE TABLE `{table}` (id INTEGER PRIMARY KEY)'))
+    added = sync_all_columns(conn)
+    assert {f'{t}.{c}' for t, c, _ in HOMEPAGE_COLUMNS} <= set(added)
+    assert sync_all_columns(conn) == []
+
+
 def test_absent_table_is_skipped_instead_of_failing():
     """資料表還沒建出來時直接跳過，不能整個炸掉。"""
     engine = sa.create_engine('sqlite:///:memory:')

@@ -39,10 +39,9 @@ def authorize():
     frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173/')
     
     if is_new_user:
-        # 新用戶強制先完成心理測驗，才能開始使用聊天
+        # 新用戶先帶去做心理測驗（可略過），測驗結果是個人化推薦的基礎
         return redirect(f'{frontend_url}quiz?welcome=true')
-    else:
-        return redirect(f'{frontend_url}chat')
+    return redirect(frontend_url)
     
 @auth_bp.route('/logout')
 def logout():

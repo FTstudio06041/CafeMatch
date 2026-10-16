@@ -24,8 +24,21 @@ ADHOC_COLUMNS = (
     ('chat_sessions', 'pref_state', 'JSON NULL'),
 )
 
+# 2026-10 首頁改版新增的欄位（遷移 c3e8a1d4f7b2）：
+#   cafes.lat / lng            首頁地圖的座標
+#   community_posts.rating     有星等的店家貼文 = 店家評論
+#   community_posts.updated_at 評論編輯時間
+#   community_notes.cafe_id    綁定店家的便利貼 = 24 小時現況回報
+HOMEPAGE_COLUMNS = (
+    ('cafes', 'lat', 'DOUBLE NULL'),
+    ('cafes', 'lng', 'DOUBLE NULL'),
+    ('community_posts', 'rating', 'TINYINT NULL'),
+    ('community_posts', 'updated_at', 'DATETIME NULL'),
+    ('community_notes', 'cafe_id', 'INT NULL'),
+)
 
-def sync_adhoc_columns(bind):
+
+def sync_columns(bind, columns):
     """逐欄檢查再新增，重複執行不會有副作用。
 
     回傳這次真的加了哪些欄位（`表.欄位` 字串）。跟舊版的差別是不再吞例外：
@@ -34,7 +47,7 @@ def sync_adhoc_columns(bind):
     inspector = sa.inspect(bind)
     existing_tables = set(inspector.get_table_names())
     added = []
-    for table, column, ddl in ADHOC_COLUMNS:
+    for table, column, ddl in columns:
         if table not in existing_tables:
             continue
         if column in {c['name'] for c in inspector.get_columns(table)}:
@@ -42,3 +55,12 @@ def sync_adhoc_columns(bind):
         bind.execute(sa.text(f'ALTER TABLE `{table}` ADD COLUMN `{column}` {ddl}'))
         added.append(f'{table}.{column}')
     return added
+
+
+def sync_adhoc_columns(bind):
+    return sync_columns(bind, ADHOC_COLUMNS)
+
+
+def sync_all_columns(bind):
+    """init-db 用：所有清單一次對齊。"""
+    return sync_columns(bind, ADHOC_COLUMNS + HOMEPAGE_COLUMNS)

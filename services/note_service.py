@@ -9,7 +9,11 @@ class NoteService:
     @staticmethod
     def get_notes(current_user=None):
         twenty_four_hours_ago = get_utc_now() - timedelta(hours=24)
-        notes = CommunityNote.query.filter(CommunityNote.created_at >= twenty_four_hours_ago).order_by(CommunityNote.created_at.desc()).all()
+        # 綁定 cafe_id 的是店家現況回報（cafe_report_service），不屬於全站便利貼
+        notes = CommunityNote.query.filter(
+            CommunityNote.created_at >= twenty_four_hours_ago,
+            CommunityNote.cafe_id.is_(None),
+        ).order_by(CommunityNote.created_at.desc()).all()
         result = []
         if not notes:
             return result
@@ -47,7 +51,7 @@ class NoteService:
 
     @staticmethod
     def create_or_update_note(user, content, color_index):
-        existing_note = CommunityNote.query.filter_by(user_id=user.id).first()
+        existing_note = CommunityNote.query.filter_by(user_id=user.id, cafe_id=None).first()
         if existing_note:
             existing_note.content = content
             existing_note.color_index = color_index

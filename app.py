@@ -86,7 +86,7 @@ oauth.register(
 # --- 匯入模型與註冊路由 ---
 import models
 from routes import register_blueprints
-from utils.schema_sync import sync_adhoc_columns
+from utils.schema_sync import sync_all_columns
 
 register_blueprints(app)
 
@@ -97,7 +97,7 @@ def init_db():
 
     # 這些欄位歷史上是在這裡用裸 ALTER TABLE 加的，Alembic 並不知道它們存在。
     # 清單已移到 utils/schema_sync.py，與遷移共用同一份，兩邊不會漂開。
-    added = sync_adhoc_columns(db.session.connection())
+    added = sync_all_columns(db.session.connection())
     db.session.commit()
     for name in added:
         print(f'[INIT] 已新增欄位 {name}')

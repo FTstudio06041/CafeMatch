@@ -13,7 +13,10 @@ class Cafes(db.Model):
     image = db.Column(db.Text)
     google_place_id = db.Column(db.String(255))
     google_photo_attribution = db.Column(db.Text)
-    
+    # 首頁地圖的座標，由 scripts/backfill_cafe_coords.py 依 google_place_id 回填
+    lat = db.Column(db.Float)
+    lng = db.Column(db.Float)
+
     tags = db.relationship('Tags', secondary='cafe_tags', backref='cafes')
     hours = db.relationship('OperatingHours', backref='cafe')
 
