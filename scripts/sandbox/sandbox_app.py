@@ -1,0 +1,65 @@
+# -*- coding: utf-8 -*-
+"""
+沙盒用的 Flask 進入點：設定好沙盒環境變數後才載入 app.py，
+另外加一個只在沙盒存在的 /sandbox-login，免 Google 直接登入。
+
+    python -m flask --app scripts/sandbox/sandbox_app.py db upgrade
+    python -m flask --app scripts/sandbox/sandbox_app.py run --port 5001
+"""
+import os
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+from sandbox_config import (  # noqa: E402
+    FRONTEND_URL, HOST, SANDBOX_ROOT, SUFFIX, die, prod_env, sandbox_names,
+)
+
+_, SB_DB, _, SB_URI = sandbox_names()
+
+# 沿用正式站的非機密設定（Ollama、地圖金鑰等），蓋掉所有會指向正式站的設定
+for k, v in prod_env().items():
+    if v is not None:
+        os.environ[k] = v
+os.environ.update({
+    'DB_URI': SB_URI,
+    'SECRET_KEY': 'cafematch-sandbox-only',
+    'FLASK_ENV': 'development',
+    'FRONTEND_URL': FRONTEND_URL,
+    'CORS_ORIGINS': FRONTEND_URL.rstrip('/'),
+})
+for k in ('GOOGLE_CALLBACK_URL', 'TEST_DB_URI'):
+    os.environ.pop(k, None)
+
+sys.path.insert(0, SANDBOX_ROOT)
+os.chdir(SANDBOX_ROOT)
+from flask import redirect, request, session  # noqa: E402
+
+from app import app  # noqa: E402
+from database import db  # noqa: E402
+from models import User  # noqa: E402
+
+# 最後一道保險：真的連到沙盒庫才放行
+if SUFFIX not in app.config['SQLALCHEMY_DATABASE_URI']:
+    die('沙盒沒有連到 _sandbox 資料庫，停止。')
+
+print(f'[沙盒] 資料庫：{SB_DB}　前端：{FRONTEND_URL}')
+
+
+@app.route('/sandbox-login')
+def sandbox_login():
+    """沙盒專用：直接以指定 email 登入（不存在就建立）。只在本機 127.0.0.1 可連。"""
+    if request.remote_addr not in ('127.0.0.1', '::1'):
+        return '只限本機', 403
+    email = (request.args.get('email') or 'tester@sandbox.local').strip()
+    user = User.query.filter_by(email=email).first()
+    if not user:
+        user = User(email=email, name='沙盒測試帳號')
+        db.session.add(user)
+        db.session.commit()
+    session['user_email'] = email
+    return redirect(FRONTEND_URL + (request.args.get('next') or 'passport').lstrip('/'))
+
+
+if __name__ == '__main__':
+    app.run(host=HOST, port=5001, debug=False)
