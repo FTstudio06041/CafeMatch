@@ -48,3 +48,7 @@ export const CHAT_WINDOW_UI_TEXTS = {
   inputPlaceholder: '輸入訊息...',
   send: '送出'
 };
+
+export const LANDING_UI_TEXTS = {
+  loginError: 'Google 登入失敗，請重新登入。',
+};

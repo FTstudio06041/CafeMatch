@@ -18,12 +18,26 @@ def login():
 
 @auth_bp.route('/auth/callback')
 def authorize():
-    token = oauth.google.authorize_access_token()
-    user_info = token.get('userinfo')
-    
-    google_email = user_info['email']
-    google_name = user_info['name']
-    google_picture = user_info['picture']
+    frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173/')
+
+    # Google 回呼失敗不能讓使用者看到 500。常見原因：
+    # - 從 www.cafematch.net 開始登入，但回呼網址是 cafematch.net，
+    #   兩個網域的 session cookie 不共用 → state 對不上（MismatchingStateError）
+    # - 在 callback 頁按重新整理／上一頁，同一個 code 被重複兌換（invalid_grant）
+    # - 使用者在 Google 頁面按取消（帶 error=access_denied 回來）
+    try:
+        token = oauth.google.authorize_access_token()
+        user_info = token.get('userinfo') or {}
+        google_email = user_info['email']
+    except Exception as e:
+        current_app.logger.warning(
+            'Google OAuth callback 失敗 (host=%s, error=%s): %r',
+            request.host, request.args.get('error'), e,
+        )
+        return redirect(f'{frontend_url}?login_error=1')
+
+    google_name = user_info.get('name') or google_email.split('@')[0]
+    google_picture = user_info.get('picture')
 
     user = User.query.filter_by(email=google_email).first()
     is_new_user = False
@@ -36,8 +50,8 @@ def authorize():
 
     session['user_email'] = google_email
     AdminService.log_action(google_email, '登入', '新用戶' if is_new_user else '既有用戶')
-    frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173/')
-    
+
+
     if is_new_user:
         # 新用戶強制先完成心理測驗，才能開始使用聊天
         return redirect(f'{frontend_url}quiz?welcome=true')
