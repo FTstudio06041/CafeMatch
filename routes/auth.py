@@ -118,7 +118,7 @@ def update_shop_state(user):
         cafe_id = data.get('cafe_id')
         action_type = data.get('type')
 
-        if not isinstance(cafe_id, int) or action_type not in ('fav', 'visited'):
+        if not isinstance(cafe_id, int) or action_type not in ('fav', 'visited', 'want'):
             return jsonify({"success": False, "message": "參數錯誤"}), 400
 
         result = passport_service.toggle_shop_state(user, cafe_id, action_type, data.get('source'))

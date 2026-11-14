@@ -4,23 +4,33 @@ import { Gift, MapPin, RefreshCw, Star, Check, Coffee } from 'lucide-react';
 import { apiClient } from '../../utils/apiClient';
 import { toggleShopState } from '../../utils/shopState';
 import { toast } from '../../utils/toast';
+import WantTag from './WantTag';
 
 // 跟後端 blindbox_service.SKIP_REASONS 對應
 const SKIP_REASONS = [
   { key: 'too_far', label: '太遠了' },
   { key: 'not_my_type', label: '不是我的菜' },
   { key: 'been_there', label: '其實去過了' },
-  { key: 'no_time', label: '這週沒空' },
+  { key: 'no_time', label: '最近沒空' },
   { key: 'other', label: '其他' },
 ];
 
-const STATUS_LABEL = { completed: '完成', expired: '錯過', skipped: '換掉' };
+// opened：以前拆開、還在保留期內等你去的盒子
+const STATUS_LABEL = { completed: '完成', expired: '錯過', skipped: '換掉', opened: '待去' };
 
-function daysLeft(endsAt) {
+// 後端 blindbox_service.OPENED_KEEP_DAYS
+const OPENED_KEEP_DAYS = 7;
+
+function hoursLeft(endsAt) {
   if (!endsAt) return null;
   const ms = new Date(endsAt) - new Date();
-  return Math.max(0, Math.ceil(ms / 86400000));
+  return Math.max(0, Math.ceil(ms / 3600000));
 }
+
+const fmtDay = (key) => {
+  const [, m, d] = (key || '').split('-');
+  return m ? `${Number(m)}/${Number(d)}` : key;
+};
 
 export default function BlindBoxCard({ box, history, onChange }) {
   const navigate = useNavigate();
@@ -50,7 +60,7 @@ export default function BlindBoxCard({ box, history, onChange }) {
     const data = await apiClient('/api/blindbox/reroll', { method: 'POST', body: JSON.stringify({ reason }) });
     setAskReason(false);
     onChange(data.box, { refreshHistory: true });
-    toast.info('換了一盒新的，這週不能再換囉');
+    toast.info('換了一盒新的，今天不能再換囉');
   });
 
   const markVisited = () => run(async () => {
@@ -81,22 +91,26 @@ export default function BlindBoxCard({ box, history, onChange }) {
     );
   }
 
-  const left = daysLeft(box.ends_at);
+  const left = hoursLeft(box.ends_at);
   const hints = box.hints || {};
 
   return (
     <div className={`blindbox-card status-${box.status}`}>
       <div className="blindbox-head">
         <div>
-          <div className="blindbox-eyebrow">本週咖啡盲盒 · {box.week_key}</div>
+          <div className="blindbox-eyebrow">今日咖啡盲盒 · {fmtDay(box.day_key)}</div>
           <h3 className="blindbox-title">
             {box.status === 'sealed' && '一家你大概不會自己挑、但可能會愛上的店'}
             {box.status === 'opened' && box.cafe?.name}
             {box.status === 'completed' && `完成！${box.cafe?.name ?? ''}`}
+            {box.cafe && <> <WantTag cafeId={box.cafe.id} /></>}
           </h3>
         </div>
-        {box.status !== 'completed' && left !== null && (
-          <div className="blindbox-countdown">{left === 0 ? '今天截止' : `還有 ${left} 天`}</div>
+        {box.status === 'sealed' && left !== null && (
+          <div className="blindbox-countdown">{left <= 1 ? '快換盒了' : `${left} 小時後換新盒`}</div>
+        )}
+        {box.status === 'opened' && (
+          <div className="blindbox-countdown">{OPENED_KEEP_DAYS} 天內去都算</div>
         )}
       </div>
 
@@ -110,7 +124,7 @@ export default function BlindBoxCard({ box, history, onChange }) {
               {hints.cost && <span className="blindbox-chip">{hints.cost}</span>}
               {(hints.tags || []).map((t) => <span key={t} className="blindbox-chip">#{t}</span>)}
             </div>
-            <p className="blindbox-note">拆開才看得到是哪一家。這週內去過，就能在護照蓋一個金色的盲盒章。</p>
+            <p className="blindbox-note">拆開才看得到是哪一家。今天沒拆，明天就換新的一盒；拆開後 {OPENED_KEEP_DAYS} 天內去過，就能在護照蓋一個金色的盲盒章。</p>
           </div>
         </div>
       )}
@@ -135,7 +149,7 @@ export default function BlindBoxCard({ box, history, onChange }) {
           {box.rating ? (
             <div className="blindbox-rated">
               你給了 {Array.from({ length: box.rating }, (_, i) => <Star key={i} size={14} fill="currentColor" />)}
-              ，下週一會有新的盒子
+              ，明天會有新的盒子
             </div>
           ) : (
             <>
@@ -214,9 +228,10 @@ export default function BlindBoxCard({ box, history, onChange }) {
           <ul>
             {history.map((h) => (
               <li key={h.id}>
-                <span className="wk">{h.week_key}</span>
+                <span className="wk">{fmtDay(h.day_key)}</span>
                 <span className={`st st-${h.status}`}>{STATUS_LABEL[h.status]}</span>
                 <span className="nm">{h.cafe_name || '（沒拆開）'}</span>
+                {h.cafe_id && <WantTag cafeId={h.cafe_id} />}
                 {h.rating && <span className="rt">{'★'.repeat(h.rating)}</span>}
               </li>
             ))}

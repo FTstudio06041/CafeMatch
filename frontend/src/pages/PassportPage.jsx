@@ -1,13 +1,16 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Award, BookOpen, CakeSlice, CalendarCheck, Camera, Cat, Coffee, Coins, Compass,
-  Crown, Droplets, Gift, House, Map as MapIcon, PlugZap, Sparkles, Stamp,
+  Award, BookOpen, Bookmark, CakeSlice, CalendarCheck, Camera, Cat, Coffee, Coins, Compass,
+  Crown, Droplets, Gift, House, Map as MapIcon, PlugZap, Sparkles, Stamp, X,
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import { apiClient } from '../utils/apiClient';
 import { logger } from '../utils/logger';
+import { toggleShopState } from '../utils/shopState';
+import { SWIPE_UI_TEXTS as T } from '../utils/constants';
 import BlindBoxCard from '../components/passport/BlindBoxCard';
+import SwipeDeck from '../components/passport/SwipeDeck';
 import '../PassportPage.css';
 
 const fmtDate = (iso) => (iso
@@ -34,7 +37,7 @@ export default function PassportPage() {
   const [passport, setPassport] = useState(null);
   const [box, setBox] = useState(null);
   const [history, setHistory] = useState([]);
-  const [filter, setFilter] = useState('all'); // all | stamped | empty
+  const [filter, setFilter] = useState('all'); // all | stamped | empty | want
   const [error, setError] = useState('');
 
   const loadPassport = useCallback(async () => {
@@ -76,7 +79,7 @@ export default function PassportPage() {
         <div className="pp-guest">
           <Stamp size={40} strokeWidth={1.5} />
           <h2>咖啡護照</h2>
-          <p>登入後，去過的每一家咖啡廳都會在這裡蓋一個章，還有每週一盒的咖啡盲盒。</p>
+          <p>登入後，去過的每一家咖啡廳都會在這裡蓋一個章，每天還有一盒咖啡盲盒。</p>
         </div>
       </div>
     );
@@ -84,12 +87,21 @@ export default function PassportPage() {
 
   const book = passport?.book || [];
   const shown = book
-    .filter((c) => (filter === 'stamped' ? c.stamped : filter === 'empty' ? !c.stamped : true))
+    .filter((c) => ({ stamped: c.stamped, empty: !c.stamped, want: c.want }[filter] ?? true))
     // 蓋過章的排前面，最近蓋的最前面；沒蓋的照原本順序
     .sort((a, b) => (b.stamped - a.stamped)
       || ((b.visited_at || '').localeCompare(a.visited_at || '')));
   const pct = passport ? Math.round((passport.stamp_count / Math.max(1, passport.total_cafes)) * 100) : 0;
   const badges = passport?.badges || [];
+  const wantList = passport?.want_list || [];
+
+  const removeWant = async (cafeId) => {
+    try {
+      await toggleShopState(cafeId, 'want', 'passport');
+    } catch {
+      // apiClient 已經跳錯誤提示
+    }
+  };
   // 已解鎖的排前面；未解鎖的照進度高低排，快拿到的放前面
   const sortedBadges = [...badges].sort((a, b) => (b.unlocked - a.unlocked)
     || (b.progress / b.target - a.progress / a.target));
@@ -121,6 +133,41 @@ export default function PassportPage() {
         <BlindBoxCard box={box} history={history} onChange={handleBoxChange} />
       </section>
 
+      <section className="pp-section pp-discover">
+        <div>
+          <h2 className="pp-section-title">{T.title}</h2>
+          <p className="pp-section-sub">{T.subtitle}</p>
+          <SwipeDeck onWantChange={loadPassport} />
+        </div>
+        <div>
+          <h2 className="pp-section-title">{T.wantListTitle}{wantList.length > 0 && ` · ${wantList.length}`}</h2>
+          {passport && wantList.length === 0 && <div className="want-empty">{T.wantListEmpty}</div>}
+          {wantList.length > 0 && (
+            <div className="want-list">
+              {wantList.map((w) => (
+                <div key={w.cafe_id} className="want-item">
+                  <button type="button" className="want-item-main" onClick={() => navigate(`/explore?open_shop_id=${w.cafe_id}`)}>
+                    <div className="want-item-img">
+                      {w.image_url ? <img src={w.image_url} alt="" loading="lazy" /> : <Coffee size={20} strokeWidth={1.5} />}
+                    </div>
+                    <div className="want-item-text">
+                      <div className="want-item-name">{w.name}</div>
+                      <div className="want-item-sub">
+                        {w.area && <span>{w.area}</span>}
+                        {w.stamped && <span className="want-item-visited">{T.visitedBadge}</span>}
+                      </div>
+                    </div>
+                  </button>
+                  <button type="button" className="want-item-remove" onClick={() => removeWant(w.cafe_id)} aria-label={`${T.removeWant}：${w.name}`} title={T.removeWant}>
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
       <section className="pp-section">
         <h2 className="pp-section-title">徽章</h2>
         <div className="pp-badges">
@@ -146,7 +193,7 @@ export default function PassportPage() {
         <div className="pp-section-head">
           <h2 className="pp-section-title">集章冊</h2>
           <div className="pp-filters">
-            {[['all', '全部'], ['stamped', '已蓋章'], ['empty', '還沒去']].map(([k, label]) => (
+            {[['all', '全部'], ['stamped', '已蓋章'], ['empty', '還沒去'], ['want', T.want]].map(([k, label]) => (
               <button key={k} type="button" className={`pp-filter ${filter === k ? 'active' : ''}`} onClick={() => setFilter(k)}>{label}</button>
             ))}
           </div>
@@ -159,16 +206,24 @@ export default function PassportPage() {
               className={`pp-stamp ${c.stamped ? 'stamped' : 'empty'} ${c.via_blindbox ? 'gold' : ''}`}
               onClick={() => navigate(`/explore?open_shop_id=${c.cafe_id}`)}
             >
-              <div className="pp-stamp-ring">
-                {c.stamped && c.image_url ? <img src={c.image_url} alt="" loading="lazy" /> : <Coffee size={22} strokeWidth={1.5} />}
-                {c.stamped && <span className="pp-stamp-date">{fmtDate(c.visited_at)}</span>}
+              <div className="pp-stamp-ringwrap">
+                <div className="pp-stamp-ring">
+                  {c.stamped && c.image_url ? <img src={c.image_url} alt="" loading="lazy" /> : <Coffee size={22} strokeWidth={1.5} />}
+                  {c.stamped && <span className="pp-stamp-date">{fmtDate(c.visited_at)}</span>}
+                </div>
+                {c.want && !c.stamped && (
+                  <span className="pp-stamp-want" title={T.want} aria-label={T.want}><Bookmark size={12} fill="currentColor" /></span>
+                )}
               </div>
               <div className="pp-stamp-name">{c.name}</div>
               {c.area && <div className="pp-stamp-area">{c.area}</div>}
             </button>
           ))}
           {passport && shown.length === 0 && (
-            <div className="pp-empty">{filter === 'stamped' ? '還沒有蓋任何章。去過一家咖啡廳後，在探索頁或聊天推薦卡片按「去過」就會蓋章。' : '全部都去過了，太強了！'}</div>
+            <div className="pp-empty">{{
+              stamped: '還沒有蓋任何章。去過一家咖啡廳後，在探索頁或聊天推薦卡片按「去過」就會蓋章。',
+              want: T.wantListEmpty,
+            }[filter] || '全部都去過了，太強了！'}</div>
           )}
         </div>
       </section>

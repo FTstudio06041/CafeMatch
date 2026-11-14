@@ -25,6 +25,9 @@ ADHOC_COLUMNS = (
     # 咖啡護照：蓋章日期（遷移 c3d9a1f5e2b7 也會加，這裡讓只跑 init-db 的環境一樣有）
     ('user_shop_state', 'fav_at', 'DATETIME NULL'),
     ('user_shop_state', 'visited_at', 'DATETIME NULL'),
+    # 想去清單（護照頁滑卡右滑）
+    ('user_shop_state', 'is_want', 'BOOLEAN DEFAULT 0'),
+    ('user_shop_state', 'want_at', 'DATETIME NULL'),
 )
 
 

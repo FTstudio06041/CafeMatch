@@ -559,6 +559,10 @@
   border-radius: var(--radius-lg);
 }
 
+.pp-stamp-ringwrap {
+  position: relative;
+}
+
 .pp-stamp-ring {
   position: relative;
   width: 84px;
@@ -653,6 +657,376 @@
 
 .pp-guest h2 {
   color: var(--text-main);
+}
+
+/* ---------- 滑卡探店 + 想去清單 ---------- */
+.pp-discover {
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) 1fr;
+  gap: var(--space-8);
+  align-items: start;
+}
+
+.pp-section-sub {
+  margin: calc(-1 * var(--space-3)) 0 var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-light);
+  line-height: var(--leading-normal);
+}
+
+.swipe {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.swipe-stack {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  height: 440px;
+  border-radius: var(--radius-2xl);
+}
+
+.swipe-stack:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 4px;
+}
+
+.swipe-card-wrap {
+  position: absolute;
+  inset: 0;
+  cursor: grab;
+  touch-action: pan-y;   /* 手機上下捲動頁面仍然可以，左右才是拖卡 */
+  user-select: none;
+  z-index: 2;
+}
+
+.swipe-card {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--radius-2xl);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-md);
+}
+
+.swipe-card.under {
+  transform: scale(0.95) translateY(10px);
+  opacity: 0.85;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.swipe-card-img {
+  flex: 0 0 56%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--text-main) 8%, transparent);
+  color: var(--text-light);
+}
+
+.swipe-card-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.swipe-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  min-height: 0;
+}
+
+.swipe-card-name {
+  font-size: var(--text-xl);
+  font-weight: 800;
+  line-height: var(--leading-tight);
+}
+
+.swipe-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-light);
+}
+
+.swipe-card-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.swipe-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  overflow: hidden;
+  max-height: 64px;
+}
+
+.swipe-card-tags .blindbox-chip {
+  font-size: var(--text-xs);
+  padding: 3px 10px;
+}
+
+.swipe-card-info {
+  margin-top: auto;
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--brand-secondary-dark);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* 拖曳時浮出來的章：往右「想去」、往左「沒興趣」 */
+.swipe-stamp {
+  position: absolute;
+  top: 24px;
+  padding: 4px 14px;
+  border: 4px solid currentColor;
+  border-radius: var(--radius-md);
+  font-size: var(--text-2xl);
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  background: color-mix(in srgb, var(--bg-white) 80%, transparent);
+  pointer-events: none;
+}
+
+.swipe-stamp.want {
+  left: 20px;
+  color: var(--color-success);
+  transform: rotate(-12deg);
+}
+
+.swipe-stamp.pass {
+  right: 20px;
+  color: var(--stamp-ink);
+  transform: rotate(12deg);
+}
+
+.swipe-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  text-align: center;
+  color: var(--text-light);
+  border: 2px dashed color-mix(in srgb, var(--text-main) 20%, transparent);
+  border-radius: var(--radius-2xl);
+}
+
+.swipe-empty strong {
+  color: var(--text-main);
+  font-size: var(--text-lg);
+}
+
+.swipe-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.swipe-btn {
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: none;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+}
+
+.swipe-btn.pass { color: var(--stamp-ink); }
+.swipe-btn.want { color: var(--color-success); }
+
+.swipe-btn.undo {
+  width: 44px;
+  height: 44px;
+  color: var(--text-light);
+}
+
+.swipe-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.swipe-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.swipe-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.swipe-btn:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 3px;
+}
+
+.swipe-meta {
+  min-height: 1.2em;
+  font-size: var(--text-xs);
+  color: var(--text-light);
+  text-align: center;
+}
+
+/* 手機、平板沒有鍵盤，不顯示鍵盤提示 */
+@media (hover: none) {
+  .swipe-meta-keys { display: none; }
+}
+
+/* 想去清單 */
+.want-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.want-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  padding-right: var(--space-1);
+  border-radius: var(--radius-xl);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.want-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.want-item-img {
+  flex: 0 0 52px;
+  height: 52px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--text-main) 8%, transparent);
+  color: var(--text-light);
+}
+
+.want-item-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.want-item-text {
+  min-width: 0;
+}
+
+.want-item-name {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.want-item-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--text-light);
+}
+
+.want-item-visited {
+  font-weight: 700;
+  color: var(--color-success);
+}
+
+.want-item-remove {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-light);
+  cursor: pointer;
+}
+
+.want-item-remove:hover {
+  background: color-mix(in srgb, var(--text-main) 8%, transparent);
+  color: var(--text-main);
+}
+
+.want-item-main:focus-visible,
+.want-item-remove:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+.want-empty {
+  padding: var(--space-6);
+  border: 2px dashed color-mix(in srgb, var(--text-main) 20%, transparent);
+  border-radius: var(--radius-xl);
+  color: var(--text-light);
+  text-align: center;
+}
+
+/* 集章冊裡被右滑過的店：右上角小書籤 */
+.pp-stamp-want {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--bg-white);
+  background: var(--brand-secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+@media (max-width: 1024px) {
+  .pp-discover {
+    grid-template-columns: 1fr;
+  }
+
+  .swipe-stack {
+    height: 420px;
+  }
 }
 
 /* ---------- 窄螢幕 ---------- */

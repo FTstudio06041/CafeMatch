@@ -1,4 +1,4 @@
-"""咖啡護照與咖啡盲盒。
+"""咖啡護照、每日咖啡盲盒與滑卡。
 
 規則判斷（evaluate_badges / choose_from_ranked）是純函式，直接測；
 API 走 in-memory SQLite，GNN 在測試環境不可用，盲盒會走隨機路徑。
@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from app import app, db
+from config.settings import get_utc_now
 from services import blindbox_service, passport_service
 
 BADGES = [
@@ -78,6 +79,13 @@ def test_week_streak_needs_consecutive_weeks():
     run = [_stamp(mon + timedelta(days=7 * i)) for i in range(3)] + [_stamp(mon + timedelta(days=1))]
     res = _by_id(passport_service.evaluate_badges(run, 10, [], BADGES))['streak']
     assert res['unlocked'] and res['progress'] == 3
+
+
+def test_day_key_uses_taipei_time():
+    # UTC 15:59 = 台灣 23:59 還是當天；UTC 16:00 = 台灣隔天 00:00
+    assert passport_service.day_key(datetime(2026, 11, 14, 15, 59)) == '2026-11-14'
+    assert passport_service.day_key(datetime(2026, 11, 14, 16, 0)) == '2026-11-15'
+    assert passport_service.day_end_utc(datetime(2026, 11, 14, 3)) == datetime(2026, 11, 14, 16)
 
 
 def test_week_key_uses_taipei_time():
@@ -181,7 +189,8 @@ def test_passport_payload(client):
     assert [b['cafe_id'] for b in stamped] == [1] and stamped[0]['area'] == '花蓮市'
     assert data['badge_count'] >= 1
     states = client.get('/api/user/shop_states').get_json()
-    assert states == {'1': {'fav': False, 'visited': True}, '2': {'fav': True, 'visited': False}}
+    assert states == {'1': {'fav': False, 'visited': True, 'want': False},
+                      '2': {'fav': True, 'visited': False, 'want': False}}
 
 
 def test_blindbox_hides_cafe_until_opened(client):
@@ -189,7 +198,8 @@ def test_blindbox_hides_cafe_until_opened(client):
     assert box['status'] == 'sealed' and 'cafe' not in box
     assert box['hints']['area'] == '花蓮市' and box['rerolls_left'] == 1
     again = client.get('/api/blindbox').get_json()['box']
-    assert again['id'] == box['id']  # 同一週只有一盒
+    assert again['id'] == box['id']  # 同一天只有一盒
+    assert box['day_key'] == passport_service.day_key()
     opened = client.post('/api/blindbox/open').get_json()['box']
     assert opened['status'] == 'opened' and opened['cafe']['id']
 
@@ -211,7 +221,7 @@ def test_visiting_the_box_cafe_completes_it_and_unlocks_badge(client):
     assert {'first_stamp', 'box_rookie'} <= {b['id'] for b in res['new_badges']}
     data = client.get('/api/blindbox').get_json()
     assert data['box']['status'] == 'completed'
-    assert data['history'] == []  # 這週完成的那盒已經顯示在卡片上，不重複列進歷史
+    assert data['history'] == []  # 今天完成的那盒已經顯示在卡片上，不重複列進歷史
     rated = client.post(f"/api/blindbox/{data['box']['id']}/rate", json={'rating': 4, 'comment': '好喝'})
     assert rated.status_code == 200 and rated.get_json()['box']['rating'] == 4
     bad = client.post(f"/api/blindbox/{data['box']['id']}/rate", json={'rating': 9})
@@ -220,7 +230,7 @@ def test_visiting_the_box_cafe_completes_it_and_unlocks_badge(client):
     assert any(b['via_blindbox'] for b in passport['book'])
 
 
-def test_reroll_once_per_week_and_records_reason(client):
+def test_reroll_once_per_day_and_records_reason(client):
     from models import BlindBox
     first = client.get('/api/blindbox').get_json()['box']
     r = client.post('/api/blindbox/reroll', json={'reason': 'too_far'})
@@ -235,27 +245,141 @@ def test_reroll_once_per_week_and_records_reason(client):
     assert hist[0]['status'] == 'skipped' and hist[0]['cafe_name'] is None  # 沒拆就不公開
 
 
-def test_last_week_box_expires(client):
+def _age_box(box_id, days):
     from models import BlindBox
-    client.get('/api/blindbox')
     with app.app_context():
-        box = BlindBox.query.first()
-        box.week_key = '2020-W01'
+        box = db.session.get(BlindBox, box_id)
+        box.day_key = passport_service.day_key(passport_service.naive_utc(get_utc_now()) - timedelta(days=days))
         db.session.commit()
-        old_id = box.id
+
+
+def test_unopened_box_expires_next_day_and_a_new_box_is_drawn(client):
+    from models import BlindBox
+    old_id = client.get('/api/blindbox').get_json()['box']['id']
+    _age_box(old_id, 1)
     new = client.get('/api/blindbox').get_json()['box']
-    assert new['id'] != old_id
+    assert new['id'] != old_id and new['status'] == 'sealed'
     with app.app_context():
         assert db.session.get(BlindBox, old_id).status == 'expired'
 
 
+def test_opened_box_waits_a_week_and_can_still_be_completed(client):
+    from models import BlindBox
+    client.get('/api/blindbox')
+    opened = client.post('/api/blindbox/open').get_json()['box']
+    _age_box(opened['id'], 3)
+    data = client.get('/api/blindbox').get_json()
+    assert data['box']['id'] != opened['id']                      # 今天有新的一盒
+    pending = [h for h in data['history'] if h['id'] == opened['id']]
+    assert pending and pending[0]['status'] == 'opened'            # 前幾天拆的列成「待去」
+    res = _toggle(client, opened['cafe']['id'], source='blindbox')
+    assert res['blindbox_completed'] is True
+    with app.app_context():
+        assert db.session.get(BlindBox, opened['id']).status == 'completed'
+
+
+def test_opened_box_expires_after_keep_days(client):
+    from models import BlindBox
+    client.get('/api/blindbox')
+    opened = client.post('/api/blindbox/open').get_json()['box']
+    _age_box(opened['id'], blindbox_service.OPENED_KEEP_DAYS)
+    client.get('/api/blindbox')
+    with app.app_context():
+        assert db.session.get(BlindBox, opened['id']).status == 'expired'
+    assert _toggle(client, opened['cafe']['id'])['blindbox_completed'] is False
+
+
+# ==========================================
+# 想去清單與滑卡
+# ==========================================
+
+def _swipe(client, cafe_id, direction):
+    return client.post('/api/swipe', json={'cafe_id': cafe_id, 'direction': direction})
+
+
+def test_deck_is_random_and_hides_visited_and_wanted(client):
+    _toggle(client, 1)
+    _toggle(client, 2, kind='want', source='passport')
+    deck = client.get('/api/swipe/deck').get_json()
+    ids = {c['cafe_id'] for c in deck['cards']}
+    assert ids == {3, 4, 5, 6} and deck['remaining'] == 4 and deck['passed'] == 0
+    card = deck['cards'][0]
+    assert {'name', 'image_url', 'area', 'cost', 'tags'} <= set(card)
+
+
+def test_swipe_right_adds_to_want_list_and_left_is_remembered(client):
+    from models import ShopStateEvent
+    r = _swipe(client, 3, 'right').get_json()
+    assert r['success'] and r['want'] is True
+    _swipe(client, 4, 'left')
+    deck = client.get('/api/swipe/deck').get_json()
+    assert {c['cafe_id'] for c in deck['cards']} == {1, 2, 5, 6} and deck['passed'] == 1
+    states = client.get('/api/user/shop_states').get_json()
+    assert states['3']['want'] is True and '4' not in states
+    passport = client.get('/api/passport').get_json()
+    assert [w['cafe_id'] for w in passport['want_list']] == [3]
+    assert next(b for b in passport['book'] if b['cafe_id'] == 3)['want'] is True
+    with app.app_context():
+        assert [(e.cafe_id, e.action, e.source) for e in ShopStateEvent.query.order_by(ShopStateEvent.id)] == \
+            [(3, 'want', 'swipe'), (4, 'pass', 'swipe')]
+
+
+def test_remove_from_want_list(client):
+    _swipe(client, 3, 'right')
+    res = _toggle(client, 3, kind='want', source='passport')
+    assert res['want'] is False
+    assert client.get('/api/passport').get_json()['want_list'] == []
+
+
+def test_undo_puts_the_card_back(client):
+    _swipe(client, 3, 'left')
+    _swipe(client, 5, 'right')
+    undone = client.post('/api/swipe/undo').get_json()
+    assert undone['card']['cafe_id'] == 5 and undone['direction'] == 'right'
+    assert client.get('/api/user/shop_states').get_json().get('5', {}).get('want') is not True
+    assert client.post('/api/swipe/undo').get_json()['card']['cafe_id'] == 3
+    assert client.post('/api/swipe/undo').status_code == 400
+
+
+def test_reset_brings_passed_cafes_back(client):
+    for cid in range(1, 7):
+        _swipe(client, cid, 'left' if cid % 2 else 'right')
+    assert client.get('/api/swipe/deck').get_json()['remaining'] == 0
+    assert client.post('/api/swipe/reset').get_json()['restored'] == 3
+    assert {c['cafe_id'] for c in client.get('/api/swipe/deck').get_json()['cards']} == {1, 3, 5}
+
+
+def test_swipe_validates_input(client):
+    assert _swipe(client, 3, 'up').status_code == 400
+    assert _swipe(client, '3', 'right').status_code == 400
+    assert _swipe(client, True, 'right').status_code == 400
+    assert _swipe(client, 999, 'right').status_code == 400
+
+
+def test_blindbox_never_picks_a_cafe_swiped_left(client):
+    for cid in (1, 2, 3, 4, 5):
+        _swipe(client, cid, 'left')
+    client.get('/api/blindbox')
+    assert client.post('/api/blindbox/open').get_json()['box']['cafe']['id'] == 6
+
+
+def test_wanted_cafe_can_still_be_drawn(client):
+    for cid in (1, 2, 3, 4, 5):
+        _toggle(client, cid)
+    _swipe(client, 6, 'right')
+    client.get('/api/blindbox')
+    assert client.post('/api/blindbox/open').get_json()['box']['cafe']['id'] == 6
+
+
 def test_delete_account_removes_passport_data(client):
-    from models import BlindBox, ShopStateEvent
+    from models import BlindBox, CafeSwipe, ShopStateEvent
     client.get('/api/blindbox')
     _toggle(client, 1)
+    _swipe(client, 2, 'left')
     assert client.post('/api/user/delete').get_json()['success']
     with app.app_context():
         assert ShopStateEvent.query.count() == 0 and BlindBox.query.count() == 0
+        assert CafeSwipe.query.count() == 0
 
 
 def test_requires_login():
@@ -263,3 +387,5 @@ def test_requires_login():
     with app.test_client() as c:
         assert c.get('/api/passport').status_code == 401
         assert c.get('/api/blindbox').status_code == 401
+        assert c.get('/api/swipe/deck').status_code == 401
+        assert c.post('/api/swipe', json={'cafe_id': 1, 'direction': 'right'}).status_code == 401
