@@ -4,9 +4,12 @@ import '../LandingPage.css'; // 引入剛才建立的 CSS
 import FloatingBackgroundIcons from '../components/FloatingBackgroundIcon';
 import CoffeeAskBar from '../components/AskBar';
 import LiquidSurface from '../components/LiquidSurface';
+import { LANDING_UI_TEXTS } from '../utils/constants';
 
 export default function LandingPage() {
   const { login, loginAsGuest } = useContext(AuthContext);
+  // 後端 /auth/callback 失敗時會帶 ?login_error=1 導回首頁
+  const loginFailed = new URLSearchParams(window.location.search).has('login_error');
 
   return (
     <div className="landing-body">
@@ -36,6 +39,11 @@ export default function LandingPage() {
         <div className="intro-section">
           <h1 className="main-title">找到你的<br />夢中情店</h1>
           <CoffeeAskBar />
+          {loginFailed && (
+            <p role="alert" style={{ color: '#b3261e', fontWeight: 600, textAlign: 'center', margin: '0 0 12px' }}>
+              {LANDING_UI_TEXTS.loginError}
+            </p>
+          )}
           <div className="glow-wrapper">
             <button className="btn-google-login" onClick={login}>
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

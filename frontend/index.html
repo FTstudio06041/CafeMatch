@@ -11,6 +11,15 @@
     <meta name="description" content="啡你莫屬 (CafeMatch) 是一個幫助您透過人格測驗與探索系統，找到最適合自己風格咖啡廳的平台。" />
     <meta name="theme-color" content="#d5bea4" />
     <title>啡你莫屬 CafeMatch</title>
+    <script>
+      // 統一使用不含 www 的網域。Google 登入的回呼網址固定是 cafematch.net，
+      // 從 www 開始登入的話 session cookie 帶不過去，回呼時 state 對不上就會失敗。
+      if (location.hostname.indexOf('www.') === 0) {
+        location.replace(location.protocol + '//' + location.hostname.slice(4) +
+          (location.port ? ':' + location.port : '') +
+          location.pathname + location.search + location.hash);
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
