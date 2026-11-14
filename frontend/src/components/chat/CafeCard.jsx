@@ -1,5 +1,7 @@
-import { useState } from 'react';
-import { MapPin, Clock, Coffee, ExternalLink } from 'lucide-react';
+import { useContext, useState } from 'react';
+import { MapPin, Clock, Coffee, ExternalLink, Heart, Check } from 'lucide-react';
+import { AuthContext } from '../../context/AuthContext';
+import { useShopStates, toggleShopState } from '../../utils/shopState';
 import './CafeCard.css';
 
 /**
@@ -8,6 +10,25 @@ import './CafeCard.css';
  */
 export default function CafeCard({ cafe }) {
   const [imgError, setImgError] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const { user } = useContext(AuthContext);
+  const isGuest = !user || user.isGuest;
+  // 推薦卡片直接可以收藏／標記去過：「推薦 → 真的去了」是推薦成效最直接的訊號，
+  // 以前要自己跑去探索頁找這家店，大部分人不會這樣做，這筆資料就收不到。
+  const states = useShopStates(!isGuest);
+  const mine = states[cafe.id] || { fav: false, visited: false };
+
+  const toggle = async (type) => {
+    if (busy || !cafe.id) return;
+    setBusy(true);
+    try {
+      await toggleShopState(cafe.id, type, 'chat');
+    } catch {
+      // apiClient 已經跳過錯誤提示
+    } finally {
+      setBusy(false);
+    }
+  };
   const showImg = cafe.image && !imgError;
 
   // cafe.url 存的是 Google Maps 短碼（非完整網址），不能直接當連結（會導向空白頁）。
@@ -46,6 +67,30 @@ export default function CafeCard({ cafe }) {
             {cafe.tags.slice(0, 6).map((t, i) => (
               <span key={i} className="cafe-card-tag">{t}</span>
             ))}
+          </div>
+        )}
+
+        {!isGuest && cafe.id && (
+          <div className="cafe-card-actions">
+            <button
+              type="button"
+              className={`cafe-card-action ${mine.fav ? 'active' : ''}`}
+              onClick={() => toggle('fav')}
+              disabled={busy}
+              aria-pressed={mine.fav}
+            >
+              <Heart size={13} fill={mine.fav ? 'currentColor' : 'none'} /> {mine.fav ? '已收藏' : '收藏'}
+            </button>
+            <button
+              type="button"
+              className={`cafe-card-action ${mine.visited ? 'active' : ''}`}
+              onClick={() => toggle('visited')}
+              disabled={busy}
+              aria-pressed={mine.visited}
+              title="去過就在咖啡護照蓋一個章"
+            >
+              <Check size={13} /> {mine.visited ? '已去過' : '我去過了'}
+            </button>
           </div>
         )}
 

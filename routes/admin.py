@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request, session, current_app
 from database import db
-from models import User, Cafes, AdminLog, UserShopState, cafe_tags, OperatingHours, AiQueryLog, ChatSession, ChatFeedback
+from models import User, Cafes, AdminLog, UserShopState, cafe_tags, OperatingHours, AiQueryLog, ChatSession, ChatFeedback, ShopStateEvent, BlindBox
 from utils.auth import admin_required
 from services.admin_service import AdminService
 from services.google_maps_service import get_cafe_image_url, has_google_maps_key
@@ -99,6 +99,8 @@ def admin_delete_cafe(cafe_id):
     db.session.execute(cafe_tags.delete().where(cafe_tags.c.cafe_id == cafe_id))
     OperatingHours.query.filter_by(cafe_id=cafe_id).delete()
     UserShopState.query.filter_by(cafe_id=cafe_id).delete()
+    ShopStateEvent.query.filter_by(cafe_id=cafe_id).delete()
+    BlindBox.query.filter_by(cafe_id=cafe_id).delete()
     db.session.delete(cafe)
     db.session.commit()
     current_email = session.get('user_email')

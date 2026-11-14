@@ -22,6 +22,9 @@ ADHOC_COLUMNS = (
     ('cafes', 'google_photo_attribution', 'TEXT'),
     ('community_posts', 'original_post_id', 'INT DEFAULT NULL'),
     ('chat_sessions', 'pref_state', 'JSON NULL'),
+    # 咖啡護照：蓋章日期（遷移 c3d9a1f5e2b7 也會加，這裡讓只跑 init-db 的環境一樣有）
+    ('user_shop_state', 'fav_at', 'DATETIME NULL'),
+    ('user_shop_state', 'visited_at', 'DATETIME NULL'),
 )
 
 

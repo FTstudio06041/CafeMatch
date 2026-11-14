@@ -1,6 +1,6 @@
 import logging
 from database import db
-from models import User, UserShopState, ChatSession, ChatFeedback, UserQuizResult, CommunityPost, PostLike, PostComment, CommunityNote, CommunityLike, CommunityComment
+from models import User, UserShopState, ChatSession, ChatFeedback, UserQuizResult, ShopStateEvent, BlindBox, CommunityPost, PostLike, PostComment, CommunityNote, CommunityLike, CommunityComment
 
 def delete_user_data(user_id):
     # 刪除與此使用者相關的所有按讚和留言
@@ -29,7 +29,9 @@ def delete_user_data(user_id):
     ChatFeedback.query.filter_by(user_id=user_id).delete()
     UserQuizResult.query.filter_by(user_id=user_id).delete()
 
-    # 刪除收藏
+    # 刪除收藏、護照流水帳與盲盒
+    ShopStateEvent.query.filter_by(user_id=user_id).delete()
+    BlindBox.query.filter_by(user_id=user_id).delete()
     UserShopState.query.filter_by(user_id=user_id).delete()
     
     # 刪除使用者

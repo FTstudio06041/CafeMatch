@@ -4,6 +4,7 @@ from .quiz import QuizQuestion, QuizOption, QuizResultType, UserQuizResult
 from .community import CommunityPost, PostLike, PostComment, CommunityNote, CommunityLike, CommunityComment
 from .chat import ChatSession, ChatFeedback, AiQueryLog
 from .system import AdminLog, SystemAnnouncement, BugReport, SystemSetting
+from .gamification import ShopStateEvent, BlindBox
 
 __all__ = [
     'User', 'UserShopState',
@@ -11,5 +12,6 @@ __all__ = [
     'QuizQuestion', 'QuizOption', 'QuizResultType', 'UserQuizResult',
     'CommunityPost', 'PostLike', 'PostComment', 'CommunityNote', 'CommunityLike', 'CommunityComment',
     'ChatSession', 'ChatFeedback', 'AiQueryLog',
-    'AdminLog', 'SystemAnnouncement', 'BugReport', 'SystemSetting'
+    'AdminLog', 'SystemAnnouncement', 'BugReport', 'SystemSetting',
+    'ShopStateEvent', 'BlindBox',
 ]
