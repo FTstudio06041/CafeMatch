@@ -2,6 +2,7 @@ import { useContext, useState } from 'react';
 import { MapPin, Clock, Coffee, ExternalLink, Heart, Check } from 'lucide-react';
 import { AuthContext } from '../../context/AuthContext';
 import { useShopStates, toggleShopState } from '../../utils/shopState';
+import WantTag from '../passport/WantTag';
 import './CafeCard.css';
 
 /**
@@ -50,7 +51,7 @@ export default function CafeCard({ cafe }) {
       </div>
 
       <div className="cafe-card-body">
-        <div className="cafe-card-name">{cafe.name}</div>
+        <div className="cafe-card-name">{cafe.name} <WantTag cafeId={cafe.id} enabled={!isGuest} /></div>
 
         {cafe.cost && (
           <div className="cafe-card-meta"><Coffee size={13} /> {cafe.cost}</div>

@@ -6,6 +6,7 @@ import '../ExplorePage.css';
 import { toast } from '../utils/toast';
 import { logger } from '../utils/logger';
 import { toggleShopState, seedShopStates } from '../utils/shopState';
+import WantTag from '../components/passport/WantTag';
 export default function ExplorePage() {
   const { user, API_BASE_URL } = useContext(AuthContext);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -98,7 +99,7 @@ export default function ExplorePage() {
                 <div className="detail-hero-info">
                   <div>
                     <div className="detail-tags">{selectedShop.tags}</div>
-                    <h1 className="detail-title">{selectedShop.name}</h1>
+                    <h1 className="detail-title">{selectedShop.name} <WantTag cafeId={selectedShop.id} enabled={!user?.isGuest} /></h1>
                     <div className="detail-meta">
                       {selectedShop.rating != null && <span>{selectedShop.rating} ★</span>}
                       <span>{selectedShop.hours}</span>

@@ -24,6 +24,9 @@ class UserShopState(db.Model):
     # 舊資料沒有時間（欄位是後來才加的），一律是 NULL，前端顯示成「早期紀錄」。
     fav_at = db.Column(db.DateTime, nullable=True)
     visited_at = db.Column(db.DateTime, nullable=True)
+    # 「想去」清單：在護照頁的滑卡往右滑加入。比收藏輕量 —— 只是有興趣，還沒確定喜歡。
+    is_want = db.Column(db.Boolean, default=False)
+    want_at = db.Column(db.DateTime, nullable=True)
     __table_args__ = (
         db.UniqueConstraint('user_id', 'cafe_id', name='uix_user_cafe_state'),
     )

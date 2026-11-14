@@ -23,8 +23,8 @@ from services.google_maps_service import get_cafe_image_url
 
 BADGES_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'passport_badges.json')
 
-# 收藏／去過是從哪個畫面按的。不在白名單的一律記成 unknown，不信任前端亂帶。
-VALID_SOURCES = {'explore', 'chat', 'blindbox', 'passport'}
+# 收藏／去過／想去是從哪個畫面按的。不在白名單的一律記成 unknown，不信任前端亂帶。
+VALID_SOURCES = {'explore', 'chat', 'blindbox', 'passport', 'swipe'}
 
 TAIPEI = timezone(timedelta(hours=8))
 
@@ -47,6 +47,23 @@ def naive_utc(dt):
     if dt.tzinfo is not None:
         dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
     return dt
+
+
+def _taipei(dt=None):
+    dt = naive_utc(dt or get_utc_now())
+    return dt.replace(tzinfo=timezone.utc).astimezone(TAIPEI)
+
+
+def day_key(dt=None):
+    """台灣時間的日期，例如 2026-11-14。每天 00:00 換一盒盲盒。"""
+    return _taipei(dt).date().isoformat()
+
+
+def day_end_utc(dt=None):
+    """今天結束（明天 00:00 台灣時間）換算成 UTC，給前端倒數用。"""
+    local = _taipei(dt)
+    midnight = local.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    return naive_utc(midnight)
 
 
 def week_key(dt=None):
@@ -244,7 +261,11 @@ def toggle_shop_state(user, cafe_id, action_type, source):
         db.session.add(state)
 
     completed_box = None
-    if action_type == 'fav':
+    if action_type == 'want':
+        state.is_want = not state.is_want
+        state.want_at = now if state.is_want else None
+        action = 'want' if state.is_want else 'unwant'
+    elif action_type == 'fav':
         state.is_fav = not state.is_fav
         state.fav_at = now if state.is_fav else None
         action = 'fav' if state.is_fav else 'unfav'
@@ -264,16 +285,17 @@ def toggle_shop_state(user, cafe_id, action_type, source):
     return {
         'fav': bool(state.is_fav),
         'visited': bool(state.is_visited),
+        'want': bool(state.is_want),
         'new_badges': new_badges,
         'blindbox_completed': completed_box is not None,
     }
 
 
 def get_shop_states(user_id):
-    """{cafe_id: {fav, visited}}，給聊天推薦卡片顯示按鈕狀態用。"""
+    """{cafe_id: {fav, visited, want}}，給聊天推薦卡片、盲盒顯示按鈕狀態與「想去」標籤用。"""
     rows = UserShopState.query.filter_by(user_id=user_id).all()
-    return {r.cafe_id: {'fav': bool(r.is_fav), 'visited': bool(r.is_visited)}
-            for r in rows if r.is_fav or r.is_visited}
+    return {r.cafe_id: {'fav': bool(r.is_fav), 'visited': bool(r.is_visited), 'want': bool(r.is_want)}
+            for r in rows if r.is_fav or r.is_visited or r.is_want}
 
 
 def get_passport(user):
@@ -295,11 +317,18 @@ def get_passport(user):
             'stamped': stamped,
             'visited_at': _iso(st.visited_at) if stamped else None,
             'via_blindbox': stamped and cafe.id in box_cafes,
+            'want': bool(st and st.is_want),
+            'want_at': _iso(st.want_at) if st and st.is_want else None,
         })
 
     badges = compute_badges(user.id)
     stamped_count = sum(1 for b in book if b['stamped'])
+    # 想去清單：還沒去過的排前面，最近加入的最前面
+    want_list = sorted((b for b in book if b['want']), key=lambda b: b['want_at'] or '', reverse=True)
+    want_list.sort(key=lambda b: b['stamped'])  # sort 是穩定的：同一組內維持「最近加入在前」
     return {
+        'want_list': [{k: b[k] for k in ('cafe_id', 'name', 'image_url', 'area', 'tags', 'stamped', 'want_at')}
+                      for b in want_list],
         'total_cafes': len(book),
         'stamp_count': stamped_count,
         'badge_count': sum(1 for b in badges if b['unlocked']),
