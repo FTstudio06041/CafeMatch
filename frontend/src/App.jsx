@@ -16,6 +16,7 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const QuizPage = lazy(() => import('./pages/QuizPage'));
 const AdminPage = lazy(() => import('./pages/AdminPage'));
 const PostViewPage = lazy(() => import('./pages/PostViewPage'));
+const PassportPage = lazy(() => import('./pages/PassportPage'));
 
 
 function MainLayoutWrapper() {
@@ -46,6 +47,7 @@ function AppContent() {
             <Route path="/explore" element={<ExplorePage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/quiz" element={<QuizPage />} />
+            <Route path="/passport" element={<PassportPage />} />
             <Route path="/admin" element={user?.is_admin ? <AdminPage /> : <Navigate to="/" />} />
           </Route>
         </Routes>

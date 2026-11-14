@@ -381,29 +381,8 @@ def _tiered_sample(candidates: list, guaranteed: int = 0,
     return sorted(locked + chosen, key=rank_key, reverse=True)
 
 
-def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
-                        exclude_ids: set | None = None,
-                        pref_keywords: list | None = None,
-                        tag_weight: float = TAG_BLEND_WEIGHT,
-                        filter_pools: dict | None = None) -> list:
-    """
-    以（調整後的）五維分數執行 GNN 推薦，並用已表達的偏好關鍵字微調排序。
-
-    參數:
-        scores:        {work, env, social, taste, cp} 調整後分數
-        hard_filters:  {'pet': bool, 'parking': bool, 'night': bool}
-        exclude_ids:   要排除的 DB cafe id（例如已推薦過的）
-        pref_keywords: 對話中已表達的偏好關鍵字（與店家標籤混合排序）
-        tag_weight:    標籤匹配在最終分數的權重（0 = 純 GNN）
-        filter_pools:  {'pet': {cafe_id...}, 'night': {...}} 各硬條件的合格名單，
-                       由 services/cafe_facts.py 從資料庫取。沒帶就不套硬條件。
-
-    回傳:
-        [{'cafe_id', 'gnn_score', 'tag_score', 'blended_score', 'avg_score', 'review_count'}]
-
-    拋出:
-        GnnUnavailable — 呼叫端應回退關鍵字檢索
-    """
+def _score_all(scores: dict):
+    """用（調整後的）五維分數替所有店家打分。回傳 (state, logits, sigmoid 分數)。"""
     state = _load()
     torch = state['torch']
     model = state['model']
@@ -429,6 +408,33 @@ def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
             torch.cat([u_rep, z_cafe], dim=-1)
         ).squeeze(-1).numpy()
         raw = torch.sigmoid(torch.from_numpy(logits)).numpy()
+    return state, logits, raw
+
+
+def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
+                        exclude_ids: set | None = None,
+                        pref_keywords: list | None = None,
+                        tag_weight: float = TAG_BLEND_WEIGHT,
+                        filter_pools: dict | None = None) -> list:
+    """
+    以（調整後的）五維分數執行 GNN 推薦，並用已表達的偏好關鍵字微調排序。
+
+    參數:
+        scores:        {work, env, social, taste, cp} 調整後分數
+        hard_filters:  {'pet': bool, 'parking': bool, 'night': bool}
+        exclude_ids:   要排除的 DB cafe id（例如已推薦過的）
+        pref_keywords: 對話中已表達的偏好關鍵字（與店家標籤混合排序）
+        tag_weight:    標籤匹配在最終分數的權重（0 = 純 GNN）
+        filter_pools:  {'pet': {cafe_id...}, 'night': {...}} 各硬條件的合格名單，
+                       由 services/cafe_facts.py 從資料庫取。沒帶就不套硬條件。
+
+    回傳:
+        [{'cafe_id', 'gnn_score', 'tag_score', 'blended_score', 'avg_score', 'review_count'}]
+
+    拋出:
+        GnnUnavailable — 呼叫端應回退關鍵字檢索
+    """
+    state, logits, raw = _score_all(scores)
 
     hard_filters = hard_filters or {}
     exclude_ids = exclude_ids or set()
@@ -467,3 +473,23 @@ def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
     guaranteed = GUARANTEED_TOP_MATCHES if (keywords and has_match) else 0
 
     return _tiered_sample(filtered, guaranteed=guaranteed, must_include=must_include)
+
+
+def rank_all(scores: dict, exclude_ids: set | None = None) -> list:
+    """不抽樣、不混標籤：回傳所有候選店家照 GNN logit 由高到低的完整排名。
+
+    咖啡盲盒用：它要自己決定「排名夠前面、但跟使用者舒適圈不一樣」的店，
+    recommend_by_scores 的分層抽樣只給五家，不夠挑。
+
+    回傳 [{'cafe_id', 'gnn_score', 'gnn_logit', 'rank'}]，rank 從 1 起算。
+    拋出 GnnUnavailable。
+    """
+    state, logits, raw = _score_all(scores)
+    exclude_ids = exclude_ids or set()
+    ranked = sorted(
+        ({'cafe_id': cafe_id, 'gnn_score': float(raw[idx]), 'gnn_logit': float(logits[idx])}
+         for idx, cafe_id in state['idx2cafe_id'].items() if cafe_id not in exclude_ids),
+        key=lambda c: c['gnn_logit'], reverse=True)
+    for i, c in enumerate(ranked, 1):
+        c['rank'] = i
+    return ranked
