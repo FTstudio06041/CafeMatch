@@ -25,17 +25,19 @@ if errorlevel 1 ( pause & exit /b 1 )
 cd ..
 
 echo.
+rem VITE_API_URL 一定要設：前端在 127.0.0.1 上預設會直連 localhost:5000（正式站後端）。
+rem 設成沙盒前端自己，所有 API 都經 Vite proxy 轉到沙盒後端 5001。
 echo === 3/3 啟動沙盒（後端 5001、前端 5174）===
 start "CafeMatch 沙盒後端 5001" cmd /k ""%PY%" -m flask --app scripts/sandbox/sandbox_app.py run --host 127.0.0.1 --port 5001"
-start "CafeMatch 沙盒前端 5174" /d "%CD%\frontend" cmd /k "set BACKEND_ORIGIN=http://127.0.0.1:5001&& npx vite --host 127.0.0.1 --port 5174 --strictPort"
+start "CafeMatch 沙盒前端 5174" /d "%CD%\frontend" cmd /k "set BACKEND_ORIGIN=http://127.0.0.1:5001&& set VITE_API_URL=http://127.0.0.1:5174&& npx vite --host 127.0.0.1 --port 5174 --strictPort"
 
 echo 等待服務啟動...
 timeout /t 20 /nobreak >nul
 start "" "http://127.0.0.1:5001/sandbox-login"
 
 echo.
-echo 沙盒已開啟，瀏覽器會用「沙盒測試帳號」登入並進到護照頁。
-echo 想用自己的帳號（有做過測驗，盲盒會走 GNN）：
-echo   http://127.0.0.1:5001/sandbox-login?email=你的Gmail
-echo 測完：關掉兩個沙盒視窗即可。正式站完全不受影響。
+echo 沙盒已開啟，瀏覽器會自動用沙盒測試帳號登入。
+echo 用自己的帳號登入請開：
+echo http://127.0.0.1:5001/sandbox-login?email=YOUR_GMAIL
+echo 測完把兩個沙盒視窗關掉即可。
 pause

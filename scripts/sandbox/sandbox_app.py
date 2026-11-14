@@ -60,5 +60,13 @@ def sandbox_login():
     return redirect(FRONTEND_URL + (request.args.get('next') or 'passport').lstrip('/'))
 
 
+def _login_via_sandbox():
+    # 沙盒頁面上的「Google 登入」也改走沙盒登入，不會去 Google、也不會碰到正式站
+    return redirect(f'http://{HOST}:5001/sandbox-login')
+
+
+app.view_functions['auth.login'] = _login_via_sandbox
+
+
 if __name__ == '__main__':
     app.run(host=HOST, port=5001, debug=False)
