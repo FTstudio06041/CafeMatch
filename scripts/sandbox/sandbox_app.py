@@ -3,8 +3,9 @@
 沙盒用的 Flask 進入點：設定好沙盒環境變數後才載入 app.py，
 另外加一個只在沙盒存在的 /sandbox-login，免 Google 直接登入。
 
-    python -m flask --app scripts/sandbox/sandbox_app.py db upgrade
     python -m flask --app scripts/sandbox/sandbox_app.py run --port 5001
+
+資料庫是沙盒資料夾裡的 sandbox.db（由 copy_db.py 建立），不連正式庫。
 """
 import os
 import sys
@@ -12,17 +13,15 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from sandbox_config import (  # noqa: E402
-    FRONTEND_URL, HOST, SANDBOX_ROOT, SUFFIX, die, prod_env, sandbox_names,
+    FRONTEND_URL, HOST, SANDBOX_DB_FILE, SANDBOX_DB_URI, SANDBOX_ROOT, die, prod_env,
 )
-
-_, SB_DB, _, SB_URI = sandbox_names()
 
 # 沿用正式站的非機密設定（Ollama、地圖金鑰等），蓋掉所有會指向正式站的設定
 for k, v in prod_env().items():
     if v is not None:
         os.environ[k] = v
 os.environ.update({
-    'DB_URI': SB_URI,
+    'DB_URI': SANDBOX_DB_URI,
     'SECRET_KEY': 'cafematch-sandbox-only',
     'FLASK_ENV': 'development',
     'FRONTEND_URL': FRONTEND_URL,
@@ -39,11 +38,11 @@ from app import app  # noqa: E402
 from database import db  # noqa: E402
 from models import User  # noqa: E402
 
-# 最後一道保險：真的連到沙盒庫才放行
-if SUFFIX not in app.config['SQLALCHEMY_DATABASE_URI']:
-    die('沙盒沒有連到 _sandbox 資料庫，停止。')
+# 最後一道保險：真的連到沙盒的 SQLite 檔才放行
+if app.config['SQLALCHEMY_DATABASE_URI'] != SANDBOX_DB_URI:
+    die('沙盒沒有連到 sandbox.db，停止。')
 
-print(f'[沙盒] 資料庫：{SB_DB}　前端：{FRONTEND_URL}')
+print(f'[沙盒] 資料庫：{SANDBOX_DB_FILE}　前端：{FRONTEND_URL}')
 
 
 @app.route('/sandbox-login')

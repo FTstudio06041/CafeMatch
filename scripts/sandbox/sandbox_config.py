@@ -4,7 +4,8 @@
 
 沙盒是正式站旁邊的一份獨立副本：
 - 程式碼：git worktree（例如 Desktop\\CafeMatch-test），不碰正式站資料夾
-- 資料庫：同一台 MariaDB 上的 <正式庫名>_sandbox，從正式庫複製一份
+- 資料庫：沙盒資料夾裡的 sandbox.db（SQLite 檔），從正式庫複製一份。
+  不用在 MariaDB 開新資料庫，所以不需要額外的資料庫權限
 - 埠：後端 5001、前端 5174（正式站是 5000 / 5173）
 
 資料庫帳密從正式站的 .env 讀，不必另外輸入，也不會印到畫面上。
@@ -20,6 +21,8 @@ PROD_ROOT = os.environ.get('CAFEMATCH_PROD_ROOT') or os.path.join(os.path.dirnam
 PROD_ENV = os.path.join(PROD_ROOT, '.env')
 
 SUFFIX = '_sandbox'
+SANDBOX_DB_FILE = os.path.join(SANDBOX_ROOT, 'sandbox.db')
+SANDBOX_DB_URI = 'sqlite:///' + SANDBOX_DB_FILE.replace('\\', '/')
 BACKEND_PORT = 5001
 FRONTEND_PORT = 5174
 HOST = '127.0.0.1'
@@ -56,12 +59,6 @@ def prod_db_uri():
     return uri
 
 
-def sandbox_names():
-    """回傳 (正式庫名, 沙盒庫名, 正式 URI, 沙盒 URI)。"""
-    uri = prod_db_uri()
-    parts, db = split_db(uri)
-    if db.endswith(SUFFIX):
-        die(f'正式站的資料庫名稱 {db} 已經是 {SUFFIX} 結尾，停止以免搞混。')
-    sb = db + SUFFIX
-    sb_uri = urlunsplit(parts._replace(path='/' + sb))
-    return db, sb, uri, sb_uri
+def prod_db_name():
+    _, db = split_db(prod_db_uri())
+    return db

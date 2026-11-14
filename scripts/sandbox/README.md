@@ -1,6 +1,6 @@
 # 測試沙盒（只用來試新功能，不要合併進 main）
 
-在正式機上開一份獨立副本：程式碼在另一個資料夾、資料庫是正式庫的複本（`<庫名>_sandbox`），
+在正式機上開一份獨立副本：程式碼在另一個資料夾、資料庫是正式庫的複本（沙盒資料夾裡的 `sandbox.db` 檔，不需要額外的資料庫權限），
 後端 5001／前端 5174。正式站（5000／5173、正式資料庫）完全不受影響。
 
 ```
@@ -18,6 +18,5 @@ git worktree add ..\CafeMatch-test FETCH_HEAD
 
 ```
 cd /d C:\Users\IMBigData\Desktop\CafeMatch
-venv\Scripts\python.exe ..\CafeMatch-test\scripts\sandbox\copy_db.py --drop
 git worktree remove --force ..\CafeMatch-test
 ```

@@ -13,24 +13,19 @@ if not exist "%PY%" (
 )
 
 echo.
-echo === 1/4 複製正式資料庫到沙盒（只讀正式庫）===
+echo === 1/3 複製正式資料庫到沙盒的 sandbox.db（只讀正式庫）===
 "%PY%" scripts\sandbox\copy_db.py
 if errorlevel 1 ( pause & exit /b 1 )
 
 echo.
-echo === 2/4 在沙盒資料庫跑新版遷移 ===
-"%PY%" -m flask --app scripts/sandbox/sandbox_app.py db upgrade
-if errorlevel 1 ( pause & exit /b 1 )
-
-echo.
-echo === 3/4 安裝前端套件（第一次會久一點）===
+echo === 2/3 安裝前端套件（第一次會久一點）===
 cd frontend
 if not exist node_modules call npm install --no-audit --no-fund
 if errorlevel 1 ( pause & exit /b 1 )
 cd ..
 
 echo.
-echo === 4/4 啟動沙盒（後端 5001、前端 5174）===
+echo === 3/3 啟動沙盒（後端 5001、前端 5174）===
 start "CafeMatch 沙盒後端 5001" cmd /k ""%PY%" -m flask --app scripts/sandbox/sandbox_app.py run --host 127.0.0.1 --port 5001"
 start "CafeMatch 沙盒前端 5174" /d "%CD%\frontend" cmd /k "set BACKEND_ORIGIN=http://127.0.0.1:5001&& npx vite --host 127.0.0.1 --port 5174 --strictPort"
 
