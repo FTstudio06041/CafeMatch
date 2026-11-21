@@ -122,7 +122,10 @@ class ChatPipelineService:
                     # 每一輪都重算五維向量：使用者的回答會即時改變推薦的權重，
                     # 不必等到按下推薦按鈕才知道自己的回答造成什麼影響
                     quiz_scores = ChatPipelineService._resolve_quiz_scores(data)
-                    has_quiz = bool(quiz_scores and any(quiz_scores.values()))
+                    # 問幾題、進度從哪起跳，只看「這段對話」是不是從測驗進來的。
+                    # 資料庫裡以前做過的測驗、按推薦時前端順手帶的分數都不算 ——
+                    # 否則直接聊天也會從 50% 起跳、只問三題就說可以推薦。
+                    has_quiz = ChatPipelineService._conversation_has_quiz(data)
                     live_scores, live_filters, live_accuracy = build_gnn_input(
                         quiz_scores, temp_history, merged_prefs
                     )
@@ -465,6 +468,18 @@ class ChatPipelineService:
             return []
         rows = {c.id: c for c in Cafes.query.filter(Cafes.id.in_(ids)).all()}
         return [rows[i] for i in ids if i in rows]
+
+    @staticmethod
+    def _conversation_has_quiz(data):
+        """
+        這段對話是不是從心理測驗結果進來的。
+
+        前端只有在測驗進場那一輪，才會把分數寫進對話的 pref_state.quiz_scores；
+        之後每一輪都原樣帶回。直接聊天的對話不會有這個欄位。
+        """
+        pref_state = data.get('pref_state')
+        scores = pref_state.get('quiz_scores') if isinstance(pref_state, dict) else None
+        return bool(isinstance(scores, dict) and any(scores.values()))
 
     @staticmethod
     def _resolve_quiz_scores(data):

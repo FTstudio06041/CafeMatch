@@ -320,3 +320,30 @@ def test_followup_and_invitation_reach_model_with_latest_conditions(monkeypatch,
     if not ready:
         assert any('[QUICK_OPTIONS]' in chunk.get('response', '') for chunk in chunks)
     assert chunks[-1]['done']
+
+
+@pytest.mark.parametrize('pref_state, expected_base, expected_target', [
+    (None, 0, 5),                                                      # 直接聊天
+    ({'quiz_scores': {'work': 8, 'env': 5, 'social': 2, 'taste': 4, 'cp': 3}}, 50, 3),  # 測驗進場
+])
+def test_old_quiz_does_not_shortcut_a_plain_chat(monkeypatch, pipeline_context,
+                                                 pref_state, expected_base, expected_target):
+    """
+    以前做過測驗（資料庫或瀏覽器還留著分數）不代表這段對話有測驗：
+    直接聊天要從 0% 起跳、問滿五維，只有從測驗進來的對話才從 50% 起跳。
+    """
+    old_quiz = {'work': 8, 'env': 5, 'social': 2, 'taste': 4, 'cp': 3}
+    monkeypatch.setattr(ChatPipelineService, '_resolve_quiz_scores', lambda _: old_quiz)
+    monkeypatch.setattr(preference_service, 'extract_preferences', lambda *a, **k: {
+        'preferences': {'vibe': ['安靜']}, 'dialogue_act': 'preferences', 'next_dimension': 'purpose',
+    })
+    monkeypatch.setattr(ai_service, 'stream_generate', Mock(return_value=iter([
+        json.dumps({'response': '好的'}), json.dumps({'done': True}),
+    ])))
+    data = {'message': '想找安靜的店', 'history': [], 'quiz_scores': old_quiz}
+    if pref_state:
+        data['pref_state'] = pref_state
+    chunks = [json.loads(c) for c in ChatPipelineService.generate_pipeline(data, False)]
+    progress = next(c for c in chunks if 'progress_dims' in c)
+    assert progress['progress_base'] == expected_base
+    assert progress['progress_target'] == expected_target
