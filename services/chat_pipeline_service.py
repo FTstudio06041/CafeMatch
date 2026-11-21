@@ -131,7 +131,8 @@ class ChatPipelineService:
                     # 資料太少就推薦等於亂猜，前端據此決定推薦按鈕能不能按
                     ready = conversation_guide.is_ready_to_recommend(
                         temp_history, collected_dims, has_quiz=has_quiz,
-                        state=guide_state
+                        state=guide_state,
+                        collected_keys={k for k, v in merged_prefs.items() if v},
                     )
                     yield json.dumps({
                         "progress_dims": collected_dims,
