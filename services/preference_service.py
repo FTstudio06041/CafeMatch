@@ -80,6 +80,12 @@ def _clause_dimensions(text):
     }
     if re.search(r'\d+\s*(?:元|塊)', text):
         dims.add('budget')
+    # 營業時段（「晚上十點後還有開的」）屬於特殊需求；沒有這條，
+    # 這種子句認不出維度，會被同一句裡別的子句整欄蓋掉
+    # 「一點」常是「安靜一點」的程度詞，所以不收「一」，且時間後面要接前後或開關店
+    if re.search(r'(?:\d{1,2}|十[一二]|[二兩三四五六七八九十])\s*點半?\s*(?:以?後|之?前|還|開|關)'
+                 r'|營業|還有開|開到', text):
+        dims.add('special')
     return dims
 
 
@@ -236,7 +242,8 @@ def extract_preferences(history, user_message, model_name, base_preferences=None
                 }
             if act in ('preferences', 'recommend'):
                 literal = {}
-                for clause in re.split(r'[，,。！？!?；;\n]', user_message):
+                # 空白也算子句分隔：口語常不打標點（「想要有wifi 可以久坐 咖非不要太苦」）
+                for clause in re.split(r'[，,。！？!?；;\n\s　]', user_message):
                     clause = clause.strip()
                     if is_user_question(clause):
                         continue
@@ -248,9 +255,23 @@ def extract_preferences(history, user_message, model_name, base_preferences=None
                         # replace_dimensions 要靠它核對維度，整段訊息形同免驗。
                         evidence[dim] = clause
                 # 清楚屬於單一維度的子句以原文為準，避免小模型把「太酸」縮成「酸」。
+                # 模型照抄原文、但不是任何子句片段的條件要留著：一句話常有兩個
+                # 子句，只認得其中一句時，整欄取代會把另一句的條件吃掉。
+                # 模型自己改寫的版本（「300元內」）不留，那只是同一句的另一種說法。
                 for dim, clauses in literal.items():
                     if prefs.get(dim) != ['不限']:
-                        prefs[dim] = clauses[:6]
+                        others = [v for v in prefs.get(dim) or []
+                                  if v in user_message
+                                  and not any(v in c or c in v for c in clauses)]
+                        prefs[dim] = list(dict.fromkeys(clauses + others))[:6]
+                # 子句已依關鍵字歸到某一維，模型若把同一句放在別的維度就移除，
+                # 免得「可以久坐」同時出現在氛圍和特殊需求
+                for dim, clauses in literal.items():
+                    for other in list(prefs):
+                        if other != dim:
+                            prefs[other] = [v for v in prefs[other] if v not in clauses]
+                            if not prefs[other]:
+                                del prefs[other]
             removals = result.get('remove_preferences')
             removals = removals if isinstance(removals, dict) else {}
             removals = {

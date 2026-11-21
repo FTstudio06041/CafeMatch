@@ -365,18 +365,29 @@ def dimensions_needed_to_recommend(history: list, has_quiz: bool = True) -> int:
 
 
 def is_ready_to_recommend(history: list, collected_dims: int,
-                          has_quiz: bool = True, state: dict = None) -> bool:
+                          has_quiz: bool = True, state: dict = None,
+                          collected_keys=None) -> bool:
     """
     資料是否足夠推薦。
 
     兩種情況算足夠：
       1. 已確認的維度達到門檻
-      2. 狀態機已經問完該問的（問太多次／輪數夠了），再問也問不出東西
+      2. 狀態機已經問完該問的（問太多次／輪數夠了／每個維度都問過或已掌握），
+         再問也問不出東西
+
+    第 2 點必須與 analyze_and_guide 邀請按鈕的條件一致：狀態機已經請使用者
+    按推薦，這裡卻判定不足，按鈕會被鎖住、推薦請求也會被擋下，使用者卡死。
 
     state 與 analyze_and_guide 同一份跨輪進度；不給則只用 history 反推。
     """
     if collected_dims >= dimensions_needed_to_recommend(history, has_quiz):
         return True
+
+    if collected_keys is not None:
+        asked_keys = get_asked_dimensions(history) | _state_asked(state)
+        if all(d["key"] in asked_keys or d["key"] in collected_keys
+               for d in _load_config()["dimensions"]):
+            return True
 
     strategy = _load_config().get("strategy", {})
     accuracy = detect_accuracy_feedback(history)

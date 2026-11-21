@@ -3,6 +3,16 @@ OLLAMA_CLIENT_TIMEOUT = 300      # 串流生成超時
 OLLAMA_HEALTH_TIMEOUT = 3        # 健康檢查超時
 PREFERENCE_EXTRACTION_TIMEOUT = 60 # 包含本機模型冷啟動與完整語意萃取
 
+# 出卡片那一輪的額外停止序列：店家資訊已由前端卡片呈現，
+# 提示詞再三禁止，模型仍會在說明後面自己演一份「圖文卡片」
+# （分隔線、假圖片網址、改寫過的地址）。一出現這些記號就截斷。
+CARDS_MODE_STOP_SEQUENCES = [
+    "***", "---", "【圖文卡片】", "[圖文卡片]", "![", "[圖片]",
+    "📍", "地址：", "\n- **", "\n**", "\n1.", "\n- ",
+    # 說明後面另起一段的括號旁白（「(圖文卡片)」「(由於目前尚未觸發推薦階段…)」）
+    "\n(", "\n（",
+]
+
 # Database Search Limits
 CAFE_TAG_MATCH_LIMIT = 5         # 標籤匹配最多取幾家
 CAFE_NAME_MATCH_LIMIT = 3        # 名稱匹配最多取幾家

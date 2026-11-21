@@ -17,6 +17,7 @@ cafe_facts.py — 硬條件的資料來源（寵物友善／晚間營業）
 免得使用者以為系統有考慮這個條件。
 """
 
+import re
 import threading
 import time as _time
 from datetime import time as dtime
@@ -59,15 +60,24 @@ def _query_pools():
     parking = by_tags(PARKING_TAG_NAMES)
 
     night = set()
+    has_hours, open_any = set(), set()
     for row in OperatingHours.query.all():
+        has_hours.add(row.cafe_id)
         if row.is_closed or not row.close_time:
             continue
+        open_any.add(row.cafe_id)
         # 關店時間比開店早 = 營業到隔天凌晨，這種當然算晚間營業
         crosses_midnight = row.open_time and row.close_time < row.open_time
         if crosses_midnight or row.close_time >= NIGHT_CLOSE_AFTER:
             night.add(row.cafe_id)
 
-    return {'pet': pet, 'night': night, 'parking': parking}
+    # 一週七天都標公休的店（多半已歇業）不能推薦。沒有營業時間資料的店
+    # 無從判斷，照常保留。
+    costs = {c.id: c.cost for c in Cafes.query.all()}
+    open_ids = {cid for cid in costs if cid in open_any or cid not in has_hours}
+
+    return {'pet': pet, 'night': night, 'parking': parking,
+            'open': open_ids, 'costs': costs}
 
 
 def filter_pools(force_refresh: bool = False) -> dict:
@@ -94,6 +104,36 @@ def filter_pools(force_refresh: bool = False) -> dict:
                             exc_info=True)
             return {}
     return _cache
+
+
+_COST_RANGE = re.compile(r'\$?\s*(\d+)\s*-\s*\$?\s*(\d+)')
+
+
+def cost_floor(cost: str | None) -> int | None:
+    """價位帶的下限：「$200-400」→ 200。格式認不得時回傳 None。"""
+    m = _COST_RANGE.search(cost or '')
+    return int(m.group(1)) if m else None
+
+
+def required_ids(pools: dict, budget_max: int | None = None) -> set | None:
+    """
+    一定要符合、不能被放寬的條件 → 合格店家名單。
+
+    寵物、夜間、停車符合的店太少時會用其他店補滿名額（見 gnn_recommender），
+    但這兩個不行：
+      營業中  整週公休的店推出去，使用者白跑一趟
+      預算    使用者講了上限，推超過的店比少推幾家更糟
+    價位帶下限低於預算才算符合（$200-400 對「兩百內」不算）；價位不明的店保留。
+    pools 讀不到（資料庫故障）時回傳 None，代表這次不套用。
+    """
+    if not pools or 'open' not in pools:
+        return None
+    ids = set(pools['open'])
+    if budget_max is not None:
+        costs = pools.get('costs') or {}
+        ids = {cid for cid in ids
+               if cost_floor(costs.get(cid)) is None or cost_floor(costs.get(cid)) < budget_max}
+    return ids
 
 
 def unsupported(hard_filters: dict) -> list:
@@ -204,6 +244,67 @@ def _match_tag(text, tags):
     return max(hits, key=lambda h: h[1])
 
 
+def card_condition_facts(preferences: dict | None, cafes: list) -> list:
+    """
+    逐一核對「這一批卡片」對使用者每個條件的支持程度。
+
+    classify_conditions 回答的是「整個資料庫有沒有這種資料」；這裡回答的是
+    「畫面上這幾家到底有幾家符合」。少了這一步，模型只看得到一串店家資料，
+    就會順口說出「這幾間都有不錯的甜點」「都有插座」這種沒有根據的話。
+
+    回傳 [{'text': 條件原文, 'matched': 幾家符合（None = 沒有資料可判斷）,
+           'total': 卡片家數}]
+    0 家只會出現在資料可靠的條件（預算、營業時段、寵物、停車）。
+    """
+    from services.preference_service import is_negative_preference, positive_keywords
+    from services.preference_adjuster import hard_filter_flags, parse_budget_max
+
+    cafes = list(cafes or [])
+    total = len(cafes)
+    if not total:
+        return []
+    pools = filter_pools()
+    facts, seen = [], set()
+
+    budget_max = parse_budget_max(preferences)
+    for dim, values in (preferences or {}).items():
+        if not isinstance(values, list):
+            continue
+        for text in values:
+            if not isinstance(text, str):
+                continue
+            text = text.strip()
+            if not text or text == '不限' or text in seen or is_negative_preference(text):
+                continue
+            seen.add(text)
+
+            matched = None
+            flags = hard_filter_flags(text)
+            if dim == 'budget' and budget_max is not None:
+                matched = sum(1 for c in cafes
+                              if cost_floor(c.cost) is not None and cost_floor(c.cost) < budget_max)
+            elif flags and all(pools.get(f) for f in flags):
+                matched = sum(1 for c in cafes if all(c.id in pools[f] for f in flags))
+            else:
+                # 整句（「想要有甜點」）與標籤（「甜點」）長度差太多，_match_tag
+                # 對不上；改用句中系統認得的關鍵字逐一比對
+                words = [w for w in positive_keywords({dim: [text]}) if w != text and len(w) >= 2]
+
+                def supports(cafe):
+                    tags = {t.tag_name: 1 for t in cafe.tags}
+                    return bool(_match_tag(text, tags)) or any(
+                        w in name or name in w for w in words for name in tags if len(name) >= 2)
+
+                # 標籤是評論抽出來的具體品項（「鬆餅」「巴斯克」），對不上「甜點」
+                # 不代表店裡沒有。所以標籤只能證明「有」，對不到一律當成沒有資料，
+                # 不能報成 0 家 —— 否則模型會說出「這幾家都沒有甜點」。
+                hits = [c for c in cafes if supports(c)]
+                if hits:
+                    matched = len(hits)
+            facts.append({'text': text, 'matched': matched, 'total': total})
+    return facts
+
+
 def classify_conditions(preferences: dict | None) -> dict:
     """
     核對使用者的每個條件，判斷資料庫到底有沒有東西可以支撐它。
@@ -223,7 +324,7 @@ def classify_conditions(preferences: dict | None) -> dict:
     詞彙表讀不到時一律回空結果，寧可不報也不要誤報。
     """
     from services.preference_service import is_negative_preference
-    from services.preference_adjuster import _HARD_FILTER_KEYWORDS
+    from services.preference_adjuster import hard_filter_flags
 
     result = {'verifiable': [], 'soft': [], 'uncovered': [], 'total_cafes': 0}
 
@@ -253,8 +354,7 @@ def classify_conditions(preferences: dict | None) -> dict:
             # 1) 硬條件：有合格名單才算數。名單是空的（例如「好停車」標籤
             #    還沒被 scripts/extract_parking_tag.py 寫進資料庫）代表
             #    系統其實判斷不了，那是 uncovered，不是可驗證。
-            flag = next((f for f, signals in _HARD_FILTER_KEYWORDS.items()
-                         if any(sig in text for sig in signals)), None)
+            flag = next(iter(sorted(hard_filter_flags(text))), None)
             if flag:
                 pool = pools.get(flag) or set()
                 if pool:

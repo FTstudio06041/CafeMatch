@@ -385,7 +385,8 @@ def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
                         exclude_ids: set | None = None,
                         pref_keywords: list | None = None,
                         tag_weight: float = TAG_BLEND_WEIGHT,
-                        filter_pools: dict | None = None) -> list:
+                        filter_pools: dict | None = None,
+                        required_ids: set | None = None) -> list:
     """
     以（調整後的）五維分數執行 GNN 推薦，並用已表達的偏好關鍵字微調排序。
 
@@ -397,6 +398,8 @@ def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
         tag_weight:    標籤匹配在最終分數的權重（0 = 純 GNN）
         filter_pools:  {'pet': {cafe_id...}, 'night': {...}} 各硬條件的合格名單，
                        由 services/cafe_facts.py 從資料庫取。沒帶就不套硬條件。
+        required_ids:  一定要符合、不會被放寬的店家名單（營業中、預算內）。
+                       None 代表不限制。
 
     回傳:
         [{'cafe_id', 'gnn_score', 'tag_score', 'blended_score', 'avg_score', 'review_count'}]
@@ -437,6 +440,8 @@ def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
     for idx, cafe_id in state['idx2cafe_id'].items():
         if cafe_id in exclude_ids:
             continue
+        if required_ids is not None and cafe_id not in required_ids:
+            continue
         avg_score, review_count = state['cafe_stats'].get(idx, (0.0, 0))
         candidates.append({
             'cafe_id': cafe_id,
@@ -461,6 +466,23 @@ def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
     # 混合排序：GNN 分數（正規化）＋ 這一輪講到的偏好與店家標籤的匹配度
     keywords = [k for k in (pref_keywords or []) if isinstance(k, str) and k and k != '不限']
     _blend_scores(filtered, keywords, state['id2tags'], tag_weight)
+
+    # 放寬時補位也有先後：符合越多硬條件的越優先（要「帶狗＋十點後」，
+    # 只符合「十點後」的也比兩個都不符合的好）。否則補進來的是隨機熱門店，
+    # 實測整批都是六點就關門的店。
+    if must_include is not None and filtered is candidates:
+        wanted = [f for f, w in hard_filters.items()
+                  if w and (filter_pools or {}).get(f) is not None]
+        if wanted:
+            def passed(c):
+                return sum(c['cafe_id'] in filter_pools[f] for f in wanted)
+            partial = sorted((c for c in filtered if passed(c) > 0),
+                             key=lambda c: (passed(c), c.get('blended_score', 0)),
+                             reverse=True)
+            for c in partial:
+                if len(must_include) >= TIER1_PICK + TIER2_PICK:
+                    break
+                must_include.add(c['cafe_id'])
 
     # 有明確偏好且真的有店家對上時，保證最匹配的兩家入選（其餘仍隨機）
     has_match = any(c.get('tag_score', 0) > 0 for c in filtered)

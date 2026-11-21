@@ -295,8 +295,11 @@ export function useChatLogic(user, navigate) {
             setRecommendGate(nextGate);
           }
         } else if (parsed.pref_state) {
-          // 後端合併後的累積偏好：掛在對話物件上，隨對話儲存、重開可還原
-          setNormalizedCurrentChat((prev) => ({
+          // 後端合併後的累積偏好：掛在對話物件上，隨對話儲存、重開可還原。
+          // 必須同步寫進 currentChatRef：緊接著的 status 事件會以 ref 為底重建對話，
+          // 用延遲執行的 updater 寫入，偏好會被那次重建蓋回上一輪的版本。
+          const prev = currentChatRef.current;
+          setNormalizedCurrentChat({
             ...prev,
             pref_state: {
               ...(prev.pref_state || {}),
@@ -306,7 +309,7 @@ export function useChatLogic(user, navigate) {
               ...(streamBase !== null ? { progress_base: streamBase } : {}),
               preferences: parsed.pref_state.preferences || {}
             }
-          }));
+          });
         } else if (parsed.status) {
           await syncStreamState(currentAiContent, currentDebugInfo, '', false, parsed.status);
         } else if (parsed.debug_info || parsed.type === 'debug_info') {

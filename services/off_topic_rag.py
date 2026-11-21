@@ -241,6 +241,7 @@ def _build():
                     (raw.get('cafe_anchor_terms') or {}).get('terms', [])],
         'min_score': float(cfg.get(key, 0.28)),
         'guard_margin': float(cfg.get('guard_margin', 0.04)),
+        'min_chars_for_retrieval': int(cfg.get('min_chars_for_retrieval', 3)),
         'responses': {c['id']: c['response'] for c in categories},
         'names': {c['id']: c['name'] for c in categories},
     }
@@ -345,6 +346,11 @@ def classify(user_message: str):
                 {'stage': 'keyword', 'score': 1.0, 'hit': kw})
 
     if _mentions_cafe(user_message):
+        return blank
+
+    # 「好」「哈哈」這種短回應幾乎沒有語意，相似度分數只是雜訊；
+    # 真正的離題短句（「股票」「颱風」）由上面的關鍵字錨點負責
+    if len(_normalize(user_message)) < state['min_chars_for_retrieval']:
         return blank
 
     hits, threshold = search(user_message, top_k=10)

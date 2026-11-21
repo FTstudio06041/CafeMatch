@@ -755,6 +755,32 @@ def test_is_ready_to_recommend_honours_state():
                                  state={'question_count': max_questions}) is True
 
 
+def test_ready_agrees_with_invitation_when_every_dimension_was_asked():
+    """
+    每個維度都問過（或已掌握）時狀態機會邀請按推薦，按鈕也必須放行；
+    否則 AI 說「可以推薦了」，按鈕卻鎖著、推薦請求也被擋下。
+    """
+    from services.conversation_guide import (
+        is_ready_to_recommend, analyze_and_guide, classify_instruction, KIND_INVITE,
+    )
+    history = [{'role': 'user', 'content': '請直接根據目前的資訊推薦咖啡廳'}]
+    state = {'asked_dimensions': ['budget', 'purpose', 'vibe', 'taste'],
+             'question_count': 4, 'user_turns': 7}
+    prefs = {'purpose': ['專心工作讀書'], 'special': ['花蓮市市區']}
+
+    kind, _ = classify_instruction(analyze_and_guide(
+        history, {'preferences': prefs, 'dialogue_act': 'recommend'},
+        has_quiz=False, state=state,
+    ))
+    assert kind == KIND_INVITE
+    assert is_ready_to_recommend(history, 2, has_quiz=False, state=state,
+                                 collected_keys=set(prefs)) is True
+    # 還有維度沒問過也沒掌握 → 照舊擋下
+    assert is_ready_to_recommend(history, 2, has_quiz=False,
+                                 state={'asked_dimensions': ['budget']},
+                                 collected_keys=set(prefs)) is False
+
+
 def test_clean_guide_state_rejects_garbage():
     """state 由前端帶回，髒資料不能污染狀態機。"""
     from services.conversation_guide import clean_guide_state
