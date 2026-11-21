@@ -10,6 +10,8 @@ preference_adjuster.py — 心理測驗分數 × 對話確認結果 → GNN 輸�
 設計原則：純 Python 規則，不依賴 torch / Flask，可獨立單元測試。
 """
 
+import re
+
 from services.preference_service import is_negative_preference
 
 DIMS = ["work", "env", "social", "taste", "cp"]
@@ -78,6 +80,63 @@ _HARD_FILTER_KEYWORDS = {
     'night': ('深夜', '晚間', '宵夜', '夜間', '很晚', '晚一點', '到晚'),
 }
 
+# 講出具體時間的晚間需求：「晚上十點後還有開的」「營業到九點」。
+# 「晚上」單獨出現仍不算（見上），要接著時間點才是在要求營業時段。
+_NIGHT_TIME_PATTERNS = (
+    re.compile(r'(?:晚上|夜裡|半夜)\s*(?:\d{1,2}|[一二三四五六七八九十]{1,3})\s*點'),
+    re.compile(r'(?:營業|開)到\s*(?:晚上)?\s*(?:[89]|1[0-2]|[八九十]|十[一二])\s*點'),
+)
+
+
+def hard_filter_flags(text: str) -> set:
+    """這一個條件觸發了哪些硬過濾（pet / parking / night）。"""
+    flags = {flag for flag, signals in _HARD_FILTER_KEYWORDS.items()
+             if any(sig in text for sig in signals)}
+    if any(p.search(text) for p in _NIGHT_TIME_PATTERNS):
+        flags.add('night')
+    return flags
+
+
+# 預算上限。只看 budget 維度：其他維度的數字多半是時間或人數。
+# 沒講數字的「平價」類說法，以資料庫最便宜那一級價位帶（$1-200）的上限計。
+_CHEAP_BUDGET_WORDS = ('平價', '便宜', '學生', 'CP值', '銅板')
+CHEAP_BUDGET_MAX = 200
+_CN_DIGITS = {'一': 1, '二': 2, '兩': 2, '三': 3, '四': 4, '五': 5,
+              '六': 6, '七': 7, '八': 8, '九': 9}
+_ARABIC_AMOUNT = re.compile(r'\d{2,5}')
+_CHINESE_AMOUNT = re.compile(r'([一二兩三四五六七八九])?([千百])([一二兩三四五六七八九])?')
+
+
+def _parse_amount(text: str) -> int | None:
+    """抓出句中最後一個金額（改口時新的數字在後面）。"""
+    found = []
+    for m in _ARABIC_AMOUNT.finditer(text):
+        found.append((m.start(), int(m.group())))
+    for m in _CHINESE_AMOUNT.finditer(text):
+        head = _CN_DIGITS.get(m.group(1), 1)
+        unit = 1000 if m.group(2) == '千' else 100
+        tail = _CN_DIGITS.get(m.group(3), 0) * unit // 10
+        found.append((m.start(), head * unit + tail))
+    return max(found)[1] if found else None
+
+
+def parse_budget_max(preferences: dict | None) -> int | None:
+    """
+    使用者一人的消費上限（元）。沒講、講「不限」或只是否定句時回傳 None。
+
+    「預算兩百內」→ 200、「under 300」→ 300、「百元有找」→ 100、「平價」→ 200。
+    """
+    budget = None
+    for text in (preferences or {}).get('budget') or []:
+        if not isinstance(text, str) or text == '不限' or is_negative_preference(text):
+            continue
+        amount = _parse_amount(text)
+        if amount is None and any(w.lower() in text.lower() for w in _CHEAP_BUDGET_WORDS):
+            amount = CHEAP_BUDGET_MAX
+        if amount is not None:
+            budget = amount   # 後面的條件是較新的說法
+    return budget
+
 
 def detect_accuracy_feedback(history: list) -> str:
     """
@@ -128,9 +187,8 @@ def build_gnn_input(quiz_scores: dict | None, history: list, preferences: dict |
                 continue
             if is_negative_preference(kw):
                 continue
-            for flag, signals in _HARD_FILTER_KEYWORDS.items():
-                if any(sig in kw for sig in signals):
-                    hard_filters[flag] = True
+            for flag in hard_filter_flags(kw):
+                hard_filters[flag] = True
             for boost_kw in _KEYWORD_BOOSTS:
                 if boost_kw in kw:
                     matched_boosts.add(boost_kw)

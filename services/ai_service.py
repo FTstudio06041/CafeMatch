@@ -7,12 +7,12 @@ from config.prompts.policy_system_prompt import GLOBAL_POLICY
 from config.prompts.task_rules import CAFE_TASK_RULES, GENERAL_TASK_RULES
 from config.prompts.output_format import (
     CAFE_RECOMMENDATION_FORMAT, CAFE_RECOMMENDATION_FORMAT_CARDS,
-    COVERAGE_DISCLOSURE_RULE,
+    CARDS_REFRESH_RULE, CARD_FACTS_RULE, COVERAGE_DISCLOSURE_RULE,
 )
 from config.ai_constants import AI_CHAT_HISTORY_LIMIT, OLLAMA_CLIENT_TIMEOUT
 from services.ollama_client import OllamaClient
 
-def build_prompt(user_message, history, is_cafe_related, cafe_context, guide_instruction=None, extracted_preferences=None, cards_mode=False, coverage=None):
+def build_prompt(user_message, history, is_cafe_related, cafe_context, guide_instruction=None, extracted_preferences=None, cards_mode=False, coverage=None, refresh=False, card_facts=None):
     """
     按照強制順序與 XML 標籤組裝完整的 Prompt：
     1. Policy Layer
@@ -47,11 +47,19 @@ def build_prompt(user_message, history, is_cafe_related, cafe_context, guide_ins
     if is_cafe_related and should_recommend:
         fmt = CAFE_RECOMMENDATION_FORMAT_CARDS if cards_mode else CAFE_RECOMMENDATION_FORMAT
         fmt = fmt.strip()
+        # 「換一批」：卡片已經換成另一批店，模型若只看歷史會以為還在追問階段
+        if cards_mode and refresh:
+            fmt += "\n\n" + CARDS_REFRESH_RULE.strip()
+        facts_block = _format_card_facts(card_facts) if cards_mode else ""
+        if facts_block:
+            fmt += "\n\n" + CARD_FACTS_RULE.strip()
         if coverage_block:
             fmt += "\n\n" + COVERAGE_DISCLOSURE_RULE.strip()
         prompt += f"<OUTPUT_FORMAT>\n{fmt}\n</OUTPUT_FORMAT>\n\n"
         if coverage_block:
             prompt += f"<REQUEST_COVERAGE>\n{coverage_block}\n</REQUEST_COVERAGE>\n\n"
+        if facts_block:
+            prompt += f"<CARD_FACTS>\n{facts_block}\n</CARD_FACTS>\n\n"
 
     # 4. RAG Context (僅參考資訊)
     if cafe_context:
@@ -123,11 +131,35 @@ def _format_coverage(coverage):
     return "\n".join(lines)
 
 
-def stream_generate(model_name, prompt_text, is_cafe_related, cafe_context, db, AiQueryLog, user_id=None, show_debug=False):
+def _format_card_facts(card_facts):
+    """
+    把 cafe_facts.card_condition_facts() 寫成完整句子。
+
+    同 _format_coverage 的理由，不寫成「欄位：值」——小模型會把欄位名照抄進回覆。
+    """
+    lines = []
+    for f in card_facts or []:
+        text, matched, total = f.get('text'), f.get('matched'), f.get('total')
+        if not text or not total:
+            continue
+        if matched is None:
+            lines.append(f"「{text}」：店家資料沒有明確標註，沒有資料可以判斷。")
+        elif matched == total:
+            lines.append(f"「{text}」：下面 {total} 家全部符合。")
+        elif matched == 0:
+            lines.append(f"「{text}」：下面 {total} 家都沒有資料顯示符合。")
+        else:
+            lines.append(f"「{text}」：下面 {total} 家中有 {matched} 家的資料顯示符合，其他家沒有資料顯示符合。")
+    return "\n".join(lines)
+
+
+def stream_generate(model_name, prompt_text, is_cafe_related, cafe_context, db, AiQueryLog, user_id=None, show_debug=False, extra_stop=None):
     """
     呼叫 Ollama API 進行串流生成，並在串流結束時攔截 Token 統計資料，
     寫入 AiQueryLog 資料表。
     這是一個 Python Generator 函式，直接 yield 給 Flask response_class 使用。
+
+    extra_stop：這一輪額外的停止序列（例如出卡片時禁止模型自己列店家資訊）。
     """
     if show_debug:
         # 先送出第一包 debug_info — 前端立刻就能顯示
@@ -146,8 +178,8 @@ def stream_generate(model_name, prompt_text, is_cafe_related, cafe_context, db, 
     stop_sequences = [
         "<POLICY>", "<TASK_RULES>", "<OUTPUT_FORMAT>",
         "<KNOWLEDGE_BASE>", "<CONVERSATION_SUMMARY>", "<USER_MESSAGE>", "<TURN_TASK>",
-        "<REQUEST_COVERAGE>"
-    ]
+        "<REQUEST_COVERAGE>", "<CARD_FACTS>"
+    ] + list(extra_stop or [])
 
     try:
         response = client.generate(

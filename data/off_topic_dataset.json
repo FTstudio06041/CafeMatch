@@ -6,6 +6,8 @@
     "min_score": 0.28,
     "min_score_embedding": 0.55,
     "guard_margin": 0.04,
+    "_comment_min_chars": "去掉標點與語助詞後少於這個字數的句子不做相似度檢索，只看關鍵字。「好」「哈哈」幾乎沒有語意，embedding 分數是雜訊，實測「好」對上時事類 0.74，回答 AI 問題就被婉拒。",
+    "min_chars_for_retrieval": 3,
     "ngram_sizes": [
       2,
       3

@@ -158,7 +158,8 @@ def _fmt_scores_delta(scores, prev):
 
 def log_recommendation(accuracy, base_scores, adjusted_scores, hard_filters,
                        keywords, engine, cafes, excluded=0,
-                       ignored_filters=None, filter_pools=None):
+                       ignored_filters=None, filter_pools=None,
+                       budget_max=None, required_count=None):
     """按下「直接推薦」時：測驗分數如何被調整、最後推了哪幾家。"""
     if not enabled():
         return
@@ -181,6 +182,9 @@ def log_recommendation(accuracy, base_scores, adjusted_scores, hard_filters,
     if ignored:
         # 使用者提了但系統沒有資料可判斷 —— 講清楚，別讓人以為有考慮
         _line('無法套用', '、'.join(filter_names.get(a, a) for a in ignored) + '（資料庫沒有這項資料）')
+    if required_count is not None:
+        budget = f'價位下限低於 {budget_max} 元' if budget_max else '不限預算'
+        _line('必要條件', f'營業中、{budget}（{required_count} 家符合）')
     _line('混合關鍵字', '、'.join(keywords) if keywords else '（無）')
     if excluded:
         _line('已排除', f'{excluded} 家（換一批）')

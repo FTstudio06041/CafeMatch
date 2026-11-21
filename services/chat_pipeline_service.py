@@ -6,11 +6,11 @@ from models import User, Cafes, Tags, AiQueryLog
 from services import ai_service, conversation_guide, preference_service, debug_logger
 from services.preference_adjuster import build_gnn_input
 from services.intent_classifier import classify_intent
-from services import off_topic_rag
+from services import off_topic_rag, service_area
 from services.cafe_retriever import retrieve_cafe_data, format_cafe_context, serialize_cafe
 from services.ollama_admin_service import check_health, get_default_model
 from services.settings_service import get_selected_model
-from config.ai_constants import CHAT_EXIT_KEYWORDS
+from config.ai_constants import CHAT_EXIT_KEYWORDS, CARDS_MODE_STOP_SEQUENCES
 
 class ChatPipelineService:
     @staticmethod
@@ -55,6 +55,13 @@ class ChatPipelineService:
                 yield json.dumps({"status": "generating_response"}, ensure_ascii=False) + "\n"
                 yield json.dumps({"response": off_response}, ensure_ascii=False) + "\n"
                 yield json.dumps({"done": True}, ensure_ascii=False) + "\n"
+                return
+
+            # 指定了花蓮以外的地點：資料庫沒有那裡的店，進模型只會被順著講下去
+            outside_reply = service_area.outside_area(user_message)
+            if outside_reply and not is_quiz_result:
+                yield json.dumps({"status": "generating_response"}, ensure_ascii=False) + "\n"
+                yield from ChatPipelineService._fixed_reply(outside_reply)
                 return
 
             if not is_cafe_related:
@@ -225,6 +232,10 @@ class ChatPipelineService:
                     recommend_engine = "gnn"
                 if not cafes:
                     cafes = retrieve_cafe_data(matched_keywords, Cafes, Tags)
+                    # 回退路徑同樣不推整週公休或超出預算的店
+                    required = ChatPipelineService._required_ids(extracted_data)
+                    if required is not None:
+                        cafes = [c for c in cafes if c.id in required] or cafes
                     if exclude_ids:
                         remaining = [c for c in cafes if c.id not in exclude_ids]
                         # 全被排除時寧可重複推薦，也不要空手而回
@@ -270,9 +281,12 @@ class ChatPipelineService:
             # 推出一批毫不相干的店。模型看到的店家清單在零命中與完美命中時
             # 長得一模一樣，不先告訴它，它沒有任何線索可以判斷。
             coverage = None
+            card_facts = None
             if has_cards:
                 from services import cafe_facts as _cafe_facts
                 coverage = _cafe_facts.classify_conditions(extracted_prefs)
+                # 這批卡片逐店核對：模型只能照這份結果講「都符合」或「其中幾家」
+                card_facts = _cafe_facts.card_condition_facts(extracted_prefs, cafes)
                 debug_logger.log_coverage(coverage)
                 if coverage.get('uncovered'):
                     # 讓前端／測試驗證得到這一輪有哪些條件沒有著落
@@ -290,7 +304,9 @@ class ChatPipelineService:
                 guide_instruction=guide_instruction,
                 extracted_preferences=extracted_prefs,
                 cards_mode=has_cards,
-                coverage=coverage
+                coverage=coverage,
+                refresh=has_cards and bool(data.get('exclude_cafe_ids')),
+                card_facts=card_facts,
             )
 
             user_id = None
@@ -322,7 +338,8 @@ class ChatPipelineService:
                 db=db,
                 AiQueryLog=AiQueryLog,
                 user_id=user_id,
-                show_debug=show_debug
+                show_debug=show_debug,
+                extra_stop=CARDS_MODE_STOP_SEQUENCES if has_cards else None,
             ):
                 try:
                     parsed = json.loads(chunk)
@@ -544,11 +561,22 @@ class ChatPipelineService:
             from services import cafe_facts
             pools = cafe_facts.filter_pools()
             ignored = cafe_facts.unsupported(hard_filters)
+            # 營業中與預算是不放寬的條件：寧可少推幾家，也不推整週公休或超出預算的店
+            from services.preference_adjuster import parse_budget_max
+            budget_max = parse_budget_max(preferences)
+            required = cafe_facts.required_ids(pools, budget_max)
 
             ranked = gnn_recommender.recommend_by_scores(
                 adjusted, hard_filters, exclude_ids=exclude_ids,
-                pref_keywords=pref_keywords, filter_pools=pools
+                pref_keywords=pref_keywords, filter_pools=pools,
+                required_ids=required,
             )
+            if not ranked and exclude_ids and required:
+                # 符合條件的店都推過了：寧可重複推薦，也不放掉預算
+                ranked = gnn_recommender.recommend_by_scores(
+                    adjusted, hard_filters, pref_keywords=pref_keywords,
+                    filter_pools=pools, required_ids=required,
+                )
             if not ranked:
                 return []
 
@@ -567,6 +595,8 @@ class ChatPipelineService:
                 excluded=len(exclude_ids or []),
                 ignored_filters=ignored,
                 filter_pools=pools,
+                budget_max=budget_max,
+                required_count=len(required) if required is not None else None,
             )
             return cafes
         except gnn_recommender.GnnUnavailable as e:
@@ -575,6 +605,14 @@ class ChatPipelineService:
         except Exception as e:
             current_app.logger.exception(f"[GNN] 推薦失敗，回退關鍵字檢索：{e}")
             return []
+
+    @staticmethod
+    def _required_ids(extracted_data):
+        """一定要符合的店家名單（營業中、預算內）；資料讀不到時回傳 None。"""
+        from services import cafe_facts
+        from services.preference_adjuster import parse_budget_max
+        prefs = (extracted_data or {}).get("preferences")
+        return cafe_facts.required_ids(cafe_facts.filter_pools(), parse_budget_max(prefs))
 
     @staticmethod
     def _latest_quiz_scores_from_db():
