@@ -1,0 +1,316 @@
+/* =========================================
+   店家專屬畫面（草圖第三版）
+   標頭：照片＋資訊與星數（貼著卡片左緣）；內容：評論區為主、旁邊資訊欄
+   ========================================= */
+.cafe-focus {
+    container-type: inline-size;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--block-radius, 26px);
+    background: #f3ebe1;
+    box-shadow: 0 10px 30px rgba(43, 27, 8, 0.14);
+    overflow: hidden;
+    animation: focusIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes focusIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- 標頭 ---------- */
+.cafe-focus-head {
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+    /* 寬：照片｜資訊｜按鈕（右上）；中：按鈕移到資訊下面；窄：按鈕獨佔一列 */
+    display: grid;
+    grid-template-columns: 140px minmax(0, 1fr) auto;
+    grid-template-areas: "photo info actions";
+    column-gap: var(--space-5);
+    min-height: 140px;
+    padding-right: var(--space-4);
+    border-radius: var(--block-radius, 26px);
+    background: #e6d6c3;
+    box-shadow: 0 6px 18px rgba(43, 27, 8, 0.14);
+}
+
+.cafe-focus-photo {
+    grid-area: photo;
+    width: 140px;
+    min-height: 140px;
+    border-radius: var(--block-radius, 26px);
+    box-shadow: 4px 0 14px rgba(43, 27, 8, 0.12);
+}
+
+/* 照片鋪滿格子、不參與排版：直式照片不會用自己的比例把標頭撐高 */
+.cafe-focus-photo img {
+    position: absolute;
+    inset: 0;
+}
+
+.cafe-focus-info {
+    grid-area: info;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    padding: var(--space-3) 0;
+}
+
+.cafe-focus-titlerow {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-3);
+}
+
+.cafe-focus-titlerow h2 {
+    font-size: clamp(1.15rem, 1.6vw, 1.55rem);
+    font-weight: 900;
+    line-height: var(--leading-tight);
+    color: var(--text-main);
+}
+
+.cafe-focus-titlerow h2:focus {
+    outline: none;
+}
+
+.focus-open {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    background: rgba(78, 52, 46, 0.1);
+    color: var(--text-light);
+    font-size: var(--text-xs);
+    font-weight: 800;
+}
+
+.focus-open::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.focus-open.open {
+    background: rgba(46, 125, 50, 0.12);
+    color: var(--color-success);
+}
+
+.cafe-focus-ratings {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-5);
+    color: var(--text-main);
+}
+
+.focus-rating {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--text-sm);
+}
+
+.focus-rating b {
+    font-size: var(--text-base);
+    font-weight: 900;
+}
+
+.focus-muted {
+    color: var(--text-light);
+    font-size: var(--text-sm);
+}
+
+.cafe-focus-facts {
+    list-style: none;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px var(--space-4);
+    min-width: 0;
+    font-size: var(--text-sm);
+    color: var(--text-main);
+}
+
+.cafe-focus-facts li {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.cafe-focus-facts svg {
+    flex-shrink: 0;
+    color: var(--brand-secondary);
+}
+
+.cafe-focus-facts li.focus-address {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block; /* inline-flex 不吃 text-overflow，改 block 才會出現刪節號 */
+}
+
+.focus-address svg {
+    vertical-align: -2px;
+    margin-right: 5px;
+}
+
+.cafe-focus-actions {
+    grid-area: actions;
+    align-self: start;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    padding-top: var(--space-4);
+}
+
+.focus-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 0 var(--space-4);
+    border: 1px solid rgba(78, 52, 46, 0.2);
+    border-radius: var(--radius-full);
+    background: rgba(255, 250, 243, 0.6);
+    color: var(--text-main);
+    font-weight: 700;
+    font-size: var(--text-sm);
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.focus-action:hover {
+    background: #fffaf3;
+}
+
+.focus-action.on {
+    background: var(--espresso);
+    border-color: var(--espresso);
+    color: #fffaf3;
+}
+
+.cafe-focus-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 40px;
+    padding: 0 var(--space-4) 0 var(--space-3);
+    border: none;
+    border-radius: var(--radius-full);
+    background: var(--espresso);
+    color: #fffaf3;
+    font-weight: 700;
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.cafe-focus-back:hover {
+    background: var(--espresso-soft);
+}
+
+/* ---------- 內容：評論區＋旁邊資訊欄 ---------- */
+.cafe-focus-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+    align-items: start;
+    gap: var(--space-6);
+    padding: var(--space-5) var(--space-6) var(--space-6);
+}
+
+.focus-section-title {
+    font-size: var(--text-lg);
+    font-weight: 900;
+    color: var(--text-main);
+    margin-bottom: var(--space-3);
+}
+
+.cafe-focus-side {
+    padding: var(--space-4) var(--space-5) var(--space-5);
+    border-radius: var(--radius-xl);
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.cafe-focus-side > .detail-section:first-child {
+    margin-top: 0;
+}
+
+/* 卡片本身窄的時候（不管視窗多寬），資訊欄移到評論下面 */
+/* 按鈕和資訊並排太擠時，按鈕換到資訊下面 */
+@container (max-width: 920px) {
+    .cafe-focus-head {
+        grid-template-columns: 140px minmax(0, 1fr);
+        grid-template-areas: "photo info" "photo actions";
+    }
+    .cafe-focus-info {
+        padding-bottom: 0;
+    }
+    .cafe-focus-actions {
+        justify-content: flex-start;
+        padding: var(--space-2) 0 var(--space-3);
+    }
+}
+
+@container (max-width: 780px) {
+    .cafe-focus-body {
+        grid-template-columns: 1fr;
+    }
+}
+
+@container (max-width: 560px) {
+    .cafe-focus-head {
+        grid-template-columns: 104px minmax(0, 1fr);
+        grid-template-areas: "photo info" "actions actions";
+        column-gap: var(--space-3);
+        padding-right: 0;
+    }
+    .cafe-focus-photo {
+        width: 104px;
+        height: 104px;
+        min-height: 0;
+        align-self: start;
+        border-radius: var(--block-radius, 22px) 0 var(--block-radius, 22px) var(--block-radius, 22px);
+    }
+    .cafe-focus-actions {
+        padding: var(--space-2) var(--space-3) var(--space-3);
+        flex-wrap: nowrap;
+    }
+    .cafe-focus-info {
+        padding: var(--space-3) var(--space-3) var(--space-3) 0;
+    }
+    .cafe-focus-facts {
+        flex-wrap: wrap;
+    }
+    .focus-action,
+    .cafe-focus-back {
+        flex: 1;
+        padding: 0 var(--space-2);
+    }
+    .cafe-focus-body {
+        padding: var(--space-4);
+    }
+}
+
+/* 支援切頁動畫（View Transitions）的瀏覽器由切頁動畫負責進場，這裡不再疊一次 */
+@supports (view-transition-name: none) {
+    .cafe-focus {
+        animation: none;
+    }
+}

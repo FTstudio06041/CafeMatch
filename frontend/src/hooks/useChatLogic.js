@@ -34,7 +34,10 @@ export const normalizeChatSession = (chat) => ({
 
 const DEFAULT_PREF_TARGET = 3; // 後端未回報時的預設目標維度數
 
-export function useChatLogic(user, navigate) {
+// 目前開著的對話 id，重新整理首頁時用來接回同一段對話（分頁關掉就忘記）
+const ACTIVE_CHAT_KEY = 'activeChatId';
+
+export function useChatLogic(user) {
   const [currentChat, setCurrentChat] = useState(EMPTY_CHAT);
   const [isTyping, setIsTyping] = useState(false);
   // 偏好掌握度：
@@ -91,7 +94,8 @@ export function useChatLogic(user, navigate) {
   }, []);
 
   const saveSessionToBackend = useCallback(async (chatState) => {
-    if (user?.isGuest) return;
+    // 未登入的對話不保存（首頁公開，不登入也能聊）
+    if (!user || user.isGuest) return;
     try {
       const normalizedChat = normalizeChatSession(chatState);
       const payload = {
@@ -115,17 +119,17 @@ export function useChatLogic(user, navigate) {
         const newId = data.id;
         if (!normalizedChat.id) {
           setNormalizedCurrentChat(prev => ({ ...prev, id: newId }));
-          navigate(`/chat?id=${newId}`, { replace: true });
         }
+        try { sessionStorage.setItem(ACTIVE_CHAT_KEY, String(newId)); } catch { /* storage 不可用就算了 */ }
         window.dispatchEvent(new Event('chat-updated'));
       }
     } catch (e) {
       logger.error('Failed to save session:', e);
     }
-  }, [user?.isGuest, navigate, setNormalizedCurrentChat]);
+  }, [user, setNormalizedCurrentChat]);
 
   const executeChatStream = useCallback(async (messageText, options = {}) => {
-    const { customTitle = null, hiddenPrompt = false, isQuizResult = false, replaceMsgIdx = null, forceRecommend = false, quizScores: suppliedQuizScores } = options;
+    const { customTitle = null, hiddenPrompt = false, isQuizResult = false, replaceMsgIdx = null, forceRecommend = false, quizScores: suppliedQuizScores, introCafeId = null } = options;
     if (isTyping) return;
     if (!messageText.trim()) return;
     const isHidden = hiddenPrompt;
@@ -141,7 +145,8 @@ export function useChatLogic(user, navigate) {
     
     let chatTitle = currentChatRef.current.title;
     if (chatTitle === '新對話') {
-      chatTitle = customTitle || messageText.substring(0, 10) + '...';
+      // 只有真的被截斷才加刪節號（左欄標題常駐顯示，短句後面掛「...」很怪）
+      chatTitle = customTitle || (messageText.length > 10 ? `${messageText.substring(0, 10)}…` : messageText);
     }
 
     let nextMessages = [...currentChatRef.current.messages];
@@ -248,6 +253,8 @@ export function useChatLogic(user, navigate) {
         force_recommend: forceRecommend,
         quiz_scores: quizScores,
         exclude_cafe_ids: excludeCafeIds,
+        // 首頁點開某家店後按「介紹一下」：後端走獨立的介紹路徑
+        intro_cafe_id: introCafeId ?? undefined,
         // 帶回累積偏好，後端會與本輪萃取合併（長對話不失憶）
         pref_state: currentChatRef.current.pref_state || undefined
       }, abortControllerRef.current.signal);
@@ -411,6 +418,40 @@ export function useChatLogic(user, navigate) {
     setIsTyping(false);
   }, []);
 
+  /** 開一段全新的對話 */
+  const newChat = useCallback(() => {
+    if (abortControllerRef.current) abortControllerRef.current.abort();
+    try { sessionStorage.removeItem(ACTIVE_CHAT_KEY); } catch { /* 略過 */ }
+    resetProgress(0);
+    setNormalizedCurrentChat(EMPTY_CHAT);
+  }, [resetProgress, setNormalizedCurrentChat]);
+
+  /** 載入已儲存的對話，並從累積偏好還原掌握度；成功回傳 true */
+  const openSession = useCallback(async (sessionId) => {
+    if (!sessionId || !user || user.isGuest) return false;
+    try {
+      const data = await chatService.fetchSessionDetail(sessionId);
+      if (!data?.id) return false;
+      setNormalizedCurrentChat(data);
+      const ps = data.pref_state || {};
+      const dims = Object.values(ps.preferences || {})
+        .filter(v => Array.isArray(v) && v.length > 0).length;
+      resetProgress(ps.progress_base || 0, dims, ps.progress_target);
+      try { sessionStorage.setItem(ACTIVE_CHAT_KEY, String(data.id)); } catch { /* 略過 */ }
+      return true;
+    } catch (err) {
+      logger.error('Failed to load session:', err);
+      return false;
+    }
+  }, [user, resetProgress, setNormalizedCurrentChat]);
+
+  /** 重新整理後接回上一段對話（只限登入者、同一個分頁） */
+  const resumeActiveSession = useCallback(() => {
+    let id = null;
+    try { id = sessionStorage.getItem(ACTIVE_CHAT_KEY); } catch { /* 略過 */ }
+    return id ? openSession(id) : Promise.resolve(false);
+  }, [openSession]);
+
   return {
     currentChat,
     setNormalizedCurrentChat,
@@ -423,6 +464,9 @@ export function useChatLogic(user, navigate) {
     progressPercent,
     resetProgress,
     recommendGate,
-    chatProgress
+    chatProgress,
+    newChat,
+    openSession,
+    resumeActiveSession
   };
 }

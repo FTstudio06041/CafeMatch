@@ -1,11 +1,13 @@
 import requests
 from flask import Blueprint, jsonify, request, redirect, current_app
 from database import db
-from models import Cafes
+from extensions import limiter
+from models import Cafes, UserQuizResult
 from utils.auth import get_current_user
 from utils.response import error_response
 from services.cafe_explore_service import get_cafes_data
 from services.google_maps_service import has_google_maps_key, get_google_photo_uri
+from services.home_recommend_service import DIMS, parse_scores, recommend_for_home
 
 explore_bp = Blueprint('explore', __name__)
 
@@ -17,6 +19,39 @@ def get_cafes():
         return jsonify(results)
     except Exception as e:
         current_app.logger.error(f"Database Error: {e}")
+        return error_response("系統發生錯誤，請稍後再試", 500)
+
+
+def _latest_quiz_scores(user):
+    record = UserQuizResult.query.filter_by(user_id=user.id) \
+        .order_by(UserQuizResult.created_at.desc()).first()
+    if not record:
+        return None
+    return parse_scores({
+        'work': record.score_work, 'env': record.score_env, 'social': record.score_social,
+        'taste': record.score_taste, 'cp': record.score_cp,
+    })
+
+
+@explore_bp.route('/api/cafes/recommended', methods=['GET'])
+@limiter.limit("30 per minute")
+def get_recommended_cafes():
+    """
+    首頁「你可能會喜歡」。
+
+    登入者用資料庫裡最近一次的測驗分數；未登入但在這台裝置做過測驗的人，
+    前端會把分數放在 query string（work=..&env=..）帶過來。
+    """
+    try:
+        current_user = get_current_user()
+        scores = _latest_quiz_scores(current_user) if current_user else None
+        if scores is None and all(d in request.args for d in DIMS):
+            scores = parse_scores({d: request.args.get(d) for d in DIMS})
+        limit = max(1, min(request.args.get('limit', 8, type=int), 20))
+        cafe_ids = [cid for (cid,) in db.session.query(Cafes.id).order_by(Cafes.id).all()]
+        return jsonify(recommend_for_home(cafe_ids, scores=scores, limit=limit))
+    except Exception as e:
+        current_app.logger.error(f"Recommend Error: {e}")
         return error_response("系統發生錯誤，請稍後再試", 500)
 
 

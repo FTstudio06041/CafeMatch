@@ -1,4 +1,4 @@
-
+import './BugReportModal.css';
 import { SIDEBAR_UI_TEXTS } from '../utils/constants';
 
 export default function BugReportModal({ 

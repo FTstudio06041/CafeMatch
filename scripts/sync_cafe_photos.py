@@ -9,8 +9,13 @@
                                      並縮圖壓縮成 800px JPEG）
 
 用法：
-    venv\\Scripts\\python.exe scripts\\sync_cafe_photos.py            # 同步
-    venv\\Scripts\\python.exe scripts\\sync_cafe_photos.py --dry-run  # 只看會做什麼
+    venv\\Scripts\\python.exe scripts\\sync_cafe_photos.py              # 同步
+    venv\\Scripts\\python.exe scripts\\sync_cafe_photos.py --dry-run    # 只看會做什麼
+    venv\\Scripts\\python.exe scripts\\sync_cafe_photos.py --force      # 店家照片全部重新處理
+    venv\\Scripts\\python.exe scripts\\sync_cafe_photos.py --cafes-only # 只處理店家照片
+
+店家照片會裁掉外圍補上的白邊（原圖不是正方形，被補白成 1080×1080，
+放進首頁的方形卡片會露出白條），並縮到 960px。
 
 之後在 GitHub 上傳新圖到對應資料夾後，重跑一次即可。
 """
@@ -35,6 +40,55 @@ PERSONA_SOURCE_DIR = os.path.join(ROOT, 'img', 'quiz')
 PERSONA_TARGET_DIR = os.path.join(ROOT, 'frontend', 'src', 'assets', 'personality')
 # 結果頁顯示尺寸只有 280px，800px 已足夠涵蓋高解析螢幕
 PERSONA_MAX_SIZE = 800
+# 首頁店家卡最大約 280px、詳情頁頭圖約 430px，960px 涵蓋兩倍解析度的螢幕
+CAFE_MAX_SIZE = 960
+# 白邊判定：和純白差距在這以內算白（容許 JPEG 雜訊）
+WHITE_TOLERANCE = 18
+
+
+def trim_white_padding(im, tolerance=WHITE_TOLERANCE, min_border=8, max_skew=6):
+    """
+    裁掉照片外圍「補上去」的白邊。
+
+    只在白邊左右等寬（或上下等高）時才裁：補白一定置中、兩側一樣寬；
+    照片本身若剛好有一邊是白牆或過曝的天空，兩側通常不會一樣寬，就不會被誤裁。
+    """
+    from PIL import Image, ImageChops
+
+    rgb = im.convert('RGB')
+    mask = ImageChops.difference(rgb, Image.new('RGB', rgb.size, (255, 255, 255)))         .convert('L').point(lambda v: 255 if v > tolerance else 0)
+    box = mask.getbbox()
+    if not box:
+        return im
+    w, h = rgb.size
+    left, top, right, bottom = box
+    margin_l, margin_t, margin_r, margin_b = left, top, w - right, h - bottom
+
+    crop_l, crop_r, crop_t, crop_b = 0, w, 0, h
+    if min(margin_l, margin_r) > min_border and abs(margin_l - margin_r) <= max_skew:
+        crop_l, crop_r = left, right
+    if min(margin_t, margin_b) > min_border and abs(margin_t - margin_b) <= max_skew:
+        crop_t, crop_b = top, bottom
+    if (crop_l, crop_t, crop_r, crop_b) == (0, 0, w, h):
+        return im
+    return im.crop((crop_l, crop_t, crop_r, crop_b))
+
+
+def process_cafe_photo(src, dst, max_size=CAFE_MAX_SIZE, quality=82):
+    """店家照片：去白邊 → 縮圖 → JPEG。Pillow 不可用時回傳 False，由呼叫端直接複製。"""
+    try:
+        from PIL import Image
+    except ImportError:
+        return False
+    try:
+        with Image.open(src) as im:
+            im = trim_white_padding(im.convert('RGB'))
+            if max(im.size) > max_size:
+                im.thumbnail((max_size, max_size), Image.LANCZOS)
+            im.save(dst, 'JPEG', quality=quality, optimize=True, progressive=True)
+        return True
+    except Exception:
+        return False
 
 
 def optimize_image(src, dst, max_size, quality=85):
@@ -77,7 +131,7 @@ def collect_photos():
     return photos
 
 
-def sync(dry_run=False):
+def sync(dry_run=False, force=False):
     from app import app
     from database import db
     from models import Cafes
@@ -103,9 +157,11 @@ def sync(dry_run=False):
             url = f'{URL_PREFIX}/{fname}'
 
             if not dry_run:
-                # 只有內容不同才複製，重跑時省 I/O
-                if not os.path.exists(dst) or os.path.getsize(dst) != os.path.getsize(src):
-                    shutil.copy2(src, dst)
+                # 來源比較新（或還沒產生過）才重新處理，重跑時省 I/O
+                stale = not os.path.exists(dst) or os.path.getmtime(src) > os.path.getmtime(dst)
+                if force or stale:
+                    if not process_cafe_photo(src, dst):
+                        shutil.copy2(src, dst)
                     copied += 1
                 cafe = db.session.get(Cafes, cafe_id)
                 if cafe and cafe.image != url:
@@ -118,7 +174,7 @@ def sync(dry_run=False):
         if not dry_run:
             db.session.commit()
 
-    msg = f'照片 {len(photos)} 張：複製 {copied} 張、更新 {updated} 筆 cafes.image'
+    msg = f'照片 {len(photos)} 張：處理 {copied} 張、更新 {updated} 筆 cafes.image'
     if orphans:
         msg += f'；{len(orphans)} 張找不到對應咖啡廳（{", ".join(orphans[:5])}）'
     if dry_run:
@@ -191,8 +247,10 @@ def sync_personality(dry_run=False):
 
 if __name__ == '__main__':
     dry = '--dry-run' in sys.argv
-    ok, message = sync(dry_run=dry)
+    ok, message = sync(dry_run=dry, force='--force' in sys.argv)
     print(('[試跑] ' if dry else '') + message.replace('[試跑] ', ''))
-    ok2, message2 = sync_personality(dry_run=dry)
-    print(('[試跑] ' if dry else '') + message2)
+    ok2 = True
+    if '--cafes-only' not in sys.argv:
+        ok2, message2 = sync_personality(dry_run=dry)
+        print(('[試跑] ' if dry else '') + message2)
     sys.exit(0 if (ok and ok2) else 1)

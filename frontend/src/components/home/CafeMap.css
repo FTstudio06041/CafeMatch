@@ -1,0 +1,109 @@
+.cafe-map {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background-color: #efe5d8;
+}
+
+.cafe-map-canvas {
+    position: absolute;
+    inset: 0;
+}
+
+.cafe-map-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-6);
+    text-align: center;
+    color: var(--text-light);
+    font-weight: 600;
+}
+
+/* AI 推薦的大頭針 */
+.map-pin {
+    width: 40px;
+    height: 48px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    filter: drop-shadow(0 4px 6px rgba(43, 27, 8, 0.35));
+    transition: transform 0.18s ease;
+    transform-origin: 50% 100%;
+}
+
+.map-pin-head {
+    width: 36px;
+    height: 36px;
+    margin-top: 2px;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    background: var(--brand-secondary, #8b5a2b);
+    border: 3px solid #fffaf3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.18s;
+}
+
+/* 水滴形狀轉了 -45 度，數字要轉回來才會正立 */
+.map-pin-num {
+    transform: rotate(45deg);
+    color: #fffaf3;
+    font-weight: 900;
+    font-size: 15px;
+    line-height: 1;
+}
+
+.map-pin:hover,
+.map-pin.active {
+    transform: scale(1.18);
+}
+
+.map-pin.active .map-pin-head {
+    background: var(--espresso, #4e342e);
+}
+
+/* 開著詳情的那家（不是推薦）：深咖啡色、咖啡杯符號 */
+.map-pin.focus .map-pin-head {
+    background: var(--espresso, #4e342e);
+}
+
+.map-pin.focus .map-pin-num {
+    display: flex;
+}
+
+/* hover 店名提示 */
+.map-tip .maplibregl-popup-content {
+    padding: 6px 12px;
+    border-radius: var(--radius-full);
+    background: var(--espresso, #4e342e);
+    color: #fffaf3;
+    font-weight: 700;
+    font-size: 0.85rem;
+    box-shadow: var(--shadow-md);
+}
+
+.map-tip .maplibregl-popup-tip {
+    border-top-color: var(--espresso, #4e342e) !important;
+    border-bottom-color: var(--espresso, #4e342e) !important;
+}
+
+.cafe-map .maplibregl-ctrl-group {
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+}
+
+.cafe-map .maplibregl-ctrl-group button {
+    width: 36px;
+    height: 36px;
+}
+
+.cafe-map .maplibregl-ctrl-attrib {
+    font-size: 11px;
+}

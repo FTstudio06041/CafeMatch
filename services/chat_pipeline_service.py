@@ -35,6 +35,13 @@ class ChatPipelineService:
                 yield json.dumps({"error": "Ollama 連線失敗，請確認是否已啟動 Ollama。", "done": True}, ensure_ascii=False) + "\n"
                 return
 
+            # 首頁點開某家店後按「介紹一下」：只介紹那一家，不進需求狀態機、不萃取偏好
+            if data.get('intro_cafe_id') is not None:
+                yield from ChatPipelineService._introduce_cafe(
+                    data.get('intro_cafe_id'), user_message, history, is_debug_requested
+                )
+                return
+
             yield json.dumps({"status": "analyzing_intent"}, ensure_ascii=False) + "\n"
             is_cafe_related, matched_keywords = classify_intent(user_message)
 
@@ -437,6 +444,80 @@ class ChatPipelineService:
                     yield json.dumps({
                         "response": "抱歉，我是花蓮咖啡廳推薦系統，只能幫你找店。"
                                     "想找什麼樣的咖啡廳呢？"
+                    }, ensure_ascii=False) + "\n"
+            except (ValueError, TypeError):
+                pass
+            yield chunk
+
+    @staticmethod
+    def _cafe_intro_context(cafe):
+        """介紹用的店家資料：基本資料加上評價統計（Google 與本站），不含評論內文。"""
+        from services.cafe_explore_service import google_review_stats, platform_review_stats
+        lines = ["【店家資料】", format_cafe_context([cafe])]
+        g_avg, g_cnt = google_review_stats().get(cafe.id, (None, 0))
+        if g_avg is not None:
+            lines.append(f"- Google 地圖評價：{g_avg} 顆星（{g_cnt} 則評論）")
+        p_avg, p_cnt = platform_review_stats().get(cafe.id, (None, 0))
+        if p_avg is not None:
+            lines.append(f"- 本站使用者評價：{p_avg} 顆星（{p_cnt} 則評論）")
+        if cafe.phone:
+            lines.append(f"- 電話：{cafe.phone}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _introduce_cafe(cafe_id, user_message, history, is_debug_requested=False):
+        """
+        介紹單一店家。和推薦流程完全分開：不萃取偏好、不碰狀態機、不出卡片，
+        只把這家店的資料交給模型，並明令資料以外的事一律不准講。
+        """
+        from config.prompts.guide_instructions import INTRODUCE_CAFE_INSTRUCTION
+        try:
+            cafe = db.session.get(Cafes, int(cafe_id))
+        except (TypeError, ValueError):
+            cafe = None
+        if not cafe:
+            yield from ChatPipelineService._fixed_reply("抱歉，我找不到這家店的資料。")
+            return
+
+        cafe_context = ChatPipelineService._cafe_intro_context(cafe)
+        model_name = get_selected_model() or get_default_model()
+        prompt_text = ai_service.build_prompt(
+            user_message=user_message,
+            history=history,
+            is_cafe_related=True,
+            cafe_context=cafe_context,
+            guide_instruction=INTRODUCE_CAFE_INSTRUCTION,
+            extracted_preferences=None,
+            cards_mode=False,
+        )
+
+        user_id, is_admin = None, False
+        user_email = session.get('user_email')
+        if user_email:
+            current_user = User.query.filter_by(email=user_email).first()
+            if current_user:
+                user_id = current_user.id
+                is_admin = getattr(current_user, 'is_admin', False)
+
+        generated = ""
+        yield json.dumps({"status": "generating_response"}, ensure_ascii=False) + "\n"
+        for chunk in ai_service.stream_generate(
+            model_name=model_name,
+            prompt_text=prompt_text,
+            is_cafe_related=True,
+            cafe_context=cafe_context,
+            db=db,
+            AiQueryLog=AiQueryLog,
+            user_id=user_id,
+            show_debug=is_debug_requested and is_admin,
+        ):
+            try:
+                parsed = json.loads(chunk)
+                if parsed.get("response"):
+                    generated += parsed["response"]
+                if parsed.get("done") and not generated.strip():
+                    yield json.dumps({
+                        "response": f"「{cafe.name}」的營業時間和大家的評論都在右邊的店家頁，可以看看。"
                     }, ensure_ascii=False) + "\n"
             except (ValueError, TypeError):
                 pass

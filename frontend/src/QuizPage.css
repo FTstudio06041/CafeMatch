@@ -1171,3 +1171,29 @@
         width: 100%;
     }
 }
+
+/* 新用戶歡迎模式的「先略過」連結 */
+.intro-skip {
+    position: relative;
+    z-index: 1;
+    margin-top: 12px;
+    min-height: 44px;
+    padding: 0 18px;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 9999px;
+    background: transparent;
+    color: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.intro-skip:hover {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+/* 支援切頁動畫（View Transitions）的瀏覽器由切頁動畫負責進場，這裡不再疊一次 */
+@supports (view-transition-name: none) {
+    .quiz-page-container {
+        animation: none;
+    }
+}

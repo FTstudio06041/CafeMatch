@@ -6,28 +6,13 @@ import RadarChart from '../components/RadarChart';
 import QuizLoginPromptModal from '../components/QuizLoginPromptModal';
 import { quizService } from '../services/quizService';
 import { queueQuizConsultation, resumeQuizConsultation } from '../utils/quizHandoff';
+import { getPersonalityImage, QUIZ_RESULT_CACHE_KEY } from '../utils/personality';
+import { navigateWithTransition } from '../utils/viewTransition';
 import '../QuizPage.css';
 
-// 咖啡人格插畫：檔名 = 人格類型 key（work / env / social / taste / cp /
-// work_env / taste_cp / balanced），由 scripts/sync_cafe_photos.py 同步產生
-const personalityImages = import.meta.glob('../assets/personality/*.{jpg,jpeg,png,webp}', {
-  eager: true,
-  import: 'default',
-});
-
-const getPersonalityImage = (typeKey) => {
-  if (!typeKey) return null;
-  for (const ext of ['jpg', 'jpeg', 'png', 'webp']) {
-    const img = personalityImages[`../assets/personality/${typeKey}.${ext}`];
-    if (img) return img;
-  }
-  return null;
-};
 
 import { logger } from '../utils/logger';
-// sessionStorage key — 用來在頁面切換時保留測驗結果
-const QUIZ_RESULT_CACHE_KEY = 'quizResultCache';
-// localStorage key — 新用戶強制測驗旗標（完成測驗前不得進入聊天）
+// localStorage key — 新用戶第一次登入的歡迎旗標（顯示歡迎文案，可略過）
 const FORCE_QUIZ_KEY = 'forceQuiz';
 
 // =============================================
@@ -52,7 +37,7 @@ export default function QuizPage() {
   const [isFading, setIsFading] = useState(false);
   const [selectedAnim, setSelectedAnim] = useState(null);       // 正在播放選中動畫的 optionId
 
-  // 強制模式：新用戶首次登入被導到 /quiz?welcome=true，完成測驗前不得進入聊天
+  // 歡迎模式：新用戶首次登入被導到 /quiz?welcome=true（可以先略過，回首頁逛逛）
   const [isForced, setIsForced] = useState(() => localStorage.getItem(FORCE_QUIZ_KEY) === 'true');
 
   useEffect(() => {
@@ -60,7 +45,7 @@ export default function QuizPage() {
     // 首次註冊也可能是帶著已完成的訪客測驗回來，先接回諮詢。
     if (resumeQuizConsultation(user)) {
       resumedQuizRef.current = true;
-      navigate('/chat?id=new', { replace: true });
+      navigate('/', { replace: true });
       return;
     }
     const params = new URLSearchParams(location.search);
@@ -207,6 +192,13 @@ export default function QuizPage() {
   };
 
   // 再測一次：重置所有狀態並清除快取
+  // 歡迎模式可以略過：首頁本來就公開，測驗只是讓推薦更準
+  const skipWelcome = () => {
+    localStorage.removeItem(FORCE_QUIZ_KEY);
+    setIsForced(false);
+    navigateWithTransition(navigate, '/', 'back');
+  };
+
   const handleRetry = () => {
     setQuizState('intro');
     setQuestions([]);
@@ -228,7 +220,7 @@ export default function QuizPage() {
 
   const goToChatWithResult = () => {
     queueQuizConsultation(quizResult);
-    navigate('/chat?id=new');
+    navigateWithTransition(navigate, '/', 'back');
   };
 
   const handleLoginWithResult = () => {
@@ -258,9 +250,14 @@ export default function QuizPage() {
                 <h1 className="intro-title">{isForced ? '歡迎來到 啡你莫屬！' : '啡你莫屬人格解析'}</h1>
                 <p className="intro-subtitle">
                   {isForced
-                    ? '第一次見面，請先完成心理測驗，讓啡啡更了解你的喜好'
+                    ? '第一次見面，做個心理測驗，讓啡啡更了解你的喜好'
                     : '找到最適合你的花蓮咖啡廳'}
                 </p>
+                {isForced && (
+                  <button type="button" className="intro-skip" onClick={skipWelcome}>
+                    先逛逛首頁，之後再測
+                  </button>
+                )}
                 {/* 波浪分隔線 */}
                 <svg className="intro-wave" viewBox="0 0 1440 120" preserveAspectRatio="none">
                   <path d="M0,60 C240,120 480,0 720,60 C960,120 1200,0 1440,60 L1440,120 L0,120 Z" />
@@ -508,6 +505,7 @@ export default function QuizPage() {
         <QuizLoginPromptModal
           open={showLoginPrompt}
           onLogin={handleLoginWithResult}
+          onContinue={() => { setShowLoginPrompt(false); goToChatWithResult(); }}
           onClose={() => setShowLoginPrompt(false)}
         />
     </div>

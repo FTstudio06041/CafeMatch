@@ -1,0 +1,21 @@
+/* =========================================
+   店家照片（店家卡、紀錄、詳情共用）
+   ========================================= */
+.cafe-photo {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cafe-photo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.cafe-photo-fallback {
+    color: rgba(255, 255, 255, 0.75);
+}

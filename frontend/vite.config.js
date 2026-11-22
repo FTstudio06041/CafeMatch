@@ -39,6 +39,7 @@ const optimizeDeps = {
     'typewriter-effect',
     'recharts',
     'react-cropper',
+    'maplibre-gl',
   ],
 }
 

@@ -10,7 +10,11 @@ class CommunityPost(db.Model):
     content = db.Column(db.Text, nullable=False)
     image = db.Column(db.Text, nullable=True)
     original_post_id = db.Column(db.Integer, db.ForeignKey('community_posts.id'), nullable=True)
+    # 有星等（1~5）且綁定 cafe_id 的貼文就是店家評論：每人每店一則，
+    # 按讚與留言沿用 post_likes / post_comments（評論即社群）
+    rating = db.Column(db.SmallInteger, nullable=True)
     created_at = db.Column(db.DateTime, default=get_utc_now)
+    updated_at = db.Column(db.DateTime, nullable=True)
 
 class PostLike(db.Model):
     __tablename__ = 'post_likes'
@@ -34,6 +38,8 @@ class CommunityNote(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     content = db.Column(db.String(100), nullable=False)
     color_index = db.Column(db.Integer, default=0)
+    # 綁定 cafe_id 的便利貼是店家的「24 小時現況回報」；NULL 是舊的全站便利貼
+    cafe_id = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=get_utc_now)
 
 class CommunityLike(db.Model):

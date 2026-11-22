@@ -1,0 +1,432 @@
+/* =========================================
+   全站外框：導覽列 + 頁面內容
+   body 是 overflow: hidden（App.css），捲動交給 .app-main
+   ========================================= */
+:root {
+    --topnav-height: 64px;
+    --espresso: #4e342e;          /* 草圖裡的深咖啡色方塊 */
+    --espresso-soft: #5d4037;
+    --latte-surface: #f6eee4;     /* 深色方塊裡的淺色卡片 / 對話框底 */
+}
+
+.app-shell {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.app-main {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    position: relative;
+    /* 注意：不要在這個捲動容器上設 view-transition-name。內容比畫面高時（例如測驗頁），
+       Chrome 會以「invalid state」中止整個轉場。切頁動畫改由 root 負責，
+       導覽列有自己的名稱，會浮在上層不跟著滑。 */
+}
+
+.page-loading {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-light);
+}
+
+/* ---------- 導覽列 ---------- */
+.topnav {
+    view-transition-name: topnav;
+    height: var(--topnav-height);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: 0 clamp(16px, 3vw, 40px);
+    background-color: var(--bg-main);
+    border-bottom: 1px solid rgba(78, 52, 46, 0.08);
+    position: relative;
+    z-index: var(--z-header);
+}
+
+.topnav-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--accent-color);
+    font-size: 1.3rem;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    text-decoration: none;
+    min-height: 44px;
+}
+
+.topnav-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+/* 分段切換：兩格等寬，深色標記滑到目前頁面；整顆都是按鈕，點哪裡都切到另一頁 */
+.topnav-seg {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(84px, 1fr));
+    padding: 4px;
+    border: none;
+    border-radius: var(--radius-full);
+    background-color: rgba(78, 52, 46, 0.08);
+    font: inherit;
+}
+
+.topnav-seg.switch {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.topnav-seg.switch:hover {
+    background-color: rgba(78, 52, 46, 0.14);
+}
+
+/* 滑過時，另一頁的字先變深，提示「點下去會到這裡」 */
+.topnav-seg.switch:hover .topnav-seg-btn:not(.active) {
+    color: var(--text-main);
+}
+
+.topnav-seg.switch:active .topnav-seg-marker {
+    transform-origin: center;
+    filter: brightness(1.15);
+}
+
+.topnav-seg-marker {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    width: calc((100% - 8px) / 2);
+    border-radius: var(--radius-full);
+    background-color: var(--espresso);
+    transition: transform 0.35s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.2s;
+}
+
+.topnav-seg-btn {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0 var(--space-4);
+    border-radius: var(--radius-full);
+    color: var(--text-light);
+    font-weight: 700;
+    font-size: 0.95rem;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color 0.2s;
+}
+
+.topnav-seg-btn:hover {
+    color: var(--text-main);
+}
+
+.topnav-seg-btn.active {
+    color: #fff;
+}
+
+.topnav-login {
+    min-height: 44px;
+    padding: 0 var(--space-5);
+    border: 1.5px solid var(--espresso);
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--espresso);
+    font-weight: 800;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.topnav-login:hover {
+    background-color: var(--espresso);
+    color: #fff;
+}
+
+/* ---------- 頭像選單 ---------- */
+.user-menu {
+    position: relative;
+}
+
+.user-menu-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    min-height: 44px;
+    padding: 2px 6px 2px 2px;
+    border: none;
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: var(--text-main);
+    cursor: pointer;
+}
+
+.user-menu-trigger:hover {
+    background-color: rgba(78, 52, 46, 0.08);
+}
+
+.user-menu-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--espresso);
+    color: #fff;
+    font-weight: 800;
+}
+
+.user-menu-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.user-menu-pop {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    min-width: 220px;
+    padding: var(--space-2);
+    border-radius: var(--radius-xl);
+    background: var(--bg-card);
+    box-shadow: var(--shadow-lg);
+    z-index: var(--z-sticky);
+    animation: fadeIn 0.18s ease;
+}
+
+.user-menu-head {
+    padding: var(--space-2) var(--space-3) var(--space-3);
+    border-bottom: 1px solid rgba(78, 52, 46, 0.08);
+    margin-bottom: var(--space-1);
+}
+
+.user-menu-name {
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.user-menu-email {
+    font-size: var(--text-xs);
+    color: var(--text-light);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+}
+
+.user-menu-pop button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    min-height: 44px;
+    padding: 0 var(--space-3);
+    border: none;
+    border-radius: var(--radius-lg);
+    background: transparent;
+    color: var(--text-main);
+    font-size: 0.95rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.user-menu-pop button:hover {
+    background-color: var(--bg-main);
+}
+
+.user-menu-pop button.danger {
+    color: var(--color-error);
+}
+
+/* ---------- 帳號設定彈窗 ---------- */
+.account-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(43, 27, 8, 0.4);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-4);
+    z-index: var(--z-modal);
+    animation: fadeIn 0.2s ease;
+}
+
+.account-modal {
+    width: 100%;
+    max-width: 440px;
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    padding: var(--space-6);
+    border-radius: var(--radius-2xl);
+    background: #fffdfa;
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+}
+
+.account-modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.account-modal-head h2 {
+    font-size: var(--text-xl);
+    color: var(--text-main);
+}
+
+.account-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.account-field input[type='text'] {
+    min-height: 44px;
+    padding: 0 var(--space-3);
+    border: 1px solid rgba(78, 52, 46, 0.2);
+    border-radius: var(--radius-lg);
+    font-size: var(--text-base);
+    color: var(--text-main);
+    background: #fff;
+}
+
+.account-avatar-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+}
+
+.account-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--espresso);
+    color: #fff;
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
+.account-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.account-cropper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+.account-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+}
+
+.account-actions .grow {
+    flex: 1;
+}
+
+.account-danger p {
+    line-height: var(--leading-relaxed);
+    color: var(--text-main);
+    margin-bottom: var(--space-5);
+}
+
+.account-danger strong {
+    color: var(--color-error);
+}
+
+.btn-danger {
+    min-height: 44px;
+    padding: 0 var(--space-5);
+    border: none;
+    border-radius: var(--radius-full);
+    background: var(--color-error);
+    color: #fff;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.link-danger {
+    min-height: 44px;
+    border: none;
+    background: transparent;
+    color: var(--color-error);
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0 var(--space-1);
+}
+
+/* 通用的圓形圖示按鈕 */
+.icon-btn {
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-main);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.icon-btn:hover {
+    background: rgba(78, 52, 46, 0.08);
+}
+
+@media (max-width: 600px) {
+    :root {
+        --topnav-height: 56px;
+    }
+    .topnav-brand span {
+        font-size: 1.1rem;
+    }
+    .topnav-seg {
+        grid-template-columns: repeat(2, minmax(64px, 1fr));
+    }
+    .topnav-seg-btn {
+        padding: 0 var(--space-2);
+        font-size: 0.88rem;
+    }
+    .topnav-login {
+        padding: 0 var(--space-3);
+    }
+}
+
+@media (max-width: 380px) {
+    .topnav-brand span {
+        display: none;
+    }
+}
