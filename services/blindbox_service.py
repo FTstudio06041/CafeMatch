@@ -83,6 +83,15 @@ def _latest_quiz_scores(user_id):
     return scores if any(scores.values()) else None
 
 
+def _closed_all_week(all_ids):
+    """整週公休的店。營業時間讀不到時回傳空集合，盲盒照常運作。"""
+    from services import cafe_facts
+    open_ids = cafe_facts.required_ids(cafe_facts.filter_pools())
+    if open_ids is None:
+        return set()
+    return set(all_ids) - open_ids
+
+
 def pick_cafe(user_id, rng=random):
     """回傳要放進盲盒的 dict：{cafe_id, pick_source, gnn_rank, gnn_score, novelty}；沒店可挑回傳 None。"""
     states = UserShopState.query.filter_by(user_id=user_id).all()
@@ -94,10 +103,13 @@ def pick_cafe(user_id, rng=random):
     cafe_tags = {c.id: [t.tag_name for t in c.tags] for c in cafes}
     all_ids = set(cafe_tags)
 
-    excluded = known | previous | passed
+    # 一週七天都標公休的店（多半已歇業）抽到也去不了，任何情況都不放寬
+    closed = _closed_all_week(all_ids)
+
+    excluded = known | previous | passed | closed
     if not (all_ids - excluded):
         # 以前抽過的都輪完了：放寬成只排除去過／收藏／沒興趣的
-        excluded = known | passed
+        excluded = known | passed | closed
     remaining = all_ids - excluded
     if not remaining:
         return None

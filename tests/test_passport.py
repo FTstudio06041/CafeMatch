@@ -363,6 +363,21 @@ def test_blindbox_never_picks_a_cafe_swiped_left(client):
     assert client.post('/api/blindbox/open').get_json()['box']['cafe']['id'] == 6
 
 
+def test_blindbox_never_picks_a_cafe_closed_all_week(client):
+    """一週七天都公休（多半已歇業）的店抽到也去不了，連輪完放寬時也不能出現。"""
+    from models.cafe import OperatingHours
+    with app.app_context():
+        db.session.add_all([OperatingHours(cafe_id=6, day_of_week=d, is_closed=1) for d in range(7)])
+        db.session.commit()
+    for cid in (1, 2, 3, 4):
+        _swipe(client, cid, 'left')
+    for _ in range(5):
+        with app.app_context():
+            pick = blindbox_service.pick_cafe(
+                user_id=1, rng=random.Random(_))
+        assert pick['cafe_id'] == 5
+
+
 def test_wanted_cafe_can_still_be_drawn(client):
     for cid in (1, 2, 3, 4, 5):
         _toggle(client, cid)

@@ -23,3 +23,19 @@ os.environ['TEST_DB_URI'] = 'sqlite:///:memory:'
 # 走 embedding 會讓每個測試都打一次 Ollama，慢、而且 CI 上根本沒有那顆模型。
 # 真實後端的準度由 scripts/eval_off_topic.py 負責量。
 os.environ['OFF_TOPIC_EMBED_MODEL'] = ''
+
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _fresh_cafe_facts_cache():
+    """
+    cafe_facts 把營業時間與標籤快取 10 分鐘。正式環境只有一個資料庫沒問題，
+    但每個測試都重建自己的 SQLite，前一個測試的快取會被下一個拿去用
+    （例如把別的測試資料裡沒有的店當成整週公休）。
+    """
+    from services import cafe_facts
+    cafe_facts._cache = None
+    cafe_facts._vocab_cache = None
+    yield
