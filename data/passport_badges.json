@@ -1,0 +1,23 @@
+{
+  "_comment": "咖啡護照徽章。規則種類：visit_count（去過幾家）、visit_ratio（去過全部店家的比例）、tag_count（去過的店裡，標籤含任一關鍵字的有幾家；關鍵字用子字串比對 tags 表）、cost_count（價位欄位完全相同的有幾家）、area_excludes（地址不含某字串的有幾家）、blindbox_count（完成幾個盲盒）、week_streak（連續幾週都有去新店）。icon 是 lucide-react 的圖示名稱。改完重啟後端即生效。",
+  "badges": [
+    {"id": "first_stamp", "name": "第一枚章", "icon": "Stamp", "desc": "在護照蓋下第一個章", "rule": {"type": "visit_count", "count": 1}},
+    {"id": "regular", "name": "常客養成中", "icon": "Coffee", "desc": "去過 5 家不同的咖啡廳", "rule": {"type": "visit_count", "count": 5}},
+    {"id": "mapper", "name": "花蓮咖啡地圖", "icon": "Map", "desc": "去過 15 家不同的咖啡廳", "rule": {"type": "visit_count", "count": 15}},
+    {"id": "half_book", "name": "護照過半", "icon": "BookOpen", "desc": "集滿一半的店家", "rule": {"type": "visit_ratio", "ratio": 0.5}},
+    {"id": "full_book", "name": "全制霸", "icon": "Crown", "desc": "收錄的每一家都去過", "rule": {"type": "visit_ratio", "ratio": 1.0}},
+
+    {"id": "socket_hunter", "name": "插座獵人", "icon": "PlugZap", "desc": "去過 3 家適合久坐工作的店", "rule": {"type": "tag_count", "count": 3, "keywords": ["插座", "不限時", "WiFi", "讀書", "安靜", "久坐"]}},
+    {"id": "dessert_radar", "name": "甜點雷達", "icon": "CakeSlice", "desc": "去過 3 家甜點出名的店", "rule": {"type": "tag_count", "count": 3, "keywords": ["甜點", "蛋糕", "肉桂捲", "布丁", "巴斯克", "提拉米蘇", "可麗露", "鬆餅", "司康"]}},
+    {"id": "pour_over", "name": "手沖信徒", "icon": "Droplets", "desc": "去過 3 家咖啡本身很講究的店", "rule": {"type": "tag_count", "count": 3, "keywords": ["手沖", "單品", "烘焙", "豆子", "咖啡師"]}},
+    {"id": "old_house", "name": "老宅散步者", "icon": "House", "desc": "去過 2 家老宅或復古風的店", "rule": {"type": "tag_count", "count": 2, "keywords": ["老宅", "復古", "懷舊", "日式"]}},
+    {"id": "photo_hunter", "name": "網美採集者", "icon": "Camera", "desc": "去過 3 家好拍的店", "rule": {"type": "tag_count", "count": 3, "keywords": ["網美", "好拍", "裝潢", "景觀", "海景", "植栽", "庭院"]}},
+    {"id": "cat_fan", "name": "店貓粉絲", "icon": "Cat", "desc": "去過 2 家有店貓店狗或寵物友善的店", "rule": {"type": "tag_count", "count": 2, "keywords": ["貓", "狗", "寵物"]}},
+    {"id": "coin_master", "name": "銅板達人", "icon": "Coins", "desc": "去過 3 家 200 元有找的店", "rule": {"type": "cost_count", "count": 3, "cost": "$1-200"}},
+    {"id": "beyond_city", "name": "走出市區", "icon": "Compass", "desc": "去過一家不在花蓮市的店", "rule": {"type": "area_excludes", "count": 1, "text": "花蓮市"}},
+
+    {"id": "box_rookie", "name": "拆盒新手", "icon": "Gift", "desc": "完成第一個咖啡盲盒", "rule": {"type": "blindbox_count", "count": 1}},
+    {"id": "box_addict", "name": "盲盒成癮", "icon": "Sparkles", "desc": "完成 5 個咖啡盲盒", "rule": {"type": "blindbox_count", "count": 5}},
+    {"id": "weekly_habit", "name": "週週有咖啡", "icon": "CalendarCheck", "desc": "連續 3 週都去了一家新店", "rule": {"type": "week_streak", "count": 3}}
+  ]
+}

@@ -5,6 +5,8 @@ import '../ExplorePage.css';
 
 import { toast } from '../utils/toast';
 import { logger } from '../utils/logger';
+import { toggleShopState, seedShopStates } from '../utils/shopState';
+import WantTag from '../components/passport/WantTag';
 export default function ExplorePage() {
   const { user, API_BASE_URL } = useContext(AuthContext);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -22,6 +24,7 @@ export default function ExplorePage() {
       const response = await fetch(`${API_BASE_URL}/api/cafes`, { credentials: 'include' });
       const data = await response.json();
       setShops(data);
+      seedShopStates(data);
     } catch (error) {
       logger.error('Failed to fetch cafes:', error);
     }
@@ -65,29 +68,11 @@ export default function ExplorePage() {
     const targetId = selectedShop.id;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/user/shop_state`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ cafe_id: targetId, type: type })
-      });
-      const result = await response.json();
-
-      if (result.success) {
-        // 修正 1：乾淨地更新所有的 shops 列表 (純函數)
-        setShops(prevShops => prevShops.map(shop => {
-          if (shop.id === targetId) {
-            return {
-              ...shop,
-              is_fav: type === 'fav' ? result.fav : shop.is_fav,
-              is_visited: type === 'visited' ? result.visited : shop.is_visited
-            };
-          }
-          return shop;
-        }));
-
-      } else {
-        toast.info("請先登入才能使用此功能！");
+      const result = await toggleShopState(targetId, type, 'explore');
+      if (result?.success) {
+        setShops(prevShops => prevShops.map(shop => (
+          shop.id === targetId ? { ...shop, is_fav: result.fav, is_visited: result.visited } : shop
+        )));
       }
     } catch (error) {
       logger.error("Error updating state:", error);
@@ -114,9 +99,9 @@ export default function ExplorePage() {
                 <div className="detail-hero-info">
                   <div>
                     <div className="detail-tags">{selectedShop.tags}</div>
-                    <h1 className="detail-title">{selectedShop.name}</h1>
+                    <h1 className="detail-title">{selectedShop.name} <WantTag cafeId={selectedShop.id} enabled={!user?.isGuest} /></h1>
                     <div className="detail-meta">
-                      <span>{selectedShop.rating} ★</span>
+                      {selectedShop.rating != null && <span>{selectedShop.rating} ★</span>}
                       <span>{selectedShop.hours}</span>
                     </div>
 

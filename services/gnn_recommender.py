@@ -381,6 +381,36 @@ def _tiered_sample(candidates: list, guaranteed: int = 0,
     return sorted(locked + chosen, key=rank_key, reverse=True)
 
 
+def _score_all(scores: dict):
+    """用（調整後的）五維分數替所有店家打分。回傳 (state, logits, sigmoid 分數)。"""
+    state = _load()
+    torch = state['torch']
+    model = state['model']
+
+    max_s = max(scores.values()) if scores and max(scores.values()) > 0 else 1
+    vec = torch.tensor([[float(scores.get(d, 0)) / max_s for d in DIMS]], dtype=torch.float)
+
+    with torch.no_grad():
+        projected = model.quiz_projector(vec)                     # (1, 384)
+        # 接邊後跑 HGT：新使用者與 cafe 的 embedding 必須來自同一次 encode，
+        # cafe 那邊的卷積結果也會因為多了這些邊而改變
+        tmp_data, new_idx, _sims = _insert_new_user(projected, state)
+        z = model.encode(tmp_data['user'].x, tmp_data)
+        user_vec = z['user'][new_idx]                             # (128,)
+        z_cafe = z['cafe']                                        # (n_cafes, 128)
+        n_cafes = z_cafe.shape[0]
+        u_rep = user_vec.unsqueeze(0).expand(n_cafes, -1)
+        # 排序用 logit（sigmoid 之前）。predictor 的 logit 落在 +17 ~ -59，
+        # 接邊之後 56 家有 43 家的 sigmoid 直接飽和成 1.0 —— 前十名 logit
+        # 只差 0.2，套完 sigmoid 全都變成同一個數字，名次資訊整個消失。
+        # sigmoid 是單調的，用 logit 排序名次一樣，但解析度留得住。
+        logits = model.predictor(
+            torch.cat([u_rep, z_cafe], dim=-1)
+        ).squeeze(-1).numpy()
+        raw = torch.sigmoid(torch.from_numpy(logits)).numpy()
+    return state, logits, raw
+
+
 def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
                         exclude_ids: set | None = None,
                         pref_keywords: list | None = None,
@@ -407,31 +437,7 @@ def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
     拋出:
         GnnUnavailable — 呼叫端應回退關鍵字檢索
     """
-    state = _load()
-    torch = state['torch']
-    model = state['model']
-
-    max_s = max(scores.values()) if scores and max(scores.values()) > 0 else 1
-    vec = torch.tensor([[float(scores.get(d, 0)) / max_s for d in DIMS]], dtype=torch.float)
-
-    with torch.no_grad():
-        projected = model.quiz_projector(vec)                     # (1, 384)
-        # 接邊後跑 HGT：新使用者與 cafe 的 embedding 必須來自同一次 encode，
-        # cafe 那邊的卷積結果也會因為多了這些邊而改變
-        tmp_data, new_idx, _sims = _insert_new_user(projected, state)
-        z = model.encode(tmp_data['user'].x, tmp_data)
-        user_vec = z['user'][new_idx]                             # (128,)
-        z_cafe = z['cafe']                                        # (n_cafes, 128)
-        n_cafes = z_cafe.shape[0]
-        u_rep = user_vec.unsqueeze(0).expand(n_cafes, -1)
-        # 排序用 logit（sigmoid 之前）。predictor 的 logit 落在 +17 ~ -59，
-        # 接邊之後 56 家有 43 家的 sigmoid 直接飽和成 1.0 —— 前十名 logit
-        # 只差 0.2，套完 sigmoid 全都變成同一個數字，名次資訊整個消失。
-        # sigmoid 是單調的，用 logit 排序名次一樣，但解析度留得住。
-        logits = model.predictor(
-            torch.cat([u_rep, z_cafe], dim=-1)
-        ).squeeze(-1).numpy()
-        raw = torch.sigmoid(torch.from_numpy(logits)).numpy()
+    state, logits, raw = _score_all(scores)
 
     hard_filters = hard_filters or {}
     exclude_ids = exclude_ids or set()
@@ -489,3 +495,23 @@ def recommend_by_scores(scores: dict, hard_filters: dict | None = None,
     guaranteed = GUARANTEED_TOP_MATCHES if (keywords and has_match) else 0
 
     return _tiered_sample(filtered, guaranteed=guaranteed, must_include=must_include)
+
+
+def rank_all(scores: dict, exclude_ids: set | None = None) -> list:
+    """不抽樣、不混標籤：回傳所有候選店家照 GNN logit 由高到低的完整排名。
+
+    咖啡盲盒用：它要自己決定「排名夠前面、但跟使用者舒適圈不一樣」的店，
+    recommend_by_scores 的分層抽樣只給五家，不夠挑。
+
+    回傳 [{'cafe_id', 'gnn_score', 'gnn_logit', 'rank'}]，rank 從 1 起算。
+    拋出 GnnUnavailable。
+    """
+    state, logits, raw = _score_all(scores)
+    exclude_ids = exclude_ids or set()
+    ranked = sorted(
+        ({'cafe_id': cafe_id, 'gnn_score': float(raw[idx]), 'gnn_logit': float(logits[idx])}
+         for idx, cafe_id in state['idx2cafe_id'].items() if cafe_id not in exclude_ids),
+        key=lambda c: c['gnn_logit'], reverse=True)
+    for i, c in enumerate(ranked, 1):
+        c['rank'] = i
+    return ranked

@@ -2,6 +2,7 @@
 import { createContext, useState, useEffect, useCallback } from 'react';
 import { apiClient, API_BASE_URL as ApiUrl } from '../utils/apiClient';
 import { logger } from '../utils/logger';
+import { resetShopStates } from '../utils/shopState';
 export const AuthContext = createContext();
 
 // 這些瀏覽器暫存都是綁定「某一個使用者」的，換人就必須清掉。
@@ -17,6 +18,7 @@ const PERSONAL_LOCAL_KEYS = ['latestQuizScores', 'targetQuizContext'];
 const LAST_IDENTITY_KEY = 'lastUserIdentity';
 
 const clearPersonalCache = () => {
+  resetShopStates(); // 收藏／去過的共用狀態（記憶體裡的）也是上一個人的
   try {
     PERSONAL_SESSION_KEYS.forEach((k) => sessionStorage.removeItem(k));
     PERSONAL_LOCAL_KEYS.forEach((k) => localStorage.removeItem(k));

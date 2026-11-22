@@ -1,0 +1,14 @@
+.want-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--bg-white);
+  background: var(--brand-secondary);
+  vertical-align: middle;
+}

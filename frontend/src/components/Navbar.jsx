@@ -14,7 +14,8 @@ export default function Navbar() {
     { path: '/chat', label: 'AI' },
     { path: '/community', label: '社群' },
     { path: '/explore', label: '探索' },
-    { path: '/quiz', label: '測驗' }
+    { path: '/quiz', label: '測驗' },
+    { path: '/passport', label: '護照' }
   ];
 
   // 找出目前網址對應的是第幾個按鈕

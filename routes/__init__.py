@@ -5,6 +5,7 @@ from .quiz import quiz_bp
 from .community import community_bp
 from .admin import admin_bp
 from .system import system_bp
+from .passport import passport_bp
 
 def register_blueprints(app):
     app.register_blueprint(auth_bp)
@@ -14,3 +15,4 @@ def register_blueprints(app):
     app.register_blueprint(community_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(system_bp)
+    app.register_blueprint(passport_bp)

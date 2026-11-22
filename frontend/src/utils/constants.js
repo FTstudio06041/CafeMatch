@@ -52,3 +52,24 @@ export const CHAT_WINDOW_UI_TEXTS = {
 export const LANDING_UI_TEXTS = {
   loginError: 'Google 登入失敗，請重新登入。',
 };
+
+// 護照頁：滑卡探店與想去清單
+export const SWIPE_UI_TEXTS = {
+  title: '滑卡探店',
+  subtitle: '右滑有興趣，加進想去清單；左滑跳過。左滑的店不會出現在盲盒裡。',
+  want: '想去',
+  pass: '沒興趣',
+  undo: '復原',
+  moreInfo: '看店家資訊',
+  remaining: (n) => `還有 ${n} 家`,
+  loading: '洗牌中…',
+  doneTitle: '都看完了',
+  doneBody: '收錄的店你都看過一輪了。',
+  resetPassed: (n) => `重新看看略過的 ${n} 家`,
+  resetDone: (n) => `${n} 家店回到牌堆了`,
+  keyboardHint: '鍵盤也可以：← 跳過、→ 想去',
+  wantListTitle: '想去清單',
+  wantListEmpty: '還沒有想去的店。滑卡往右滑，就會加進來。',
+  removeWant: '從想去清單移除',
+  visitedBadge: '去過了',
+};

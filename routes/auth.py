@@ -107,30 +107,28 @@ def update_user_profile(user):
 @auth_bp.route('/api/user/shop_state', methods=['POST'])
 @login_required
 def update_shop_state(user):
-    """切換使用者對某間咖啡廳的『收藏 / 已造訪』狀態。"""
+    """切換使用者對某間咖啡廳的『收藏 / 已造訪』狀態。
+
+    body 可帶 source（explore / chat / blindbox / passport），記進流水帳。
+    回傳多了 new_badges（這次新解鎖的徽章）與 blindbox_completed。
+    """
+    from services import passport_service
     try:
         data = request.json or {}
         cafe_id = data.get('cafe_id')
         action_type = data.get('type')
 
-        if not cafe_id or action_type not in ('fav', 'visited'):
+        if not isinstance(cafe_id, int) or action_type not in ('fav', 'visited', 'want'):
             return jsonify({"success": False, "message": "參數錯誤"}), 400
 
-        state = UserShopState.query.filter_by(user_id=user.id, cafe_id=cafe_id).first()
-        if not state:
-            state = UserShopState(user_id=user.id, cafe_id=cafe_id)
-            db.session.add(state)
-
-        if action_type == 'fav':
-            state.is_fav = not state.is_fav
-        else:  # 'visited'
-            state.is_visited = not state.is_visited
-
-        db.session.commit()
-        return jsonify({"success": True, "fav": state.is_fav, "visited": state.is_visited})
+        result = passport_service.toggle_shop_state(user, cafe_id, action_type, data.get('source'))
+        if result is None:
+            return jsonify({"success": False, "message": "找不到這間咖啡廳"}), 404
+        return jsonify({"success": True, **result})
 
     except Exception:
         db.session.rollback()
+        current_app.logger.exception("[shop_state] 更新失敗")
         return jsonify({"success": False, "message": "系統發生錯誤，請稍後再試"}), 500
 
 
