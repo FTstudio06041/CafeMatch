@@ -128,13 +128,22 @@ def main():
             sys.exit('沒有 GOOGLE_MAPS_API_KEY，無法 --fetch')
 
         cafes = Cafes.query.order_by(Cafes.id).all()
+        # 有些資料庫從來沒存過 google_place_id（正式機 56 家全是空的），
+        # 這時用店名對回 JSON；店名在 JSON 裡重複就不猜
+        by_name = {}
+        for entry in coords.values():
+            by_name.setdefault(entry.get('name'), []).append(entry)
         updated, missing = [], []
         for cafe in cafes:
             pid = cafe.google_place_id
             if not pid:
-                missing.append(f'#{cafe.id} {cafe.name}（沒有 place_id）')
-                continue
-            entry = coords.get(pid)
+                same_name = by_name.get(cafe.name) or []
+                if len(same_name) != 1:
+                    missing.append(f'#{cafe.id} {cafe.name}（沒有 place_id，店名也對不上座標檔）')
+                    continue
+                entry = same_name[0]
+            else:
+                entry = coords.get(pid)
             if entry is None and args.from_short_links and cafe.url:
                 if args.dry_run:
                     print(f'[DRY] 會解析短網址 #{cafe.id} {cafe.name}')
